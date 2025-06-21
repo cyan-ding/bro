@@ -1,13 +1,25 @@
 from patchright.async_api import async_playwright
 import asyncio
 from tools.search import search
+import uuid
 
 
 class Worker:
     def __init__(self, task: str):
         self.task = task
+        self.manager = None
+        self.id = uuid.uuid4()
 
-    def execute(self):
+    def set_manager(self, manager):
+        self.manager = manager
+
+    def receive_task(self, task):
+        self.task = task
+    
+    def report_back(self):
+        
+
+    def execute_task(self):
         asyncio.run(test_playwright(self.task))
 
 
@@ -29,4 +41,4 @@ async def test_playwright(task: str):
 if __name__ == "__main__":
     task = input("Enter a task for the worker: ")
     worker = Worker(task)
-    worker.execute()
+    worker.execute_task()
