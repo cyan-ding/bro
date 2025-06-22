@@ -4,9 +4,9 @@ from ceo import Ceo
 # entry file
 
 
-def main():
+async def main():
     if __name__ == "__main__":
         load_dotenv()
         task = input(print("Input a task for Bro: "))
         ceo = Ceo(task=task)
-        ceo.execute()
+        await ceo.execute()

@@ -21,8 +21,9 @@ class Worker:
         if (self.manager is not None):
             self.manager.receive_update(message)
 
-    def execute_task(self):
-        asyncio.run(test_playwright(self.task))
+    async def execute_task(self):
+        print(f"Executing: {self.task}")
+        # asyncio.run(test_playwright(self.task))
 
 
 # async test browser
@@ -35,12 +36,8 @@ async def test_playwright(task: str):
             headless=False,
             no_viewport=True,
         )
-
+        
         res = await search(task, browser)
         print(res)
 
 
-if __name__ == "__main__":
-    task = input("Enter a task for the worker: ")
-    worker = Worker(task)
-    worker.execute_task()

@@ -1,4 +1,0 @@
-playwright
-patchright
-python-dotenv
-aiohttp

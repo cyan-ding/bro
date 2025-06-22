@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bro"
+version = "0.1.0"
+description = "AI assistant for lazy people."
+authors = [
+    { name = "Cyan Ding", email = "blueplus.d@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "playwright",
+    "patchright",
+    "python-dotenv",
+    "aiohttp",
+    "pytest",
+    "pytest-asyncio",
+    "ruff>=0.12.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["bro"]
