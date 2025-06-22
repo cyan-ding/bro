@@ -1,4 +1,5 @@
 from manager import Manager
+from tools.ai import ai
 
 class Ceo:
     def __init__(self, task: str) -> None:
@@ -9,7 +10,7 @@ class Ceo:
     # Todo: use ai system prompt to extract high level tasks from the prompt
     # then, spawn in a number of managers to execute those tasks
     def execute(self):
-        print("Querying llms...")
+        
         test = 3
         for i in range(test):
             manager = Manager(self.divided_tasks[i])

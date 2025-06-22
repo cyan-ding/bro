@@ -1,4 +1,4 @@
 playwright
 patchright
-requests
 python-dotenv
+aiohttp
