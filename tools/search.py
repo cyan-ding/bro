@@ -1,9 +1,9 @@
-from patchright.async_api import Browser, Page
+from patchright.async_api import BrowserContext, Page
 
 # tool to search things on the internet
 
 
-async def search(request: str, browser: Browser):
+async def search(request: str, browser: BrowserContext):
     page = await browser.new_page()
 
     processed_req = "+".join(request.split(" "))

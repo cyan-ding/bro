@@ -9,15 +9,17 @@ class Worker:
         self.task = task
         self.manager = None
         self.id = uuid.uuid4()
-
+    # set manager reference 
     def set_manager(self, manager):
         self.manager = manager
 
+    # get task 
     def receive_task(self, task):
         self.task = task
     
-    def report_back(self):
-        
+    def report_back(self, message):
+        if (self.manager is not None):
+            self.manager.receive_update(message)
 
     def execute_task(self):
         asyncio.run(test_playwright(self.task))
