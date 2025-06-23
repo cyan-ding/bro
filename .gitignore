@@ -5,6 +5,7 @@ __pycache__/
 
 # Virtual environment
 venv/
+.venv
 browser_data/
 temp/
 .env
