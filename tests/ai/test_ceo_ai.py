@@ -1,5 +1,6 @@
 import pytest
 
+from bro.types import CeoResponse
 from tools.ai import ai, load_sys_prompt
 
 
@@ -15,7 +16,7 @@ async def test_ceo_ai_returns_subgoals():
     sys_prompt = await load_sys_prompt("ceo")
     prompt = "Organize a product launch event"
     result = await ai(prompt, sys_prompt)
-    assert isinstance(result, dict)
-    assert "subgoals" in result
-    assert isinstance(result["subgoals"], list)
-    assert all(isinstance(sub, str) for sub in result["subgoals"])
+    print("AI Result:", result)
+
+    # Validate the entire structure of the response using the Pydantic model
+    CeoResponse.model_validate(result)

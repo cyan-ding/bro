@@ -1,0 +1,42 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+
+## Contributing to Bro
+
+**Bro** is an AI agent that autonomously interacts with the web. It takes a user-defined task, splits it into multiple subtasks to be run on parallel, which are assigned to other ai agents to complete. Bro navigates web pages using Chromium via Playwright, processes HTML, and repeatedly queries a language model (like `gpt-4o`) to decide the next action—until the task is completed.
+
+### File Documentation
+
+When you create a **new file**:
+
+* **For humans**: At the top of the file, include a docstring in natural language explaining:
+
+  * What this file does.
+  * How it fits into the Bro system.
+  * If it introduces a new abstraction or replaces an old one.
+* **For LLMs/AI**: Include structured metadata using standardized comments such as:
+
+  ```python
+  # @file purpose: Defines <purpose>
+  ```
+
+---
+
+### Development Rules
+
+* **Always use [`uv`](mdc:https:/github.com/astral-sh/uv) instead of `pip`**
+  For deterministic and fast dependency installs.
+
+* **Use real model names**
+  Do **not** replace `gpt-4o` with `gpt-4`. The model `gpt-4o` is a distinct release and supported.
+
+---
