@@ -33,8 +33,10 @@ When you create a **new file**:
 
 ### Development Rules
 
-* **Always use [`uv`](mdc:https:/github.com/astral-sh/uv) instead of `pip`**
+* **Always use `uv` instead of `pip`**
   For deterministic and fast dependency installs.
+
+* **Always reference the [pyproject.toml](mdc:pyproject.toml) instead of creating a new `requirements.txt` file.
 
 * **Use real model names**
   Do **not** replace `gpt-4o` with `gpt-4`. The model `gpt-4o` is a distinct release and supported.
