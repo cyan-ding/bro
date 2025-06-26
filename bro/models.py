@@ -29,7 +29,7 @@ class CerebrasCeo(BaseModel):
     execution_order: List[str]
     parallel_groups: List[List[str]]
     id: str
-    choices: List
+    choices: List[str]
     created: int
     model: Optional[str]
     object: str
