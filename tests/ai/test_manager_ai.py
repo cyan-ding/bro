@@ -1,7 +1,9 @@
-import pytest
-from bro.types import CeoResponse, CeoSubgoal, InformationRequirements, ManagerResponse
-from tools.ai import ai, load_sys_prompt
 import json
+
+import pytest
+
+from bro.types import CeoResponse, CeoSubgoal, InformationRequirements, ManagerResponse
+from tools.ai import load_sys_prompt, openrouter
 
 
 @pytest.mark.asyncio
@@ -49,7 +51,7 @@ async def test_manager_ai_returns_atomic_tasks():
 
     sys_prompt = await load_sys_prompt("manager")
     prompt = f"Execute these subgoals: {ceo_output_dict}"
-    result = await ai(prompt, sys_prompt)
+    result = await openrouter(prompt, sys_prompt)
     print("AI Result:", result)
 
     # Validate the entire structure of the response using the Pydantic model
@@ -61,7 +63,7 @@ async def test_ceo_manager_transfer():
     manager_prompt = await load_sys_prompt("manager")
     ceo_prompt = await load_sys_prompt("ceo")
     user_prompt = "Why do I have so many tabs?"
-    ceo_result = await ai(user_prompt, ceo_prompt)
+    ceo_result = await openrouter(user_prompt, ceo_prompt)
     ceo_json = json.dumps(ceo_result)
-    manager_result = await ai(ceo_json, manager_prompt)
+    manager_result = await openrouter(ceo_json, manager_prompt)
     ManagerResponse.model_validate(manager_result)

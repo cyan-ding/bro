@@ -1,5 +1,6 @@
 from manager import Manager
-from tools.ai import ai, load_sys_prompt
+
+from tools.ai import load_sys_prompt, openrouter
 
 
 class Ceo:
@@ -12,7 +13,7 @@ class Ceo:
     # then, spawn in a number of managers to execute those tasks
     async def execute(self):
         sys_prompt = await load_sys_prompt("ceo")
-        result = await ai(self.task, sys_prompt)
+        result = await openrouter(self.task, sys_prompt)
 
         if "subgoals" in result:
             self.divided_tasks = result["subgoals"]

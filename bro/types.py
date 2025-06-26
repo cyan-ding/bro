@@ -1,6 +1,6 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Dict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class InformationRequirements(BaseModel):
@@ -12,7 +12,7 @@ class CeoSubgoal(BaseModel):
     id: str
     description: str
     type: Literal["SEQUENTIAL", "PARALLEL", "CONTEXT_DEPENDENT"]
-    priority: int = Field(ge=1, le=5)
+    priority: int
     dependencies: List[str]
     information_requirements: InformationRequirements
     success_criteria: str
@@ -22,6 +22,19 @@ class CeoResponse(BaseModel):
     subgoals: List[CeoSubgoal]
     execution_order: List[str]
     parallel_groups: List[List[str]]
+
+
+class CerebrasCeo(BaseModel):
+    subgoals: List[CeoSubgoal]
+    execution_order: List[str]
+    parallel_groups: List[List[str]]
+    id: str
+    choices: List
+    created: int
+    model: Optional[str]
+    object: str
+    system_fingerprint: Optional[str]
+    usage: Optional[Dict[str, int]]
 
 
 class Target(BaseModel):

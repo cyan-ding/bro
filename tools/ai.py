@@ -1,15 +1,17 @@
-import aiohttp
-import os
 import json
-from typing import Dict, Any
+import os
+from typing import Any, Dict
+
+import aiohttp
+from cerebras.cloud.sdk import AsyncCerebras
 from dotenv import load_dotenv
 
-async def ai(
+
+async def openrouter(
     user_prompt: str,
     system_prompt: str,
     model: str = "deepseek/deepseek-chat-v3-0324:free",
 ) -> Dict[Any, Any]:
-    
     load_dotenv()
 
     async with aiohttp.ClientSession() as session:
@@ -27,7 +29,7 @@ async def ai(
                         {"role": "user", "content": user_prompt},
                     ],
                     "response_format": {"type": "json_object"},
-                    "temperature": 0.1
+                    "temperature": 0.1,
                 },
             )
             result = await response.json()
@@ -44,6 +46,33 @@ async def ai(
         except Exception as e:
             print(f"Error in OpenRouter response: {e}")
             return {}
+
+
+async def cerebras(
+    user_prompt: str,
+    system_prompt: str,
+    schema,
+    model: str = "llama-4-scout-17b-16e-instruct",
+):
+    load_dotenv()
+    client = AsyncCerebras(
+        api_key=os.environ.get("CEREBRAS_API_KEY"),
+    )
+
+    chat_completion = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "BroResponse", "strict": True, "schema": schema},
+        },
+        temperature=0.1,
+    )
+    return chat_completion
+
 
 async def load_sys_prompt(filename: str) -> str:
     with open(f"prompts/{filename}.txt", "r") as f:
