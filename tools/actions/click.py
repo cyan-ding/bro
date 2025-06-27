@@ -1,14 +1,34 @@
+import re
+from difflib import get_close_matches
+
 from patchright.async_api import Page
 
+candidates = []
 
-async def get_button(page: Page, site: str):
+
+def sanitize_filename(name):
+    """Sanitize filename to be safe for filesystem"""
+    return re.sub(r"[^a-zA-Z0-9_\-\.]", "_", name)
+
+
+async def extract_texts(elements):
+    texts = []
+    for el in elements:
+        text = await el.inner_text()
+        if text.strip():
+            texts.append(text)
+            candidates.append((text, el))
+    return texts
+
+
+async def get_button(page: Page):
     # Get explicit links and buttons
     links = await page.get_by_role("link").all()
     buttons = await page.get_by_role("button").all()
 
     # Get divs and other elements that might be clickable
     clickable_divs = await page.locator(
-        "div[onclick], div[data-click], div[class*='click'], div[class*='button'], div[class*='link'], div[class*='nav'], div[class*='menu'], div[class*='tab'], div[class*='card'], div[class*='item']"
+        "div[data-click], div[class*='click'], div[class*='button'], div[class*='link'], div[class*='nav'], div[class*='menu'], div[class*='tab'], div[class*='card'], div[class*='item']"
     ).all()
 
     # Get elements with cursor pointer (often indicates clickable)
@@ -21,9 +41,6 @@ async def get_button(page: Page, site: str):
         "[onclick], [onmousedown], [onmouseup], [data-action], [data-click], [data-href], [data-url]"
     ).all()
 
-    # Get anchor tags (links) that might be styled as buttons
-    anchor_links = await page.locator("a[href]").all()
-
     # Get elements with button-like classes
     button_like = await page.locator(
         "[class*='btn'], [class*='button'], [class*='cta'], [class*='action'], [class*='submit'], [class*='primary'], [class*='secondary']"
@@ -32,120 +49,13 @@ async def get_button(page: Page, site: str):
     # Get any element with href attribute (not just anchor tags)
     href_elements = await page.locator("[href]").all()
 
-    # Get image map areas (clickable regions on images)
-    area_elements = await page.locator("area[href]").all()
-
-    # Get images that have associated image maps
-    image_maps = await page.locator("img[usemap]").all()
-
-    # Get map elements
-    map_elements = await page.locator("map").all()
-
-    # Get orphaned area elements (not inside a map)
-    orphaned_areas = await page.locator("area[href]").all()
-
-    link_texts = []
-    for link in links:
-        label = await link.inner_text()
-        if label.strip():
-            link_texts.append(label)
-
-    button_texts = []
-    for button in buttons:
-        label = await button.inner_text()
-        if label.strip():
-            button_texts.append(label)
-
-    # Process clickable divs
-    div_texts = []
-    for div in clickable_divs:
-        label = await div.inner_text()
-        if label.strip():
-            div_texts.append(label)
-
-    # Process pointer elements
-    pointer_texts = []
-    for element in pointer_elements:
-        label = await element.inner_text()
-        if label.strip():
-            pointer_texts.append(label)
-
-    # Process click handlers
-    handler_texts = []
-    for element in click_handlers:
-        label = await element.inner_text()
-        if label.strip():
-            handler_texts.append(label)
-
-    # Process anchor links
-    anchor_texts = []
-    for anchor in anchor_links:
-        label = await anchor.inner_text()
-        if label.strip():
-            anchor_texts.append(label)
-
-    # Process button-like elements
-    button_like_texts = []
-    for element in button_like:
-        label = await element.inner_text()
-        if label.strip():
-            button_like_texts.append(label)
-
-    # Process elements with href attributes
-    href_texts = []
-    for element in href_elements:
-        label = await element.inner_text()
-        if label.strip():
-            href_texts.append(label)
-
-    # Process area elements (image map regions)
-    area_texts = []
-    area_info = []
-    for area in area_elements:
-        # Get alt text if available
-        alt_text = await area.get_attribute("alt")
-        href_value = await area.get_attribute("href")
-        shape = await area.get_attribute("shape")
-        coords = await area.get_attribute("coords")
-
-        # Use alt text if available, otherwise use href as identifier
-        display_text = alt_text if alt_text else f"Image region: {href_value}"
-        area_texts.append(display_text)
-
-        area_info.append(
-            {"text": display_text, "href": href_value, "shape": shape, "coords": coords}
-        )
-
-    # Process orphaned area elements (areas without proper map structure)
-    orphaned_area_texts = []
-    orphaned_area_info = []
-    for area in orphaned_areas:
-        href_value = await area.get_attribute("href")
-        shape = await area.get_attribute("shape")
-        coords = await area.get_attribute("coords")
-
-        # For orphaned areas, use the href as the identifier
-        display_text = f"Orphaned area: {href_value}"
-        orphaned_area_texts.append(display_text)
-
-        orphaned_area_info.append(
-            {"text": display_text, "href": href_value, "shape": shape, "coords": coords}
-        )
-
-    # Process map elements
-    map_info = []
-    for map_elem in map_elements:
-        name = await map_elem.get_attribute("name")
-        id_attr = await map_elem.get_attribute("id")
-        map_info.append({"name": name, "id": id_attr})
-
-    # Process image maps
-    image_map_info = []
-    for img in image_maps:
-        src = await img.get_attribute("src")
-        alt = await img.get_attribute("alt")
-        usemap = await img.get_attribute("usemap")
-        image_map_info.append({"src": src, "alt": alt, "usemap": usemap})
+    link_texts = await extract_texts(links)
+    button_texts = await extract_texts(buttons)
+    div_texts = await extract_texts(clickable_divs)
+    pointer_texts = await extract_texts(pointer_elements)
+    handler_texts = await extract_texts(click_handlers)
+    button_like_texts = await extract_texts(button_like)
+    href_texts = await extract_texts(href_elements)
 
     # Remove duplicates and combine all clickable elements
     all_clickable = list(
@@ -155,31 +65,59 @@ async def get_button(page: Page, site: str):
             + div_texts
             + pointer_texts
             + handler_texts
-            + anchor_texts
             + button_like_texts
             + href_texts
-            + area_texts
-            + orphaned_area_texts
         )
     )
 
-    await page.screenshot(path=f"./temp/{site}.png")
-    await page.close()
+    return all_clickable
+    # {
+    #     "links": link_texts,
+    #     "buttons": button_texts,
+    #     "clickable_divs": div_texts,
+    #     "pointer_elements": pointer_texts,
+    #     "click_handlers": handler_texts,
+    #     "button_like": button_like_texts,
+    #     "href_elements": href_texts,
+    #     "all_clickable": all_clickable,
+    # }
 
-    return {
-        "links": link_texts,
-        "buttons": button_texts,
-        "clickable_divs": div_texts,
-        "pointer_elements": pointer_texts,
-        "click_handlers": handler_texts,
-        "anchor_links": anchor_texts,
-        "button_like": button_like_texts,
-        "href_elements": href_texts,
-        "area_elements": area_texts,
-        "area_details": area_info,
-        "orphaned_areas": orphaned_area_texts,
-        "orphaned_area_details": orphaned_area_info,
-        "map_elements": map_info,
-        "image_maps": image_map_info,
-        "all_clickable": all_clickable,
-    }
+
+# click the closest button that corresponds to llm_input
+async def click(llm_input, page: Page, site: str):
+    texts = [text for text, _ in candidates]
+    retries = 10
+    closest = get_close_matches(llm_input, texts, n=retries, cutoff=0.6)
+
+    if closest:
+        for retry in range(0, retries):
+            matched_text = closest[retry]
+            matched_locator = next(
+                locator for text, locator in candidates if text == matched_text
+            )
+
+            # Store current URL to detect navigation
+            current_url = page.url
+
+            # Click with navigation handling
+            try:
+                # Method 1: Wait for navigation if it occurs
+                async with page.expect_navigation(timeout=5000) as navigation_info:
+                    await matched_locator.click()
+                # Navigation occurred, wait for it to complete
+                await navigation_info.value
+                print(f"Navigation detected: {current_url} -> {page.url}")
+                break  # Success! Exit the retry loop
+            except TimeoutError:
+                # No navigation occurred, just wait for any load state changes
+                await matched_locator.click()
+                print("No navigation detected, clicked element without page change")
+                continue  # try next candidate
+
+    # Wait for the page to be fully loaded (whether navigated or not)
+    await page.wait_for_load_state("networkidle")
+
+    # Sanitize filename and take screenshot
+    filename = sanitize_filename(site) + ".png"
+
+    await page.screenshot(path=f"tools/actions/ss/{filename}")

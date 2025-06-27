@@ -1,4 +1,4 @@
-from manager import Manager
+from roles.manager import Manager
 
 from tools.ai import load_sys_prompt, openrouter
 

@@ -1,9 +1,10 @@
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import aiohttp
 from cerebras.cloud.sdk import AsyncCerebras
+from cerebras.cloud.sdk.types.chat.chat_completion import ChatCompletion
 from dotenv import load_dotenv
 
 
@@ -51,27 +52,34 @@ async def openrouter(
 async def cerebras(
     user_prompt: str,
     system_prompt: str,
-    schema,
+    schema=None,
     model: str = "llama-4-scout-17b-16e-instruct",
-):
+) -> ChatCompletion:
     load_dotenv()
     client = AsyncCerebras(
         api_key=os.environ.get("CEREBRAS_API_KEY"),
     )
 
-    chat_completion = await client.chat.completions.create(
-        model=model,
-        messages=[
+    params = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+        "stream": False,
+    }
+    if schema is not None:
+        params["response_format"] = {
             "type": "json_schema",
             "json_schema": {"name": "BroResponse", "strict": True, "schema": schema},
-        },
-        temperature=0.1,
-    )
-    return chat_completion
+        }
+
+    chat_completion = await client.chat.completions.create(**params)
+
+    response: ChatCompletion = cast(ChatCompletion, chat_completion)
+    return response
 
 
 async def load_sys_prompt(filename: str) -> str:

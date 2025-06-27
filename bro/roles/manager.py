@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from worker import Worker
+from roles.worker import Worker
 
 from tools.ai import load_sys_prompt, openrouter
 

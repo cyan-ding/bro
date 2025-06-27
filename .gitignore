@@ -9,7 +9,7 @@ venv/
 browser_data/
 temp/
 .env
-
+ss/
 # Distribution / packaging
 build/
 dist/
