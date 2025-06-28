@@ -1,13 +1,13 @@
 import json
 import uuid
 from typing import List, cast
-
+import asyncio
 from patchright.async_api import async_playwright
 
 from tools.actions.click import click, get_button, sanitize_filename
 from tools.actions.search import search
 from tools.actions.text_input import enter_input, get_text_input
-from tools.ai import cerebras, load_sys_prompt
+from tools.ai import cerebras, load_sys_prompt, cerebras_tools
 
 
 class Worker:
@@ -30,8 +30,22 @@ class Worker:
 
     async def execute_task(self):
         print(f"Executing: {self.task}")
-        await test_click(self.task)
-        # await test_input()
+        # plan is to make another llm call using tools/ as tool calls.
+        # eg: Task: self.task, categorize into a tool call
+        await test_tools()
+
+
+async def test_tools():
+    sys_prompt = await load_sys_prompt("worker")
+    user_prompt = "Send an email"
+    llm_res = await cerebras_tools(user_prompt, sys_prompt)
+    try:
+        llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["tool_calls"]
+        print(llm_res)
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
 
 
 async def test_input():
@@ -51,10 +65,10 @@ async def test_input():
             # list text inputs
             input_list = await get_text_input(webpage)
             # ai inference
-            sys_prompt = await load_sys_prompt("worker")
-            prompt_action = "Identify UI element to ask the AI a question"
+            sys_prompt = await load_sys_prompt("micro")
+            target = "Identify UI element to ask the AI a question"
             output_format = "Json format containing html, placeholder, aria_label, aria_describedby, and label properties as provided in the input"
-            prompt = f"Prompt action: {prompt_action}, Output format: {output_format}, DOM elements: {input_list}"
+            prompt = f"Prompt action: {target}, Output format: {output_format}, DOM elements: {input_list}"
             llm_res = await cerebras(prompt, sys_prompt)
 
             # process output
@@ -65,7 +79,7 @@ async def test_input():
 
 
 # async test browser
-async def test_click(task: str):
+async def test_click():
     async with async_playwright() as p:
         browser = await p.chromium.launch_persistent_context(
             user_data_dir="./browser_data",
@@ -87,8 +101,10 @@ async def test_click(task: str):
             button_list = await get_button(webpage)
 
             # ai inference
-            sys_prompt = await load_sys_prompt("worker")
-            prompt = "Prompt: Signing in" + str(button_list)
+            sys_prompt = await load_sys_prompt("micro")
+            target = "Signing in"
+            output_format = "The name of the button identified, as close as possible to what the element actually contained in the HTML"
+            prompt = f"Prompt action: {target}, Output format: {output_format}, DOM elements: {button_list}"
             llm_res = await cerebras(prompt, sys_prompt)
 
             # process output
@@ -97,3 +113,13 @@ async def test_click(task: str):
             llm_json = json.loads(llm_res)
             # click ui element
             await click(llm_json["action"], webpage, website)
+
+
+# if just testing input/click functions
+async def main():
+    await test_click()
+    # await test_input()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
