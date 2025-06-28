@@ -1,10 +1,12 @@
-import uuid
 import json
+import uuid
+from typing import List, cast
+
 from patchright.async_api import async_playwright
-from typing import cast, List
-from tools.actions.click import get_button, click
+
+from tools.actions.click import click, get_button, sanitize_filename
 from tools.actions.search import search
-from tools.actions.text_input import get_text_input
+from tools.actions.text_input import enter_input, get_text_input
 from tools.ai import cerebras, load_sys_prompt
 
 
@@ -29,6 +31,7 @@ class Worker:
     async def execute_task(self):
         print(f"Executing: {self.task}")
         await test_click(self.task)
+        # await test_input()
 
 
 async def test_input():
@@ -40,7 +43,7 @@ async def test_input():
             no_viewport=True,
         )
 
-        sites = ["https://inference.cerebras.ai/"]
+        sites = ["https://chatgpt.com"]
 
         for site in sites:
             webpage = await search(site, browser)
@@ -49,14 +52,16 @@ async def test_input():
             input_list = await get_text_input(webpage)
             # ai inference
             sys_prompt = await load_sys_prompt("worker")
-            prompt = "Prompt: Try inference" + str(input_list)
+            prompt_action = "Identify UI element to ask the AI a question"
+            output_format = "Json format containing html, placeholder, aria_label, aria_describedby, and label properties as provided in the input"
+            prompt = f"Prompt action: {prompt_action}, Output format: {output_format}, DOM elements: {input_list}"
             llm_res = await cerebras(prompt, sys_prompt)
 
             # process output
             llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
             print(llm_res, "\n")
             llm_json = json.loads(llm_res)
-            print("placeholder", llm_json)
+            await enter_input(llm_json["action"], webpage, sanitize_filename(site))
 
 
 # async test browser

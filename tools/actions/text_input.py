@@ -1,14 +1,14 @@
 # function to input text
+
 from patchright.async_api import Page
 
-element_data = []
 
-
+# returns list of metadata corresponding to input_candidates
 async def get_text_input(page: Page):
     # 1. Typed input fields (textual + special types)
     typed_inputs = await page.locator(
-        "input[type='text'], input[type='password'], input[type='email'], input[type='search']"
-        + "input[type='tel'], input[type='url'], input[type='number'], input[type='date'], input[type='time']"
+        "input[type='text'], input[type='password'], input[type='email'], input[type='search'], "
+        + "input[type='tel'], input[type='url'], input[type='number'], input[type='date'], input[type='time'], "
         + "input[type='datetime-local'], input[type='month'], input[type='week'], input[type='color']"
     ).all()
 
@@ -36,6 +36,7 @@ async def get_text_input(page: Page):
         )
     )
 
+    element_data = []
     for el in input_candidates:
         html = await el.inner_html()
         placeholder = await el.get_attribute("placeholder")
@@ -45,6 +46,7 @@ async def get_text_input(page: Page):
 
         element_data.append(
             {
+                "element": el,
                 "html": html,
                 "placeholder": placeholder,
                 "aria_label": aria_label,
@@ -56,5 +58,90 @@ async def get_text_input(page: Page):
     return element_data
 
 
-async def enter_input(llm_input: str, page: Page, site: str):
-    print("Placeholder")
+async def enter_input(llm_input, page: Page, site: str):
+    try:
+        # Get the current input candidates for this page
+        input_candidates = await get_text_input(page)
+        matched_candidates = []
+        # Find matching input element
+        matched_input = None
+        for candidate_data in input_candidates:
+            if (
+                (candidate_data.get("html") == llm_input.get("html"))
+                or (candidate_data.get("placeholder") == llm_input.get("placeholder"))
+                or (candidate_data.get("aria_label") == llm_input.get("aria_label"))
+                or (
+                    candidate_data.get("aria_describedby")
+                    == llm_input.get("aria_describedby")
+                )
+                or (candidate_data.get("label") == llm_input.get("label"))
+            ):
+                matched_element = candidate_data["element"]
+                matched_input = matched_element
+                matched_candidates.append(matched_element)
+
+        if matched_input is None:
+            print("No matching input element found")
+            return
+
+        # Try multiple strategies to fill the input
+        for candidate in matched_candidates:
+            try:
+                # Strategy 1: Wait for element to be visible and try fill
+                await candidate.wait_for(state="visible", timeout=5000)
+                await candidate.scroll_into_view_if_needed()
+                await candidate.fill("search")
+                print(
+                    f"Successfully filled element: {await candidate.get_attribute('placeholder')}"
+                )
+                break
+            except Exception as e1:
+                print(f"Strategy 1 failed: {e1}")
+                try:
+                    # Strategy 2: Try clicking first, then filling
+                    await candidate.wait_for(state="visible", timeout=5000)
+                    await candidate.scroll_into_view_if_needed()
+                    await candidate.click()
+                    await page.wait_for_timeout(500)  # Wait for any animations
+                    await candidate.fill("search")
+                    print(
+                        f"Successfully filled element with click strategy: {await candidate.get_attribute('placeholder')}"
+                    )
+                    break
+                except Exception as e2:
+                    print(f"Strategy 2 failed: {e2}")
+                    try:
+                        # Strategy 3: Try using type instead of fill
+                        await candidate.wait_for(state="visible", timeout=5000)
+                        await candidate.scroll_into_view_if_needed()
+                        await candidate.click()
+                        await page.wait_for_timeout(500)
+                        await candidate.type("search")
+                        print(
+                            f"Successfully typed into element: {await candidate.get_attribute('placeholder')}"
+                        )
+                        break
+                    except Exception as e3:
+                        print(f"Strategy 3 failed: {e3}")
+                        try:
+                            # Strategy 4: Try using keyboard shortcuts
+                            await candidate.wait_for(state="visible", timeout=5000)
+                            await candidate.scroll_into_view_if_needed()
+                            await candidate.focus()
+                            await page.keyboard.type("search")
+                            print(
+                                f"Successfully used keyboard input: {await candidate.get_attribute('placeholder')}"
+                            )
+                            break
+                        except Exception as e4:
+                            print(f"Strategy 4 failed: {e4}")
+                            continue
+
+        await page.wait_for_load_state("networkidle")
+        await page.screenshot(path=f"tools/actions/ss/{site}.png")
+
+    except Exception as e:
+        print("Text input error: ", e)
+        import traceback
+
+        traceback.print_exc()

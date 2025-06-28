@@ -1,6 +1,6 @@
 import asyncio
 
-from worker import Worker
+from roles.worker import Worker
 
 # entry file
 

@@ -101,18 +101,18 @@ async def click(llm_input, page: Page, site: str):
 
             # Click with navigation handling
             try:
+                await matched_locator.click()
                 # Method 1: Wait for navigation if it occurs
                 async with page.expect_navigation(timeout=5000) as navigation_info:
-                    await matched_locator.click()
-                # Navigation occurred, wait for it to complete
-                await navigation_info.value
-                print(f"Navigation detected: {current_url} -> {page.url}")
-                break  # Success! Exit the retry loop
+                    # Navigation occurred, wait for it to complete
+                    await navigation_info.value
+                    print(f"Navigation detected: {current_url} -> {page.url}")
+                    break  # Success! Exit the retry loop
             except TimeoutError:
-                # No navigation occurred, just wait for any load state changes
-                await matched_locator.click()
-                print("No navigation detected, clicked element without page change")
                 continue  # try next candidate
+    else:
+        print("No matches, no clicks")
+        return
 
     # Wait for the page to be fully loaded (whether navigated or not)
     await page.wait_for_load_state("networkidle")
