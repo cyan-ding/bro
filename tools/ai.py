@@ -53,7 +53,7 @@ async def cerebras_tools(
     user_prompt: str,
     system_prompt: str,
     schema=None,
-    model: str = "llama-4-scout-17b-16e-instruct",
+    model: str = "qwen-3-32b",
 ) -> ChatCompletion:
     load_dotenv()
     client = AsyncCerebras(
@@ -74,7 +74,10 @@ async def cerebras_tools(
                 "type": "function",
                 "function": {
                     "name": "click",
-                    "description": "Click on a button or button like object displayed in the browser",
+                    "description": "Click on a button or button-like object displayed in the browser. "
+                    "The 'target' argument must be a literal, observable description of the UI element, "
+                    "such as the exact text, label, or aria-label as it appears in the DOM. "
+                    "Example: 'button with text \"Sign in\"'.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -91,7 +94,10 @@ async def cerebras_tools(
                 "type": "function",
                 "function": {
                     "name": "input_text",
-                    "description": "Enter text into a text area, text box, or text field adjacent object in the browser",
+                    "description": "Enter text into a text area, text box, or text field in the browser. "
+                    "The 'target' argument must be a literal, observable description of the UI element, "
+                    "such as the exact placeholder, label, or aria-label as it appears in the DOM. "
+                    "Example: 'input field with placeholder \"Email\"'.",
                     "parameters": {
                         "type": "object",
                         "properties": {

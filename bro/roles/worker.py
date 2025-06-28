@@ -37,7 +37,7 @@ class Worker:
 
 async def test_tools():
     sys_prompt = await load_sys_prompt("worker")
-    user_prompt = "Send an email"
+    user_prompt = "Write an email"
     llm_res = await cerebras_tools(user_prompt, sys_prompt)
     try:
         llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["tool_calls"]
