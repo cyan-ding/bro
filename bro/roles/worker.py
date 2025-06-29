@@ -7,6 +7,7 @@ from tools.actions.click import click, get_button, sanitize_filename
 from tools.actions.search import search
 from tools.actions.text_input import enter_input, get_text_input
 from tools.ai import cerebras, load_sys_prompt, cerebras_tools
+import traceback
 
 
 class Worker:
@@ -40,12 +41,25 @@ class Worker:
                 no_viewport=True,
             )
             webpage = await search("https://chatgpt.com", browser=browser)
-            await test_tools(webpage=webpage)
+            await test_tool_chain(webpage=webpage)
 
 
-async def test_tools(webpage: Page):
+async def test_tool_chain(webpage: Page):
+    prompt_chain = [
+        "Enter into Chat Gpt instructions on setting up a new Windows",
+        "Click on the submit button",
+    ]
+
     sys_prompt = await load_sys_prompt("worker")
-    user_prompt = "Enter a prompt in Chat Gpt for how to cook spaghetti"
+
+    for prompt in prompt_chain:
+        try:
+            await tool_call(webpage=webpage, sys_prompt=sys_prompt, user_prompt=prompt)
+        except Exception:
+            traceback.print_exc()
+
+
+async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str):
     llm_res = await cerebras_tools(user_prompt, sys_prompt)
     try:
         llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["tool_calls"]
@@ -53,19 +67,21 @@ async def test_tools(webpage: Page):
         func = llm_res[0]["function"]
         func_name = func["name"]
         func_args = func["arguments"]
-        target = json.loads(func_args)["target"]
+        json_func = json.loads(func_args)
+        target = json_func["target"]
+        input_text = ""
+        if func_name == "input_text":
+            input_text = json_func["input"]
         match func_name:
             case "click":
                 await click_wrapper(webpage, target)
             case "input_text":
-                await text_input_wrapper(webpage, target)
+                await text_input_wrapper(webpage, target, input_text)
     except Exception:
-        import traceback
-
         traceback.print_exc()
 
 
-async def text_input_wrapper(webpage: Page, target: str):
+async def text_input_wrapper(webpage: Page, target: str, input_text: str):
     # list text inputs
     input_list = await get_text_input(webpage)
     # ai inference
@@ -78,7 +94,12 @@ async def text_input_wrapper(webpage: Page, target: str):
     llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
     print("LLM Output for text input analysis: ", llm_res, "\n")
     llm_json = json.loads(llm_res)
-    await enter_input(llm_json["action"], webpage, sanitize_filename(webpage.url))
+    await enter_input(
+        llm_json["action"],
+        webpage,
+        sanitize_filename(webpage.url),
+        input_text=input_text,
+    )
 
 
 async def click_wrapper(webpage: Page, target: str):

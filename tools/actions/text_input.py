@@ -58,7 +58,7 @@ async def get_text_input(page: Page):
     return element_data
 
 
-async def enter_input(llm_input, page: Page, site: str):
+async def enter_input(llm_input, page: Page, site: str, input_text: str):
     try:
         # Get the current input candidates for this page
         input_candidates = await get_text_input(page)
@@ -90,51 +90,33 @@ async def enter_input(llm_input, page: Page, site: str):
                 # Strategy 1: Wait for element to be visible and try fill
                 await candidate.wait_for(state="visible", timeout=5000)
                 await candidate.scroll_into_view_if_needed()
-                await candidate.fill("search")
+                await candidate.click()
+                await candidate.fill(input_text)
                 print(
                     f"Successfully filled element: {await candidate.get_attribute('placeholder')}"
                 )
                 break
-            except Exception as e1:
-                print(f"Strategy 1 failed: {e1}")
+            except Exception:
                 try:
-                    # Strategy 2: Try clicking first, then filling
-                    await candidate.wait_for(state="visible", timeout=5000)
-                    await candidate.scroll_into_view_if_needed()
-                    await candidate.click()
-                    await page.wait_for_timeout(500)  # Wait for any animations
-                    await candidate.fill("search", force=True)
+                    await candidate.fill(input_text, force=True)
                     print(
-                        f"Successfully filled element with click strategy: {await candidate.get_attribute('placeholder')}"
+                        f"Successfully filled element with force: {await candidate.get_attribute('placeholder')}"
                     )
                     break
-                except Exception as e2:
-                    print(f"Strategy 2 failed: {e2}")
+                except Exception:
                     try:
-                        # Strategy 3: Try using type instead of fill
-                        await candidate.wait_for(state="visible", timeout=5000)
-                        await candidate.scroll_into_view_if_needed()
-                        await candidate.click()
-                        await page.wait_for_timeout(500)
-                        await candidate.type("search")
+                        await candidate.type(input_text)
                         print(
                             f"Successfully typed into element: {await candidate.get_attribute('placeholder')}"
                         )
                         break
-                    except Exception as e3:
-                        print(f"Strategy 3 failed: {e3}")
-                        try:
-                            # Strategy 4: Try using keyboard shortcuts
-                            await candidate.wait_for(state="visible", timeout=5000)
-                            await candidate.scroll_into_view_if_needed()
-                            await candidate.focus()
-                            await page.keyboard.type("search")
-                            print(
-                                f"Successfully used keyboard input: {await candidate.get_attribute('placeholder')}"
-                            )
-                            break
-                        except Exception as e4:
-                            print(f"Strategy 4 failed: {e4}")
+                    except Exception:
+                        await candidate.focus()
+                        await page.keyboard.type(input_text)
+                        print(
+                            f"Successfully used keyboard input: {await candidate.get_attribute('placeholder')}"
+                        )
+                        break
 
         await page.wait_for_load_state("networkidle")
         await page.screenshot(path=f"tools/actions/ss/{site}.png")

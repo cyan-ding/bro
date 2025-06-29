@@ -110,3 +110,5 @@ async def click(llm_input, page: Page, site: str):
     filename = sanitize_filename(site) + ".png"
 
     await page.screenshot(path=f"tools/actions/ss/{filename}")
+
+    candidates.clear()
