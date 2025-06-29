@@ -103,7 +103,7 @@ async def enter_input(llm_input, page: Page, site: str):
                     await candidate.scroll_into_view_if_needed()
                     await candidate.click()
                     await page.wait_for_timeout(500)  # Wait for any animations
-                    await candidate.fill("search")
+                    await candidate.fill("search", force=True)
                     print(
                         f"Successfully filled element with click strategy: {await candidate.get_attribute('placeholder')}"
                     )
@@ -135,7 +135,6 @@ async def enter_input(llm_input, page: Page, site: str):
                             break
                         except Exception as e4:
                             print(f"Strategy 4 failed: {e4}")
-                            continue
 
         await page.wait_for_load_state("networkidle")
         await page.screenshot(path=f"tools/actions/ss/{site}.png")

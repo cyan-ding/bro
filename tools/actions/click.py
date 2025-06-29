@@ -71,16 +71,6 @@ async def get_button(page: Page):
     )
 
     return all_clickable
-    # {
-    #     "links": link_texts,
-    #     "buttons": button_texts,
-    #     "clickable_divs": div_texts,
-    #     "pointer_elements": pointer_texts,
-    #     "click_handlers": handler_texts,
-    #     "button_like": button_like_texts,
-    #     "href_elements": href_texts,
-    #     "all_clickable": all_clickable,
-    # }
 
 
 # click the closest button that corresponds to llm_input
@@ -95,7 +85,6 @@ async def click(llm_input, page: Page, site: str):
             matched_locator = next(
                 locator for text, locator in candidates if text == matched_text
             )
-
             # Store current URL to detect navigation
             current_url = page.url
 
