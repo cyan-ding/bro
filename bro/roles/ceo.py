@@ -1,6 +1,6 @@
 from roles.manager import Manager
 
-from tools.ai import load_sys_prompt, openrouter
+from actions.ai import load_sys_prompt, openrouter
 
 
 class Ceo:

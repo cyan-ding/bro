@@ -5,11 +5,11 @@ import uuid
 from typing import List, cast
 
 from patchright.async_api import Page, async_playwright
-
-from tools.actions.click import click, get_button, sanitize_filename
-from tools.actions.search import search
-from tools.actions.text_input import enter_input, get_text_input
-from tools.ai import cerebras, cerebras_tools, load_sys_prompt
+from prompts.tools.worker_tool import worker_tool
+from actions.click import click, get_button, sanitize_filename
+from actions.search import search
+from actions.text_input import enter_input, get_text_input
+from actions.ai import cerebras, cerebras_tools, load_sys_prompt
 
 
 class Worker:
@@ -43,17 +43,15 @@ class Worker:
                 no_viewport=True,
             )
             webpage = await search("https://chatgpt.com", browser=browser)
-            await test_tool_chain(webpage=webpage)
+            prompt_chain = [
+                "Enter into Chat Gpt instructions on setting up a new Windows",
+                "Click on the submit button",
+            ]
+            await test_tool_chain(webpage=webpage, prompt_chain=prompt_chain)
 
 
-async def test_tool_chain(webpage: Page):
-    prompt_chain = [
-        "Enter into Chat Gpt instructions on setting up a new Windows",
-        "Click on the submit button",
-    ]
-
+async def test_tool_chain(webpage: Page, prompt_chain):
     sys_prompt = await load_sys_prompt("worker")
-
     for prompt in prompt_chain:
         try:
             await tool_call(webpage=webpage, sys_prompt=sys_prompt, user_prompt=prompt)
@@ -62,7 +60,10 @@ async def test_tool_chain(webpage: Page):
 
 
 async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str):
-    llm_res = await cerebras_tools(user_prompt, sys_prompt)
+    worker_params = worker_tool(
+        user_prompt=user_prompt, system_prompt=sys_prompt, model="qwen-3-32b"
+    )
+    llm_res = await cerebras_tools(worker_params)
     try:
         llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["tool_calls"]
         print(llm_res)
