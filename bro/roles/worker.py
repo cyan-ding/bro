@@ -1,13 +1,15 @@
+import asyncio
 import json
+import traceback
 import uuid
 from typing import List, cast
-import asyncio
+
 from patchright.async_api import Page, async_playwright
+
 from tools.actions.click import click, get_button, sanitize_filename
 from tools.actions.search import search
 from tools.actions.text_input import enter_input, get_text_input
-from tools.ai import cerebras, load_sys_prompt, cerebras_tools
-import traceback
+from tools.ai import cerebras, cerebras_tools, load_sys_prompt
 
 
 class Worker:
@@ -103,20 +105,26 @@ async def text_input_wrapper(webpage: Page, target: str, input_text: str):
 
 
 async def click_wrapper(webpage: Page, target: str):
-    button_list = await get_button(webpage)
-
-    # ai inference
+    candidates = await get_button(webpage)
+    print("Candidate buttons: ", candidates, "\n")
+    # Prepare LLM input (strip element handles)
+    llm_candidates = [
+        {k: v for k, v in c.items() if k != "element"} for c in candidates
+    ]
     sys_prompt = await load_sys_prompt("micro")
-    output_format = "The name of the button identified, as close as possible to what the element actually contained in the HTML"
-    prompt = f"Prompt action: {target}, Output format: {output_format}, DOM elements: {button_list}"
+    prompt = (
+        f"Prompt action: {target}\n"
+        f"Here is a list of clickable elements (with their HTML and attributes):\n"
+        f"{json.dumps(llm_candidates, indent=2)}\n"
+        'Return the index of the best match as a JSON object: {"action": <index>}'
+    )
     llm_res = await cerebras(prompt, sys_prompt)
-
-    # process output
     llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
-    print("LLM Output for click analysis: ", llm_res, "\n")
+
+    print("LLM Output for text input analysis: ", llm_res, "\n")
     llm_json = json.loads(llm_res)
-    # click ui element
-    await click(llm_json["action"], webpage, webpage.url)
+    idx = int(llm_json["action"])
+    await click(idx, webpage, webpage.url, candidates)
 
 
 async def test_input():
