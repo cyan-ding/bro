@@ -133,7 +133,7 @@ async def test_input():
         for site in sites:
             webpage = await search(site, browser)
             test_target = "Identify UI element to ask the AI a question"
-            await text_input_wrapper(webpage, test_target)
+            await text_input_wrapper(webpage, test_target, site)
 
 
 # async test browser

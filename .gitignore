@@ -31,3 +31,6 @@ Desktop.ini
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+# AI
+yolov8n.pt
