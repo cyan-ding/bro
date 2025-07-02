@@ -5,7 +5,7 @@ import uuid
 from typing import List, cast
 
 from patchright.async_api import Page, async_playwright
-from prompts.tools.worker_tool import worker_tool
+from prompts.tools.cerebras.worker_tool import worker_tool
 from actions.click import click, get_button, sanitize_filename
 from actions.search import search
 from actions.text_input import enter_input, get_text_input

@@ -1,51 +1,101 @@
+"""
+AI Action Functions for Bro
+
+This module provides AI interaction functions for the Bro system, including:
+- Claude AI integration with prompt caching and tool calling
+- Cerebras AI integration for various models
+- OpenRouter integration for additional model access
+- System prompt loading and caching utilities
+
+The module supports multiple AI providers and includes specialized functions for
+different tool sets (CEO, Manager, Worker) used in the Bro agent hierarchy.
+
+@file purpose: Provides AI interaction functions with caching and tool calling support
+"""
+
 import json
 import os
-from typing import Any, Dict, cast
 import aiohttp
+import anthropic
 from cerebras.cloud.sdk import AsyncCerebras
 from cerebras.cloud.sdk.types.chat.chat_completion import ChatCompletion
 from dotenv import load_dotenv
+from typing import Any, Dict, cast
+from openai import OpenAI
 
 
-async def openrouter(
-    user_prompt: str,
-    system_prompt: str,
-    model: str = "deepseek/deepseek-chat-v3-0324:free",
-) -> Dict[Any, Any]:
+async def gpt(params: Dict[str, Any]):
+    load_dotenv()
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    try:
+        response = client.responses.create(**params)
+        return response
+    except Exception as e:
+        print("Error in OpenAi API: ", e)
+
+
+async def claude(
+    params: Dict[str, Any],
+):
+    """
+    Claude AI function with prompt caching and tool calling support.
+
+    Args:
+        user_prompt: The user's input prompt
+        system_prompt: The system prompt to guide Claude's behavior
+        tools: List of tool definitions for function calling
+        model: Claude model to use
+        temperature: Sampling temperature (0.0 to 1.0)
+        max_tokens: Maximum tokens in response
+        stream: Whether to stream the response
+        tool_choice: Tool choice strategy ("auto", "none", or "required")
+
+    Returns:
+        Dictionary containing the AI response and metadata
+    """
     load_dotenv()
 
-    async with aiohttp.ClientSession() as session:
-        try:
-            response = await session.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0.1,
-                },
-            )
-            result = await response.json()
+    # Initialize Claude client
+    client = anthropic.Anthropic(api_key=os.environ.get("CLAUDE_API_KEY"))
 
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"]
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                    raise ValueError(f"AI Response in invalid JSON: {content}")
-            else:
-                raise ValueError(f"Unexpected API response: {result}")
+    try:
+        # Make the API call
+        response = client.messages.create(**params)
 
-        except Exception as e:
-            print(f"Error in OpenRouter response: {e}")
-            return {}
+        # Process the response
+        result = {
+            "id": response.id,
+            "type": response.type,
+            "role": response.role,
+            "content": response.content,
+            "model": response.model,
+            "stop_reason": response.stop_reason,
+            "stop_sequence": response.stop_sequence,
+            "usage": response.usage,
+        }
+
+        # Handle tool calls if present
+        if hasattr(response, "content") and response.content:
+            tool_calls = []
+            for content_block in response.content:
+                if hasattr(content_block, "type") and content_block.type == "tool_use":
+                    tool_calls.append(
+                        {
+                            "id": content_block.id,
+                            "name": content_block.name,
+                            "input": content_block.input,
+                            "type": content_block.type,
+                        }
+                    )
+
+            if tool_calls:
+                return tool_calls
+
+        return result
+
+    except Exception as e:
+        print(f"Error in Claude API call: {e}")
+        return {"error": str(e)}
 
 
 async def cerebras_tools(
@@ -104,5 +154,46 @@ async def cerebras(
 
 
 async def load_sys_prompt(filename: str) -> str:
-    with open(f"prompts/{filename}.txt", "r") as f:
+    with open(f"prompts/roles/{filename}.txt", "r") as f:
         return f.read()
+
+
+async def openrouter(
+    user_prompt: str,
+    system_prompt: str,
+    model: str = "deepseek/deepseek-chat-v3-0324:free",
+) -> Dict[Any, Any]:
+    load_dotenv()
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            response = await session.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.1,
+                },
+            )
+            result = await response.json()
+
+            if "choices" in result and len(result["choices"]) > 0:
+                content = result["choices"][0]["message"]["content"]
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    raise ValueError(f"AI Response in invalid JSON: {content}")
+            else:
+                raise ValueError(f"Unexpected API response: {result}")
+
+        except Exception as e:
+            print(f"Error in OpenRouter response: {e}")
+            return {}
