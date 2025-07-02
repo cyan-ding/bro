@@ -1,7 +1,7 @@
 def manager_claude(
     user_prompt: str,
     system_prompt: str,
-    model: str = "claude-3-5-haiku-latest",
+    model: str = "claude-sonnet-4-20250514",
     temperature: float = 0.1,
     stream: bool = False,
     max_tokens: int = 1024,

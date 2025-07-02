@@ -3,8 +3,8 @@ import uuid
 
 from roles.worker import Worker
 
-from actions.ai import load_sys_prompt, gpt
-from prompts import gpt_manager
+from actions.ai import load_sys_prompt, gpt, claude
+from prompts import gpt_manager, manager_claude
 
 
 class Manager:
@@ -23,11 +23,11 @@ class Manager:
         # llm_res = await cerebras_tools(params=llm_params)
         # llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["tool_calls"]
         # print(llm_res)
-        # params = manager_claude(user_prompt=self.subgoal, system_prompt=sys_prompt)
+        params = manager_claude(user_prompt=self.subgoal, system_prompt=sys_prompt)
 
-        # res = await claude(params=params)
-        params = gpt_manager(user_prompt=self.subgoal, system_prompt=sys_prompt)
-        res = await gpt(params)
+        res = await claude(params=params)
+        # params = gpt_manager(user_prompt=self.subgoal, system_prompt=sys_prompt)
+        # res = await gpt(params)
         print(res)
 
     # add a worker
@@ -60,7 +60,7 @@ class Manager:
 
 async def main():
     manager = Manager(
-        "Use chat gpt to collect informationon how to set up a windows computer"
+        "Complete this task in its entirety. nothing can be left incomplete: Create a detailed comparison table of the Tesla Model Y, Tesla Model X, and Tesla Model 3, showing price ranges, driving range, key safety features, and any notable advantages or disadvantages of each model"
     )
     await manager.create_tasks()
 
