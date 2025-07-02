@@ -60,7 +60,7 @@ class Manager:
 
 async def main():
     manager = Manager(
-        "Collect information from chat gpt on how to set up a windows computer"
+        "Use chat gpt to collect informationon how to set up a windows computer"
     )
     await manager.create_tasks()
 

@@ -55,3 +55,12 @@ def ceo_claude(
             }
         ],
     }
+
+
+def pretty_print_tool_calls(tool_calls):
+    for i, call in enumerate(tool_calls, 1):
+        print(f"Manager Tool Call {i}:")
+        subgoals = call['input'].get('subgoal_chain', [])
+        for idx, subgoal in enumerate(subgoals, 1):
+            print(f"  {idx}. {subgoal}")
+        print()

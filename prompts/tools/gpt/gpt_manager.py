@@ -1,7 +1,7 @@
 def gpt_manager(
     user_prompt: str,
     system_prompt: str,
-    model: str = "gpt-4.1-nano",
+    model: str = "gpt-4.1",
 ):
     return {
         "model": model,
@@ -14,7 +14,9 @@ def gpt_manager(
                 "type": "function",
                 "name": "worker",
                 "description": "Assigns a chain of low-level atomic tasks to a worker agent for sequential execution."
-                + "The subgoal_chain should be a list of high-level subgoals or objectives.",
+                "Each atomic task MUST follow the user's specified website or tool exactly. Do NOT substitute or add alternatives."
+                "Each atomic task MUST target only a single object or action (e.g., one website, one button, one field). "
+                "Do NOT combine multiple targets or actions in a single task. ",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -47,4 +49,5 @@ def gpt_manager(
             #     "cache_control": {"type": "ephemeral"},
             # },
         ],
+        "temperature": 0.5,
     }
