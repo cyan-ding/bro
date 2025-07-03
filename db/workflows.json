@@ -1,0 +1,21 @@
+{
+  "test_login": [
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "click",
+      "selector": "button:has-text('OpenAI')"
+    },
+    {
+      "action": "text_input",
+      "selector": "#identifierId",
+      "value": "abcd@gmail.com"
+    },
+    {
+      "action": "text_input",
+      "selector": "#identifierId",
+      "value": "abcd"
+    }
+  ]
+}

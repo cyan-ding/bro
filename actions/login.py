@@ -6,16 +6,16 @@ from actions.click import click, get_button
 from actions.search import search
 from actions.text_input import enter_input, get_text_input
 from bro.roles.worker import click_wrapper
+from db import workflows
+from db.workflows import Workflows
 
-
-async def login(page: Page, browser: BrowserContext):
+async def login(page: Page, browser: BrowserContext, workflow_id = None):
     """
     Automates logging into a site using 'Log in with Google'.
     Fills email and password fields if needed, and clicks the 'Log in with Google' button.
     """
     email = input("Input email: ")
     password = input("Input password: ")
-
     # 1. Find and click the 'Log in with Google' button
     candidates = await get_button(page)
     google_btn_idx = None
@@ -31,7 +31,7 @@ async def login(page: Page, browser: BrowserContext):
     if google_btn_idx is None:
         print("Could not find 'Log in with Google' button.")
     else:
-        await click(google_btn_idx, page, page.url, candidates)
+        await click(google_btn_idx, page, page.url, candidates, workflow_id=workflow_id)
 
     # 2. Switch to the Google login popup/page
     # Wait for new page (popup)
@@ -70,7 +70,7 @@ async def login(page: Page, browser: BrowserContext):
     if not email_input:
         print("Could not find email input field.")
         return
-    await enter_input(email_input, google_page, "google_login", email)
+    await enter_input(email_input, google_page, "google_login", email, workflow_id=workflow_id)
 
     # 4. Click 'Next' after email
     btn_candidates = await get_button(google_page)
@@ -87,7 +87,7 @@ async def login(page: Page, browser: BrowserContext):
             next_btn_idx = idx
             break
     if next_btn_idx is not None:
-        await click(next_btn_idx, google_page, "google_login", btn_candidates)
+        await click(next_btn_idx, google_page, "google_login", btn_candidates, workflow_id=workflow_id)
     else:
         print("Could not find Next button")
     await asyncio.sleep(2)
@@ -112,7 +112,7 @@ async def login(page: Page, browser: BrowserContext):
     if not password_input:
         print("Could not find password input field.")
         return
-    await enter_input(password_input, google_page, "google_login", password)
+    await enter_input(password_input, google_page, "google_login", password, workflow_id=workflow_id)
 
     # 6. Click 'Next' after password
     btn_candidates = await get_button(google_page)
@@ -124,7 +124,7 @@ async def login(page: Page, browser: BrowserContext):
             next_btn_idx = idx
             break
     if next_btn_idx is not None:
-        await click(next_btn_idx, google_page, "google_login", btn_candidates)
+        await click(next_btn_idx, google_page, "google_login", btn_candidates, workflow_id=workflow_id)
     print("Login flow attempted. Check browser for result.")
 
 
@@ -136,10 +136,11 @@ async def test_login():
             headless=False,
             no_viewport=True,
         )
-        page = await search("https://chatgpt.com", browser)
-        await click_wrapper(page, "Log in")
+        workflow_id = "test_login"
+        page = await search("https://chatgpt.com", browser, workflow_id=workflow_id)
+        await click_wrapper(page, "Log in", workflow_id=workflow_id)
         await page.wait_for_timeout(3000)
-        await login(page, browser)
+        await login(page, browser, workflow_id=workflow_id)
 
 if __name__ == "__main__":
     asyncio.run(test_login())

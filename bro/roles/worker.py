@@ -106,7 +106,7 @@ async def text_input_wrapper(webpage: Page, target: str, input_text: str):
     )
 
 
-async def click_wrapper(webpage: Page, target: str):
+async def click_wrapper(webpage: Page, target: str, workflow_id =None):
     candidates = await get_button(webpage)
     print("Candidate buttons: ", candidates, "\n")
     # Prepare LLM input (strip element handles)
@@ -126,7 +126,7 @@ async def click_wrapper(webpage: Page, target: str):
     print("LLM Output for text input analysis: ", llm_res, "\n")
     llm_json = json.loads(llm_res)
     idx = int(llm_json["action"])
-    await click(idx, webpage, webpage.url, candidates)
+    await click(idx, webpage, webpage.url, candidates, workflow_id=workflow_id)
 
 
 async def test_input():

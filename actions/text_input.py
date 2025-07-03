@@ -2,6 +2,9 @@
 
 from patchright.async_api import Page
 
+from actions.utils import get_best_selector
+from db.workflows import Workflows
+
 
 # returns list of metadata corresponding to input_candidates
 async def get_text_input(page: Page):
@@ -62,7 +65,9 @@ async def get_text_input(page: Page):
     return element_data
 
 
-async def enter_input(llm_input, page: Page, site: str, input_text: str):
+async def enter_input(
+    llm_input, page: Page, site: str, input_text: str, workflow_id=None
+):
     try:
         # Get the current input candidates for this page
         input_candidates = await get_text_input(page)
@@ -96,29 +101,39 @@ async def enter_input(llm_input, page: Page, site: str, input_text: str):
                 await candidate.scroll_into_view_if_needed()
                 await candidate.click()
                 await candidate.fill(input_text)
-                print(
-                    f"Successfully filled element: {await candidate.get_attribute('placeholder')}"
+                print("Successfully used keyboard input")
+                await add_input_to_workflow(
+                    workflow_id=workflow_id, candidate=candidate, input_text=input_text
                 )
                 break
             except Exception:
                 try:
                     await candidate.fill(input_text, force=True)
-                    print(
-                        f"Successfully filled element with force: {await candidate.get_attribute('placeholder')}"
+                    print("Successfully used keyboard input")
+                    await add_input_to_workflow(
+                        workflow_id=workflow_id,
+                        candidate=candidate,
+                        input_text=input_text,
                     )
                     break
                 except Exception:
                     try:
                         await candidate.type(input_text)
-                        print(
-                            f"Successfully typed into element: {await candidate.get_attribute('placeholder')}"
+                        print("Successfully used keyboard input")
+                        await add_input_to_workflow(
+                            workflow_id=workflow_id,
+                            candidate=candidate,
+                            input_text=input_text,
                         )
                         break
                     except Exception:
                         await candidate.focus()
                         await page.keyboard.type(input_text)
-                        print(
-                            f"Successfully used keyboard input: {await candidate.get_attribute('placeholder')}"
+                        print("Successfully used keyboard input")
+                        await add_input_to_workflow(
+                            workflow_id=workflow_id,
+                            candidate=candidate,
+                            input_text=input_text,
                         )
                         break
 
@@ -130,3 +145,13 @@ async def enter_input(llm_input, page: Page, site: str, input_text: str):
         import traceback
 
         traceback.print_exc()
+
+
+async def add_input_to_workflow(workflow_id, candidate, input_text):
+    if workflow_id is not None:
+        workflow = Workflows()
+        selector = await get_best_selector(candidate)
+        workflow.add_step(
+            id=workflow_id,
+            step={"action": "text_input", "selector": selector, "value": input_text},
+        )
