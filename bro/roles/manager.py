@@ -3,8 +3,8 @@ import uuid
 
 from roles.worker import Worker
 
-from actions.ai import load_sys_prompt, gpt, claude
-from prompts import gpt_manager, manager_claude
+from actions.ai import claude, load_sys_prompt
+from prompts import manager_claude
 
 
 class Manager:

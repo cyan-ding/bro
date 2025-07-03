@@ -1,7 +1,7 @@
-from actions.ai import load_sys_prompt, claude, gpt
-from prompts.tools.gpt.gpt_ceo import gpt_ceo
-from prompts.tools.claude.ceo_claude import ceo_claude, pretty_print_tool_calls
 import asyncio
+
+from actions.ai import claude, load_sys_prompt
+from prompts.tools.claude.ceo_claude import ceo_claude, pretty_print_tool_calls
 
 
 class Ceo:
@@ -18,7 +18,11 @@ class Ceo:
         # llm_res = await cerebras_tools(params=llm_params)
         # llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["tool_calls"]
         # print(llm_res)
-        prompt = ceo_claude(user_prompt=self.task, system_prompt=sys_prompt, model="claude-opus-4-20250514")
+        prompt = ceo_claude(
+            user_prompt=self.task,
+            system_prompt=sys_prompt,
+            model="claude-opus-4-20250514",
+        )
         res = await claude(prompt)
         # prompt = gpt_ceo(user_prompt=self.task, system_prompt=sys_prompt)
         # res = await gpt(prompt)
@@ -28,8 +32,8 @@ class Ceo:
 
 async def main():
     ceo = Ceo(
-        "Find and compare the top three electric cars available in 2024, including price, range, and safety features."     
-        )
+        "Find and compare the top three electric cars available in 2024, including price, range, and safety features."
+    )
     await ceo.execute()
 
 

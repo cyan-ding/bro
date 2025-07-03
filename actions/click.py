@@ -65,8 +65,16 @@ async def get_button(page: Page):
         ).all()
         + await page.locator("[href]").all()
     )
-    # Remove duplicates by id
-    unique_elements = list({id(el): el for el in all_elements}.values())
+    # Remove duplicates by outerHTML
+    unique_by_html = {}
+    for el in all_elements:
+        try:
+            outer_html = await el.evaluate("el => el.outerHTML")
+            if outer_html not in unique_by_html:
+                unique_by_html[outer_html] = el
+        except Exception:
+            continue
+    unique_elements = list(unique_by_html.values())
     candidates = await extract_candidates(unique_elements)
     return candidates
 

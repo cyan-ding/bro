@@ -43,6 +43,8 @@ async def get_text_input(page: Page):
         aria_label = await el.get_attribute("aria-label")
         aria_describedby = await el.get_attribute("aria-describedby")
         label = await el.evaluate("el => el.labels?.[0]?.innerText")  # linked <label>
+        outer_html = await el.evaluate("el => el.outerHTML")
+        inner_html = html  # already fetched
 
         element_data.append(
             {
@@ -52,6 +54,8 @@ async def get_text_input(page: Page):
                 "aria_label": aria_label,
                 "aria_describedby": aria_describedby,
                 "label": label,
+                "outer_html": outer_html,
+                "inner_html": inner_html,
             }
         )
 
