@@ -39,6 +39,7 @@ dependencies = [
     "openai>=1.93.0",
     "lxml",
     "chardet",
+    "datasets>=3.6.0",
 ]
 
 [tool.setuptools.packages.find]

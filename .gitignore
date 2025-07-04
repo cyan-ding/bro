@@ -33,4 +33,10 @@ Desktop.ini
 .ipynb_checkpoints/
 
 # AI
-yolov8n.pt
+yolodata/
+runs/detect/train*/*.png
+runs/detect/train*/*.jpg
+runs/detect/train*/*.csv
+runs/detect/train*/*.yaml
+yolo*.pt
+last.pt
