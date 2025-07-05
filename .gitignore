@@ -5,11 +5,12 @@ __pycache__/
 
 # Virtual environment
 venv/
-.venv
+.venv/
 browser_data/
 temp/
 .env
 ss/
+
 # Distribution / packaging
 build/
 dist/
@@ -40,3 +41,5 @@ runs/detect/train*/*.csv
 runs/detect/train*/*.yaml
 yolo*.pt
 last.pt
+vision/crops/
+unlabeled/
