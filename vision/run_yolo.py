@@ -28,7 +28,7 @@ class UIElementDetector:
         image = Image.open(path)
         return np.array(image)
 
-    def detect_ui_elements(self, image, confidence_threshold=0.5):
+    def detect_ui_elements(self, image, confidence_threshold=0.25):
         """
         Detect UI elements in the image using YOLO
         """
@@ -94,7 +94,7 @@ class UIElementDetector:
                     confidence = box.conf[0].cpu().numpy()
                     class_id = int(box.cls[0].cpu().numpy())
                     class_name = self.model.names[class_id]
-                    
+
                     # Calculate center point
                     center_x = int((x1 + x2) / 2)
                     center_y = int((y1 + y2) / 2)
