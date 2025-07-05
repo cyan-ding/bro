@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from PIL import Image
-from playwright.sync_api import sync_playwright
+from patchright.sync_api import sync_playwright
+import torch
 
 
 class UIElementDetector:
@@ -19,7 +20,7 @@ class UIElementDetector:
                 "yolov8n.pt"
             )  # or 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt'
 
-    def capture_browser_screenshot(self, path: str):
+    def get_screenshot(self, path: str):
         """
         Capture screenshot of browser or entire screen
         """
@@ -31,7 +32,11 @@ class UIElementDetector:
         """
         Detect UI elements in the image using YOLO
         """
-        results = self.model(image, conf=confidence_threshold)
+        if torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+        results = self.model(image, conf=confidence_threshold, device=device)
         return results
 
     def annotate_results(self, image, results):
@@ -89,7 +94,7 @@ class UIElementDetector:
                     confidence = box.conf[0].cpu().numpy()
                     class_id = int(box.cls[0].cpu().numpy())
                     class_name = self.model.names[class_id]
-
+                    
                     # Calculate center point
                     center_x = int((x1 + x2) / 2)
                     center_y = int((y1 + y2) / 2)
@@ -109,10 +114,15 @@ class UIElementDetector:
 # Example usage
 def main():
     # Initialize detector
-    detector = UIElementDetector()
+    detector = UIElementDetector("runs/detect/train11/weights/best.pt")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch_persistent_context(
+            user_data_dir="./browser_data",
+            channel="chrome",
+            headless=False,
+            no_viewport=True,
+        )
         context = browser.new_page()
         context.goto(
             "https://www.google.com/search?q=giraff&sca_esv=b903d8c1555ec226&sxsrf=AE3TifNCSk74N36PPSbT-x_vauLCU-jzlQ%3A1751331533342&source=hp&ei=zTJjaNXDEojI0PEP-_fYkQE&iflsig=AOw8s4IAAAAAaGNA3TVKIOoyj6lU9VtxHxxjnTvplhUP&ved=0ahUKEwiV3rSvupqOAxUIJDQIHfs7NhIQ4dUDCBo&uact=5&oq=giraff&gs_lp=Egdnd3Mtd2l6IgZnaXJhZmYyChAjGIAEGCcYigUyDRAuGIAEGLEDGEMYigUyChAAGIAEGBQYhwIyCBAAGIAEGLEDMggQABiABBixAzIKEAAYgAQYQxiKBTIIEAAYgAQYsQMyBRAAGIAEMgUQABiABDIFEAAYgARIsQZQAFjmBHAAeACQAQCYAY4BoAGLBaoBAzIuNLgBA8gBAPgBAZgCBqACnwXCAgoQLhiABBhDGIoFwgINEC4YgAQYQxjUAhiKBcICDBAAGIAEGEMYigUYCsICBRAuGIAEwgIIEC4YgAQYsQOYAwCSBwMxLjWgB9w8sgcDMS41uAefBcIHBTAuMy4zyAcR&sclient=gws-wiz"
@@ -124,7 +134,7 @@ def main():
 
     # Method 1: Screenshot-based detection
     print("Capturing screenshot...")
-    screenshot = detector.capture_browser_screenshot("vision/ss/screenshot.png")
+    screenshot = detector.get_screenshot("vision/ss/screenshot.png")
 
     # Detect elements
     print("Detecting UI elements...")
