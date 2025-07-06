@@ -43,3 +43,26 @@ yolo*.pt
 last.pt
 vision/crops/
 unlabeled/
+
+blip2_lora_results/
+
+# Training Logs and Checkpoints
+logs/
+checkpoints/
+wandb/
+tensorboard/
+*.log
+
+# Evaluation Results (usually large and not needed in repo)
+evaluation_results.json
+evaluation_results_*.json
+results/
+metrics/
+
+# Data files (if large)
+*.csv
+
+# Temporary files
+temp/
+tmp/
+*.tmp
