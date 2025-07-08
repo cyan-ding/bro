@@ -6,7 +6,7 @@ from patchright.sync_api import sync_playwright
 import torch
 import os
 import time
-from ultralytics.engine.results import Results
+from ultralytics.engine.results import Results, Boxes
 
 # Optional Core ML support
 try:
@@ -30,15 +30,21 @@ class UIElementDetector:
         self.use_coreml = use_coreml and CORE_ML_AVAILABLE
         self.model_path = model_path
         self.coreml_model = None
+        self.coreml_input_name = None # To store the CoreML model's input name
         self.yolo_model = None
         self.model_names = None
         
         if model_path:
             # Check if Core ML model exists
-            coreml_path = model_path.replace('.pt', '_coreml.mlpackage')
+            coreml_path = model_path.replace('.pt', '.mlpackage')
             if self.use_coreml and os.path.exists(coreml_path):
                 print(f"Loading Core ML model: {coreml_path}")
                 self.coreml_model = ct.models.MLModel(coreml_path)
+                try:
+                    self.coreml_input_name = next(iter(self.coreml_model.input_description))
+                except StopIteration:
+                    print("❌ Error: Core ML model has no input description.")
+                
                 self._load_class_names_from_pt()
             else:
                 print(f"Loading PyTorch model: {model_path}")
@@ -48,7 +54,13 @@ class UIElementDetector:
                 # Auto-convert to Core ML if requested and not available
                 if self.use_coreml and not os.path.exists(coreml_path):
                     print("Core ML model not found. Converting...")
-                    self.convert_to_coreml()
+                    if self.convert_to_coreml():
+                        # Get the model's expected input name after conversion
+                        try:
+                            self.coreml_input_name = next(iter(self.coreml_model.input_description))
+                        except StopIteration:
+                            print("❌ Error: Converted Core ML model has no input description.")
+
         else:
             # Use default YOLOv8n model
             print("Loading default YOLOv8n model")
@@ -79,160 +91,124 @@ class UIElementDetector:
             
         print("🚀 Converting YOLO model to Core ML using built-in export...")
         
-        # Determine output path
-        if output_path is None:
-            output_path = self.model_path.replace('.pt', '_coreml.mlpackage') if self.model_path else "yolo_model_coreml.mlpackage"
-        
         try:
             # Use YOLO's built-in Core ML export
             print("Exporting model to Core ML format...")
-            exported_model = self.yolo_model.export(
+            exported_model_path = self.yolo_model.export(
                 format='coreml',
                 imgsz=640,
-                half=False,  # Use full precision for better compatibility
-                int8=False,  # Disable quantization for now
-                nms=True,    # Include NMS in the model
-                simplify=True,  # Simplify the model
+                half=False,
+                int8=False,
+                nms=True, # This is the critical change
+                simplify=True,
             )
             
-            print(f"✅ Core ML export completed: {exported_model}")
+            print(f"✅ Core ML export completed: {exported_model_path}")
             
             # Load the converted model
-            self.coreml_model = ct.models.MLModel(exported_model)
-            
+            self.coreml_model = ct.models.MLModel(exported_model_path)
             print("✅ Core ML model loaded successfully!")
+            
             return True
                 
         except Exception as e:
             print(f"❌ Core ML conversion failed: {e}")
             print("✅ Falling back to PyTorch with MPS acceleration (Apple Silicon GPU)")
             print("💡 This provides excellent performance on Apple Silicon Macs!")
-            
-            # Try alternative conversion method
-            return self._convert_to_coreml_alternative()
-
-    def _convert_to_coreml_alternative(self):
-        """Alternative Core ML conversion method with more conservative settings"""
-        try:
-            print("🔄 Trying alternative Core ML conversion method...")
-            
-            # Export to ONNX first, then convert to Core ML
-            print("Step 1: Exporting to ONNX...")
-            onnx_path = self.model_path.replace('.pt', '_temp.onnx') if self.model_path else "yolo_temp.onnx"
-            
-            exported_onnx = self.yolo_model.export(
-                format='onnx',
-                imgsz=640,
-                half=False,
-                simplify=True,
-                opset=11,  # Use older opset for better compatibility
-            )
-            
-            print("Step 2: Converting ONNX to Core ML...")
-            
-            # Convert ONNX to Core ML
-            mlmodel = ct.convert(
-                exported_onnx,
-                inputs=[
-                    ct.TensorType(
-                        name="images",
-                        shape=[1, 3, 640, 640],
-                        dtype=np.float32
-                    )
-                ],
-                compute_units=ct.ComputeUnit.CPU_AND_GPU,  # More conservative
-                minimum_deployment_target=ct.target.iOS13,
-                convert_to="mlprogram"  # Use ML Program format
-            )
-            
-            # Save the model
-            coreml_path = self.model_path.replace('.pt', '_coreml.mlpackage') if self.model_path else "yolo_coreml.mlpackage"
-            mlmodel.save(coreml_path)
-            
-            # Load the converted model
-            self.coreml_model = ct.models.MLModel(coreml_path)
-            
-            # Clean up temporary ONNX file
-            if os.path.exists(onnx_path):
-                os.remove(onnx_path)
-            
-            print("✅ Alternative Core ML conversion completed!")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Alternative Core ML conversion also failed: {e}")
-            print("💡 Consider using PyTorch with MPS acceleration instead")
             return False
 
     def _preprocess_image_for_coreml(self, image):
         """Preprocess image for Core ML model"""
-        # Convert to PIL Image if needed
         if not isinstance(image, Image.Image):
             if isinstance(image, np.ndarray):
-                # Handle different numpy array formats
-                if image.dtype == np.uint8:
-                    image = Image.fromarray(image)
-                else:
-                    # Convert float arrays back to uint8
-                    image = Image.fromarray((image * 255).astype(np.uint8))
+                image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             else:
                 raise ValueError(f"Unsupported image type: {type(image)}")
         
-        # Handle different image modes
-        if image.mode == 'RGBA':
-            # Convert RGBA to RGB
-            image = image.convert('RGB')
-        elif image.mode == 'L':
-            # Convert grayscale to RGB
-            image = image.convert('RGB')
-        elif image.mode != 'RGB':
-            # Ensure RGB mode
+        if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Resize to expected input size (640x640 for YOLO)
         image = image.resize((640, 640), Image.Resampling.LANCZOS)
         
-        # Return PIL Image directly - don't convert to numpy array
         return image
 
-    def _postprocess_coreml_output(self, predictions, confidence_threshold=0.25):
-        """Postprocess using YOLO's native Results class"""
-        try:
-            
-            # Get predictions
-            output_key = list(predictions.keys())[0] if predictions else None
-            if not output_key:
-                return []
-            
-            output = predictions[output_key]
-            
-            if isinstance(output, np.ndarray):
-                if len(output.shape) == 3:
-                    detections = output[0]  # Remove batch dimension
-                    valid_mask = detections[:, 4] >= confidence_threshold
-                    valid_detections = detections[valid_mask]
-                    
-                    # Convert to tensor format expected by Results
-                    if len(valid_detections) > 0:
-                        pred_tensor = torch.from_numpy(valid_detections)
-                    else:
-                        pred_tensor = torch.empty((0, 6))
-                    
-                    # Create Results object
-                    results = Results(
-                        orig_img=np.zeros((640, 640, 3), dtype=np.uint8),  # Dummy image
-                        path="",
-                        names=self.model_names or {},
-                        boxes=pred_tensor
-                    )
-                    
-                    return [results]
-            
+    def _postprocess_coreml_output(self, predictions, orig_image_shape, confidence_threshold=0.25):
+        """
+        Postprocesses the output from a Core ML model that includes NMS.
+        The output is converted into the ultralytics Results format for consistency.
+        This function handles multiple potential output formats from Core ML exports.
+        """
+        detections = None
+
+        if 'coordinates' in predictions and 'confidence' in predictions:
+            # Assume coords are in [center_x, center_y, width, height] format and NORMALIZED
+            coords_xywh_norm = predictions['coordinates']
+            confs = predictions['confidence']
+
+            if coords_xywh_norm.shape[0] == confs.shape[0] and coords_xywh_norm.shape[0] > 0:
+                # ==================================================================
+                # KEY FIX: Scale the normalized coordinates by the ORIGINAL image's dimensions,
+                # not the fixed model input size.
+                # ==================================================================
+                orig_h, orig_w = orig_image_shape
+                
+                # Create a scaling factor array [width, height, width, height]
+                scaling_factor = np.array([orig_w, orig_h, orig_w, orig_h])
+                coords_xywh_scaled = coords_xywh_norm * scaling_factor
+
+                # Convert xywh to xyxy
+                x_center, y_center, w, h = coords_xywh_scaled[:, 0], coords_xywh_scaled[:, 1], coords_xywh_scaled[:, 2], coords_xywh_scaled[:, 3]
+                x1 = x_center - w / 2
+                y1 = y_center - h / 2
+                x2 = x_center + w / 2
+                y2 = y_center + h / 2
+                coords_xyxy = np.stack((x1, y1, x2, y2), axis=1)
+
+                # Get the class with the highest confidence for each detection
+                class_ids = np.argmax(confs, axis=1)
+                # Get the confidence score for that class
+                confidence_scores = np.max(confs, axis=1)
+
+                # Combine into a single array: [x1, y1, x2, y2, conf, class_id]
+                detections = np.concatenate(
+                    (coords_xyxy, confidence_scores[:, np.newaxis], class_ids[:, np.newaxis]),
+                    axis=1
+                )
+        
+        # Fallback check: For models that output a single combined tensor.
+        if detections is None:
+            for key, value in predictions.items():
+                if isinstance(value, np.ndarray) and len(value.shape) == 3 and value.shape[2] == 6:
+                    detections = value[0]
+                    break
+
+        if detections is None:
+            print("⚠️ Could not find a valid output tensor format in Core ML predictions.")
+            print("   Available prediction keys and shapes:")
+            for key, value in predictions.items():
+                if isinstance(value, np.ndarray):
+                    print(f"   - {key}: {value.shape}")
             return []
-            
-        except ImportError:
-            print("Could not import YOLO Results class, using custom implementation")
-            return self.postprocess_coreml_output(predictions, confidence_threshold)
+
+        # Filter by the overall confidence threshold
+        detections = detections[detections[:, 4] >= confidence_threshold]
+
+        if detections.shape[0] == 0:
+            return []
+
+        # Create a dummy image for the Results object, which needs it for orig_shape.
+        dummy_img = np.zeros(tuple(orig_image_shape) + (3,), dtype=np.uint8)
+        
+        # Pass the raw tensor of detections to the Results constructor.
+        # The coordinates are now in the original image's pixel space.
+        results = Results(
+            orig_img=dummy_img,
+            path="coreml_prediction",
+            names=self.model_names or {},
+            boxes=torch.from_numpy(detections)  # Pass the (N, 6) tensor directly
+        )
+
+        return [results]
 
     def get_screenshot(self, path: str):
         """
@@ -245,32 +221,29 @@ class UIElementDetector:
         """
         Detect UI elements in the image using YOLO (PyTorch or Core ML)
         """
-        if self.coreml_model is not None:
-            # Use Core ML model
+        if self.coreml_model is not None and self.coreml_input_name is not None:
             try:
+                orig_image_shape = image.shape[:2]
                 preprocessed_image = self._preprocess_image_for_coreml(image)
-                predictions = self.coreml_model.predict({"image": preprocessed_image, "confidenceThreshold": confidence_threshold})
-                results = self._postprocess_coreml_output(predictions=predictions, confidence_threshold=confidence_threshold)
+                predictions = self.coreml_model.predict({self.coreml_input_name: preprocessed_image})
+                results = self._postprocess_coreml_output(
+                    predictions=predictions, 
+                    orig_image_shape=orig_image_shape,
+                    confidence_threshold=confidence_threshold
+                )
                 return results
             except Exception as e:
                 print(f"❌ Core ML prediction failed: {e}")
                 print("🔄 Falling back to PyTorch model...")
-                # Fall back to PyTorch if Core ML fails
-                if self.yolo_model is None:
+                if self.yolo_model is None and self.model_path:
                     self.yolo_model = YOLO(self.model_path)
                     self.model_names = self.yolo_model.names
         
-        # Use PyTorch model
         if self.yolo_model is None:
             print("❌ No model loaded. Cannot perform detection.")
             return []
             
-        # Use MPS (Apple Silicon GPU) if available
-        if torch.backends.mps.is_available():
-            device = "mps"
-        else:
-            device = "cpu"
-            
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
         results = self.yolo_model(image, conf=confidence_threshold, device=device)
         return results
 
@@ -284,18 +257,12 @@ class UIElementDetector:
             boxes = result.boxes
             if boxes is not None and len(boxes) > 0:
                 for box in boxes:
-                    # Get coordinates
+                    # The coordinates are now correctly scaled to the original image size.
                     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                     confidence = box.conf[0].cpu().numpy()
                     class_id = int(box.cls[0].cpu().numpy())
+                    class_name = self.model_names.get(class_id, f"class_{class_id}")
 
-                    # Get class name
-                    if self.model_names is not None:
-                        class_name = self.model_names.get(class_id, f"class_{class_id}")
-                    else:
-                        class_name = f"class_{class_id}"
-
-                    # Draw bounding box
                     cv2.rectangle(
                         annotated_image,
                         (int(x1), int(y1)),
@@ -304,7 +271,6 @@ class UIElementDetector:
                         2,
                     )
 
-                    # Add label
                     label = f"{class_name}: {confidence:.2f}"
                     cv2.putText(
                         annotated_image,
@@ -328,17 +294,11 @@ class UIElementDetector:
             boxes = result.boxes
             if boxes is not None and len(boxes) > 0:
                 for box in boxes:
+                    # The coordinates are now correctly scaled to the original image size.
                     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                     confidence = box.conf[0].cpu().numpy()
                     class_id = int(box.cls[0].cpu().numpy())
-                    
-                    # Get class name
-                    if self.model_names is not None:
-                        class_name = self.model_names.get(class_id, f"class_{class_id}")
-                    else:
-                        class_name = f"class_{class_id}"
-
-                    # Calculate center point
+                    class_name = self.model_names.get(class_id, f"class_{class_id}")
                     center_x = int((x1 + x2) / 2)
                     center_y = int((y1 + y2) / 2)
 
@@ -357,28 +317,27 @@ class UIElementDetector:
         """
         Benchmark performance comparison between PyTorch and Core ML
         """
+        # instantiate base yolo
+        self.yolo_model = YOLO(self.model_path)
+
         if not test_image_path:
-            test_image_path = "vision/ss/screenshot.png"
+            test_image_path = "vision/ss/screenshot.png" 
             
         if not os.path.exists(test_image_path):
             print(f"❌ Test image not found: {test_image_path}")
             return
             
-        print("⚡ Benchmarking performance...")
+        print("\n⚡ Benchmarking performance...")
         
-        # Load test image
         image = Image.open(test_image_path).convert('RGB')
         image_array = np.array(image)
         
-        # Benchmark PyTorch (if available)
         if self.yolo_model:
             device = "mps" if torch.backends.mps.is_available() else "cpu"
-            
-            # Warmup
+            print(f"Benchmarking PyTorch on {device}...")
             for _ in range(3):
                 _ = self.yolo_model(image_array, verbose=False, device=device)
             
-            # Benchmark
             start_time = time.time()
             for _ in range(10):
                 _ = self.yolo_model(image_array, verbose=False, device=device)
@@ -386,69 +345,63 @@ class UIElementDetector:
             
             print(f"PyTorch ({device}): {torch_time*1000:.2f} ms per inference")
         
-        # Set default confidence threshold for Core ML benchmarking
-        confidence_threshold = 0.25
-        # Benchmark Core ML (if available)
-        if self.coreml_model:
-            # Prepare input
+        if self.coreml_model and self.coreml_input_name:
+            print("Benchmarking Core ML on Neural Engine...")
             preprocessed_image = self._preprocess_image_for_coreml(image_array)
-            # Warmup
+            
             for _ in range(3):
                 try:
-                    _ = self.coreml_model.predict({"image": preprocessed_image, "confidenceThreshold": confidence_threshold})
+                    _ = self.coreml_model.predict({self.coreml_input_name: preprocessed_image})
                 except Exception as e:
-                    print("❌ Core ML benchmark failed - model may not be compatible")
+                    print(f"❌ Core ML benchmark failed during warmup: {e}")
                     return
-            # Benchmark
             start_time = time.time()
             for _ in range(10):
-                _ = self.coreml_model.predict({"image": preprocessed_image, "confidenceThreshold": confidence_threshold})
+                _ = self.coreml_model.predict({self.coreml_input_name: preprocessed_image})
             coreml_time = (time.time() - start_time) / 10
             
             print(f"Core ML (Neural Engine): {coreml_time*1000:.2f} ms per inference")
             
             if self.yolo_model:
-                print(f"Speedup: {torch_time/coreml_time:.2f}x")
+                print(f"🚀 Core ML Speedup: {torch_time/coreml_time:.2f}x")
 
 
 # Example usage
 def main():
-    # Initialize detector with Core ML support
+    # IMPORTANT: Before running, delete your old .mlpackage file to force a re-conversion.
+    # For example: rm -f runs/detect/train11/weights/best.mlpackage
+    
     detector = UIElementDetector("runs/detect/train11/weights/best.pt", use_coreml=True)
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch_persistent_context(
-            user_data_dir="./browser_data",
-            channel="chrome",
-            headless=False,
-            no_viewport=True,
-        )
-        context = browser.new_page()
-        context.goto(
-            "https://www.google.com/search?q=giraff&sca_esv=b903d8c1555ec226&sxsrf=AE3TifNCSk74N36PPSbT-x_vauLCU-jzlQ%3A1751331533342&source=hp&ei=zTJjaNXDEojI0PEP-_fYkQE&iflsig=AOw8s4IAAAAAaGNA3TVKIOoyj6lU9VtxHxxjnTvplhUP&ved=0ahUKEwiV3rSvupqOAxUIJDQIHfs7NhIQ4dUDCBo&uact=5&oq=giraff&gs_lp=Egdnd3Mtd2l6IgZnaXJhZmYyChAjGIAEGCcYigUyDRAuGIAEGLEDGEMYigUyChAAGIAEGBQYhwIyCBAAGIAEGLEDMggQABiABBixAzIKEAAYgAQYQxiKBTIIEAAYgAQYsQMyBRAAGIAEMgUQABiABDIFEAAYgARIsQZQAFjmBHAAeACQAQCYAY4BoAGLBaoBAzIuNLgBA8gBAPgBAZgCBqACnwXCAgoQLhiABBhDGIoFwgINEC4YgAQYQxjUAhiKBcICDBAAGIAEGEMYigUYCsICBRAuGIAEwgIIEC4YgAQYsQOYAwCSBwMxLjWgB9w8sgcDMS41uAefBcIHBTAuMy4zyAcR&sclient=gws-wiz"
-        )
-        
-        time.sleep(5)  # Pause for 5 seconds
-        context.screenshot(path="vision/ss/screenshot.png")
+    os.makedirs("vision/ss", exist_ok=True)
 
-    # Method 1: Screenshot-based detection
-    print("Capturing screenshot...")
-    screenshot = detector.get_screenshot("vision/ss/screenshot.png")
+    if not os.path.exists("vision/ss/screenshot.png"):
+        print("Screenshot not found. Taking a new one from google.com...")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto("https://www.google.com")
+            page.screenshot(path="vision/ss/screenshot.png")
+            browser.close()
+            print("Screenshot saved to vision/ss/screenshot.png")
 
-    # Detect elements
+    print("\nLoading screenshot...")
+    screenshot = cv2.imread("vision/ss/screenshot.png")
+    if screenshot is None:
+        print("❌ Failed to load screenshot.png")
+        return
+
     print("Detecting UI elements...")
     results = detector.detect_ui_elements(screenshot)
 
-    # Get element coordinates
     elements = detector.get_element_coordinates(results)
-    print(f"Found {len(elements)} elements:")
+    print(f"\nFound {len(elements)} elements:")
     for elem in elements:
         print(f"- {elem['class']}: {elem['confidence']:.2f} at {elem['center']}")
 
-    # Benchmark performance
     detector.benchmark_performance()
 
-    # Annotate and display results
+    print("\nDisplaying annotated image. Press any key to exit.")
     annotated = detector.annotate_results(screenshot, results)
     cv2.imshow("UI Elements Detection", annotated)
     cv2.waitKey(0)
