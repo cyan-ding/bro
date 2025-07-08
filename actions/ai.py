@@ -17,6 +17,7 @@ import json
 import os
 import aiohttp
 import anthropic
+import asyncio
 from cerebras.cloud.sdk import AsyncCerebras
 from cerebras.cloud.sdk.types.chat.chat_completion import ChatCompletion
 from dotenv import load_dotenv
@@ -102,6 +103,11 @@ async def cerebras_tools(
     params: Dict[str, Any],
     schema=None,
 ) -> ChatCompletion:
+    """
+    Enter a prompt to cerebras using information on available tools from @params
+    
+    Returns a response containing tool call names and arguments
+    """
     load_dotenv()
     client = AsyncCerebras(
         api_key=os.environ.get("CEREBRAS_API_KEY"),
@@ -197,3 +203,12 @@ async def openrouter(
         except Exception as e:
             print(f"Error in OpenRouter response: {e}")
             return {}
+
+
+async def main():
+    sys_prompt = await load_sys_prompt("micro")
+    user_prompt = "What is the capital of the moon?"
+    res = await cerebras(user_prompt, sys_prompt)
+    print(res)
+
+asyncio.run(main())

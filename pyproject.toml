@@ -45,6 +45,9 @@ dependencies = [
     "peft>=0.16.0",
     "nltk>=3.9.1",
     "rouge-score>=0.1.2",
+    "coremltools>=8.3.0",
+    "coreml>=0.0.4",
+    "deptry>=0.23.0",
 ]
 
 [tool.setuptools.packages.find]

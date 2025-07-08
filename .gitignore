@@ -41,7 +41,7 @@ runs/detect/train*/*.csv
 runs/detect/train*/*.yaml
 yolo*.pt
 last.pt
-vision/crops/
+*crops/
 unlabeled/
 
 blip2_lora_results/
