@@ -210,5 +210,5 @@ async def main():
     user_prompt = "What is the capital of the moon?"
     res = await cerebras(user_prompt, sys_prompt)
     print(res)
-
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -2,11 +2,10 @@
 
 import json
 from patchright.async_api import Page
-from actions.utils import get_best_selector
+from actions.utils import get_best_selector, sanitize_filename
 from db.workflows import Workflows
-from ai import load_sys_prompt, cerebras
+from actions.ai import load_sys_prompt, cerebras
 from typing import cast, List
-from utils import sanitize_filename
 
 
 async def text_input_wrapper(webpage: Page, target: str, input_text: str):

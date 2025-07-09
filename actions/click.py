@@ -4,8 +4,8 @@ from typing import cast, List
 from patchright.async_api import Page, async_playwright
 from actions.search import search
 from actions.utils import get_best_selector
-from ai import load_sys_prompt, cerebras
-from utils import sanitize_filename
+from actions.ai import load_sys_prompt, cerebras
+from actions.utils import sanitize_filename
 
 
 async def click_wrapper(webpage: Page, target: str, workflow_id =None):

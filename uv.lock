@@ -394,6 +394,7 @@ dependencies = [
     { name = "coremltools" },
     { name = "datasets" },
     { name = "deptry" },
+    { name = "einops" },
     { name = "label-studio" },
     { name = "lxml" },
     { name = "matplotlib" },
@@ -414,6 +415,8 @@ dependencies = [
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
     { name = "pytz" },
+    { name = "pyvips" },
+    { name = "pyvips-binary" },
     { name = "requests" },
     { name = "rouge-score" },
     { name = "ruff" },
@@ -437,6 +440,7 @@ requires-dist = [
     { name = "coremltools", specifier = ">=8.3.0" },
     { name = "datasets", specifier = ">=3.6.0" },
     { name = "deptry", specifier = ">=0.23.0" },
+    { name = "einops", specifier = ">=0.8.1" },
     { name = "label-studio", specifier = ">=1.20.0" },
     { name = "lxml" },
     { name = "matplotlib" },
@@ -457,6 +461,8 @@ requires-dist = [
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
     { name = "pytz" },
+    { name = "pyvips", specifier = ">=3.0.0" },
+    { name = "pyvips-binary", specifier = ">=8.17.1" },
     { name = "requests" },
     { name = "rouge-score", specifier = ">=0.1.2" },
     { name = "ruff", specifier = ">=0.12.0" },
@@ -1176,6 +1182,15 @@ dependencies = [
     { name = "django" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/18/8e/2895e6a2707eb41e49f1288e075e9de37732dff755af07e19071238650e5/drf-generators-0.3.0.tar.gz", hash = "sha256:9824dcf147e18b1336ec41c0e905d45290b22862d62ee7f1b2c40c7c75435e77", size = 9437, upload-time = "2017-03-08T04:37:23.331Z" }
+
+[[package]]
+name = "einops"
+version = "0.8.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/81/df4fbe24dff8ba3934af99044188e20a98ed441ad17a274539b74e82e126/einops-0.8.1.tar.gz", hash = "sha256:de5d960a7a761225532e0f1959e5315ebeafc0cd43394732f103ca44b9837e84", size = 54805, upload-time = "2025-02-09T03:17:00.434Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl", hash = "sha256:919387eb55330f5757c6bea9165c5ff5cfe63a642682ea788a6d472576d81737", size = 64359, upload-time = "2025-02-09T03:17:01.998Z" },
+]
 
 [[package]]
 name = "email-validator"
@@ -3760,6 +3775,36 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/03/3e/dc5c793b62c60d0ca0b7e58f1fdd84d5aaa9f8df23e7589b39cc9ce20a03/pytz-2022.7.1.tar.gz", hash = "sha256:01a0681c4b9684a28304615eba55d1ab31ae00bf68ec157ec3708a8182dbbcd0", size = 313522, upload-time = "2023-01-14T12:25:05.384Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2e/09/fbd3c46dce130958ee8e0090f910f1fe39e502cc5ba0aadca1e8a2b932e5/pytz-2022.7.1-py2.py3-none-any.whl", hash = "sha256:78f4f37d8198e0627c5f1143240bb0206b8691d8d7ac6d78fee88b78733f8c4a", size = 499377, upload-time = "2023-01-14T12:25:02.823Z" },
+]
+
+[[package]]
+name = "pyvips"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cffi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4c/a2/d8ecd2f7ffa084870ba071a584aac44800a89f3c77b305999be7dc8b7bb3/pyvips-3.0.0.tar.gz", hash = "sha256:79459975e4a16089b0eaafed26eb1400ae66ebc16d3ff3a7d2241abcf19dc9e8", size = 56806, upload-time = "2025-04-28T10:07:43.784Z" }
+
+[[package]]
+name = "pyvips-binary"
+version = "8.17.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cffi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/80/4f/3c4945974278b6c6dbef90eb90c732fae3f637966b50c60a6c0ed365ebef/pyvips_binary-8.17.1.tar.gz", hash = "sha256:678975eb6649e5a442e1b431ae565842f0c656263243c5917ef9533a2c1bf45e", size = 3759, upload-time = "2025-07-09T11:40:06.416Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/48/d5b2c382d51d1a1eb7a9f19aa1240dcc8eea2faa04ec9f544dd9d2952fd7/pyvips_binary-8.17.1-cp37-abi3-macosx_10_15_x86_64.whl", hash = "sha256:bc7d5d8acec9b8d8ce77eb23863c725edbf1e21d9a81f44ed97ca91882dc319e", size = 8136553, upload-time = "2025-07-09T11:39:48.279Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/28/70ca46d35795d6d275092ea0c9285586dbe980033eac86ee8ff41954bdaa/pyvips_binary-8.17.1-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:78fde47a722dff3ed7de90efc0b12be406dad23ab93675bf0f12129e58942506", size = 7248311, upload-time = "2025-07-09T11:39:50.431Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/64/1ea2a4cbac602b4d2f3b31acf6eb3368ccb6f063002fc17d11738d1643da/pyvips_binary-8.17.1-cp37-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:92ebc40b54109f9b74a4a8154e4a089d2e420450caabe902eca2a3d5efe7de80", size = 7409778, upload-time = "2025-07-09T11:39:52.402Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/72/749bba2249e4b12b72366b65ef4f062bc8dfa33532412ccbac122b9cb580/pyvips_binary-8.17.1-cp37-abi3-manylinux_2_27_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:ecde11ca25d494d3069b5e67d19af13fd8f4e1d2a852704740df3b30c7f09033", size = 7180503, upload-time = "2025-07-09T11:39:54.461Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/cb/12841696964fbe05f7b069e5e82be45c8aa5d5bb9dc2267050704c96ca4e/pyvips_binary-8.17.1-cp37-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:323d8330b3b21ca5a9d44ef3faa5af8a6d6beae6c9622322ee9b1855a05beab4", size = 7328460, upload-time = "2025-07-09T11:39:56.413Z" },
+    { url = "https://files.pythonhosted.org/packages/78/3a/cdb698ad5e7cd33d11d84a827ada609d9948012840f8da731f9c0c0d0845/pyvips_binary-8.17.1-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:8c77c8865e6cf2aaf08c0532bd71021bfb9765c1b61bfa91af20de5625ee184a", size = 7558665, upload-time = "2025-07-09T11:39:58.281Z" },
+    { url = "https://files.pythonhosted.org/packages/13/1f/3e5e78f0070e43033aa39fd46f8132659a79b58644d485112596e263317b/pyvips_binary-8.17.1-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:217ad2db22f2e577f639246de3293b7ad13890aef70128894fbbbf61e7c9809d", size = 7441583, upload-time = "2025-07-09T11:39:59.773Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/cd/603dde01c7d6e0b8b8d7142d305a675771fe347faabeb751bb81c9b6bb7e/pyvips_binary-8.17.1-cp37-abi3-win32.whl", hash = "sha256:9da11c7a4913124db44d8a6a717ae737ea8f39bb5dfd1df6cfb37250d9f75c72", size = 8051640, upload-time = "2025-07-09T11:40:01.799Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/87/27a09666ef968e8ba21d5d9e704bac344a29877378c80c630de3449cf31a/pyvips_binary-8.17.1-cp37-abi3-win_amd64.whl", hash = "sha256:9ceba0edfaf777181b222d3b7a366c3a8545fd752dee4bcd8f9fe7a15b26367c", size = 8036807, upload-time = "2025-07-09T11:40:03.443Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/c6/42f2eeedf161a33da0063dcde281c5acc31d51602b52574495b31d1d66cd/pyvips_binary-8.17.1-cp37-abi3-win_arm64.whl", hash = "sha256:6e3024dc35c65e4e2bd48b0d36e7ef6c457c3d843c86b7dc36041a3c6aae8bdf", size = 7205933, upload-time = "2025-07-09T11:40:04.924Z" },
 ]
 
 [[package]]
