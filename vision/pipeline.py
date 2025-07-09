@@ -44,6 +44,8 @@ def load_blip2_model():
     processor = Blip2Processor.from_pretrained(BLIP2_BASE_MODEL)
     if torch.cuda.is_available():
         model = model.cuda()
+    elif torch.backends.mps.is_available():
+        model = model.to("mps")
     model.eval()
     return model, processor
 
@@ -55,7 +57,7 @@ def blip2_caption(model, processor, image_path):
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_length=50,
+            max_length=40,
             num_beams=3,
             temperature=0.7,
             do_sample=True,
