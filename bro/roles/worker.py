@@ -6,10 +6,10 @@ from typing import List, cast
 
 from patchright.async_api import Page, async_playwright
 
-from actions.ai import cerebras, cerebras_tools, load_sys_prompt
-from actions.click import click, get_button, sanitize_filename
+from actions.ai import cerebras_tools, load_sys_prompt
+from actions.click import click_wrapper
 from actions.search import search
-from actions.text_input import enter_input, get_text_input
+from actions.text_input import text_input_wrapper
 from prompts.tools.cerebras.worker_tool import worker_tool
 
 
@@ -83,51 +83,6 @@ async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str):
                 await text_input_wrapper(webpage, target, input_text)
     except Exception:
         traceback.print_exc()
-
-
-async def text_input_wrapper(webpage: Page, target: str, input_text: str):
-    # list text inputs
-    input_list = await get_text_input(webpage)
-    # ai inference
-    sys_prompt = await load_sys_prompt("micro")
-    output_format = "Json format containing html, placeholder, aria_label, aria_describedby, and label properties as provided in the input"
-    prompt = f"Prompt action: {target}, Output format: {output_format}, DOM elements: {input_list}"
-    llm_res = await cerebras(prompt, sys_prompt)
-
-    # process output
-    llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
-    print("LLM Output for text input analysis: ", llm_res, "\n")
-    llm_json = json.loads(llm_res)
-    await enter_input(
-        llm_json["action"],
-        webpage,
-        sanitize_filename(webpage.url),
-        input_text=input_text,
-    )
-
-
-async def click_wrapper(webpage: Page, target: str, workflow_id =None):
-    candidates = await get_button(webpage)
-    print("Candidate buttons: ", candidates, "\n")
-    # Prepare LLM input (strip element handles)
-    llm_candidates = [
-        {k: v for k, v in c.items() if k != "element"} for c in candidates
-    ]
-    sys_prompt = await load_sys_prompt("micro")
-    prompt = (
-        f"Prompt action: {target}\n"
-        f"Here is a list of clickable elements (with their HTML and attributes):\n"
-        f"{json.dumps(llm_candidates, indent=2)}\n"
-        'Return the index of the best match as a JSON object: {"action": <index>}'
-    )
-    llm_res = await cerebras(prompt, sys_prompt)
-    llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
-
-    print("LLM Output for text input analysis: ", llm_res, "\n")
-    llm_json = json.loads(llm_res)
-    idx = int(llm_json["action"])
-    await click(idx, webpage, webpage.url, candidates, workflow_id=workflow_id)
-
 
 async def test_input():
     async with async_playwright() as p:

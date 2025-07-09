@@ -6,7 +6,7 @@ from patchright.sync_api import sync_playwright
 import torch
 import os
 import time
-from ultralytics.engine.results import Results, Boxes
+from ultralytics.engine.results import Results
 
 # Optional Core ML support
 try:

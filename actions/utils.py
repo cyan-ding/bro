@@ -4,9 +4,14 @@ It includes selector generation logic for Playwright elements, to support robust
 
 # @file purpose: Defines utility functions for browser actions, including selector generation for workflow steps.
 """
-
+import re
 from patchright.async_api import ElementHandle
 
+
+
+def sanitize_filename(name):
+    """Sanitize filename to be safe for filesystem"""
+    return re.sub(r"[^a-zA-Z0-9_\-\.]", "_", name)
 
 async def get_best_selector(element: ElementHandle) -> str:
     """

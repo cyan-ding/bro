@@ -59,7 +59,7 @@ def blip2_caption(model, processor, image_path):
             **inputs,
             max_length=40,
             num_beams=3,
-            temperature=0.7,
+            temperature=0.7, 
             do_sample=True,
             top_p=0.9,
             repetition_penalty=1.2,

@@ -1,15 +1,34 @@
 import asyncio
-import re
-
+import json
+from typing import cast, List
 from patchright.async_api import Page, async_playwright
-
 from actions.search import search
 from actions.utils import get_best_selector
+from ai import load_sys_prompt, cerebras
+from utils import sanitize_filename
 
 
-def sanitize_filename(name):
-    """Sanitize filename to be safe for filesystem"""
-    return re.sub(r"[^a-zA-Z0-9_\-\.]", "_", name)
+async def click_wrapper(webpage: Page, target: str, workflow_id =None):
+    candidates = await get_button(webpage)
+    print("Candidate buttons: ", candidates, "\n")
+    # Prepare LLM input (strip element handles)
+    llm_candidates = [
+        {k: v for k, v in c.items() if k != "element"} for c in candidates
+    ]
+    sys_prompt = await load_sys_prompt("micro")
+    prompt = (
+        f"Prompt action: {target}\n"
+        f"Here is a list of clickable elements (with their HTML and attributes):\n"
+        f"{json.dumps(llm_candidates, indent=2)}\n"
+        'Return the index of the best match as a JSON object: {"action": <index>}'
+    )
+    llm_res = await cerebras(prompt, sys_prompt)
+    llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
+
+    print("LLM Output for text input analysis: ", llm_res, "\n")
+    llm_json = json.loads(llm_res)
+    idx = int(llm_json["action"])
+    await click(idx, webpage, webpage.url, candidates, workflow_id=workflow_id)
 
 
 async def extract_candidates(elements, max_candidates=30):

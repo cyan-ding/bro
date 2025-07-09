@@ -1,9 +1,33 @@
 # function to input text
 
+import json
 from patchright.async_api import Page
-
 from actions.utils import get_best_selector
 from db.workflows import Workflows
+from ai import load_sys_prompt, cerebras
+from typing import cast, List
+from utils import sanitize_filename
+
+
+async def text_input_wrapper(webpage: Page, target: str, input_text: str):
+    # list text inputs
+    input_list = await get_text_input(webpage)
+    # ai inference
+    sys_prompt = await load_sys_prompt("micro")
+    output_format = "Json format containing html, placeholder, aria_label, aria_describedby, and label properties as provided in the input"
+    prompt = f"Prompt action: {target}, Output format: {output_format}, DOM elements: {input_list}"
+    llm_res = await cerebras(prompt, sys_prompt)
+
+    # process output
+    llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
+    print("LLM Output for text input analysis: ", llm_res, "\n")
+    llm_json = json.loads(llm_res)
+    await enter_input(
+        llm_json["action"],
+        webpage,
+        sanitize_filename(webpage.url),
+        input_text=input_text,
+    )
 
 
 # returns list of metadata corresponding to input_candidates
