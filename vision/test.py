@@ -16,7 +16,7 @@ model = AutoModelForCausalLM.from_pretrained(
 
 # Load your image
 
-image = Image.open("vision/ss/screenshot2.png")
+image = Image.open("vision/ss/screenshot3.png")
 # 1. Image Captioning
 
 # print("Short caption:")
@@ -29,4 +29,6 @@ image = Image.open("vision/ss/screenshot2.png")
 # 2. Visual Question Answering
 
 print("Asking questions about the image:")
-print(model.query(image, "What is this image, and what is its purpose?")["answer"])
+print("Device: ", device)
+print(model.query(image, 
+"The object in the image is a button from the docs of the Moondream AI company. What is the function of the button")["answer"])

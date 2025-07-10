@@ -17,6 +17,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import numpy as np
 from PIL import Image
+import gc
 
 
 class Worker:
@@ -151,7 +152,7 @@ def init_model():
         "vikhyatk/moondream2",
         # Use a specific, existing revision date. "2025-01-09" is in the future.
         # Using a known past revision like "2024-05-20" is safer.
-        revision="2024-05-20",
+        revision="2025-01-09",
         trust_remote_code=True,
     ).to(device)
 
@@ -170,15 +171,20 @@ def run_inference_on_image(image_path):
         
     pid = os.getpid()
     print(f"[Process {pid}] Running inference on {os.path.basename(image_path)}")
-
+    prompt_text = "The object in the image is a button. What does the button do?"
     try:
         image = Image.open(image_path)
         # Use the globally loaded model and tokenizer
-        enc_image = model.encode_image(image)
-        answer = model.answer_question(enc_image, "Describe this UI element.", tokenizer)
-        return (pid, os.path.basename(image_path), answer)
+        with torch.inference_mode():
+            # 1. Encode the image to get visual features
+            res = model.query(image, prompt_text)
+
+        return (pid, os.path.basename(image_path), res)
+
     except Exception as e:
-        return (pid, os.path.basename(image_path), f"Error: {e}")
+        # Include the full traceback for better debugging
+        import traceback
+        return (pid, os.path.basename(image_path), f"Error: {e}\n{traceback.format_exc()}")
 
 # This is required for multiprocessing to work correctly.
 if __name__ == "__main__":
