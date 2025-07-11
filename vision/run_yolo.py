@@ -375,7 +375,7 @@ def main():
 
     os.makedirs("vision/ss", exist_ok=True)
 
-    if not os.path.exists("vision/ss/screenshot.png"):
+    if not os.path.exists("vision/ss/wholepage2.png"):
         print("Screenshot not found. Taking a new one from google.com...")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -386,7 +386,7 @@ def main():
             print("Screenshot saved to vision/ss/screenshot.png")
 
     print("\nLoading screenshot...")
-    screenshot = cv2.imread("vision/ss/screenshot.png")
+    screenshot = cv2.imread("vision/ss/wholepage2.png")
     if screenshot is None:
         print("❌ Failed to load screenshot.png")
         return

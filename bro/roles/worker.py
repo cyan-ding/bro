@@ -1,4 +1,3 @@
-import asyncio
 import json
 import traceback
 import uuid
@@ -11,10 +10,10 @@ from actions.text_input import text_input_wrapper
 from prompts.tools.cerebras.worker_tool import worker_tool
 from concurrent.futures import ProcessPoolExecutor
 import concurrent.futures
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import time
 import os
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 import numpy as np
 from PIL import Image
 import gc
@@ -57,7 +56,7 @@ class Worker:
             ]
             await test_tool_chain(webpage=webpage, prompt_chain=prompt_chain)
 
-
+# Chain of tool (action calls)
 async def test_tool_chain(webpage: Page, prompt_chain):
     sys_prompt = await load_sys_prompt("worker")
     for prompt in prompt_chain:
@@ -66,11 +65,14 @@ async def test_tool_chain(webpage: Page, prompt_chain):
         except Exception:
             traceback.print_exc()
 
-
+# given a task, cerebras (micro) will decide on a function to call:
+# either enter input text, or click on an element.
 async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str):
+    # get params
     worker_params = worker_tool(
         user_prompt=user_prompt, system_prompt=sys_prompt, model="qwen-3-32b"
     )
+    # get tool to call
     llm_res = await cerebras_tools(worker_params)
     try:
         llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["tool_calls"]
@@ -83,6 +85,8 @@ async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str):
         input_text = ""
         if func_name == "input_text":
             input_text = json_func["input"]
+        
+        # call outputed function
         match func_name:
             case "click":
                 await click_wrapper(webpage, target)
@@ -132,10 +136,7 @@ async def test_click():
             await click_wrapper(webpage, test_target)
 
 
-# --- 1. Define the Worker Function ---
-# This function will be executed in a separate process for each task.
-# --- The Fix: Initialize the global variable here ---
-# This line ensures 'model' exists in each process's global scope.
+# Test parallel processing using moondream
 model = None
 tokenizer = None # Also initialize the tokenizer globally
 

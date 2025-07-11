@@ -9,12 +9,14 @@ from actions.utils import sanitize_filename
 
 
 async def click_wrapper(webpage: Page, target: str, workflow_id =None):
+    # get candidate button elements
     candidates = await get_button(webpage)
     print("Candidate buttons: ", candidates, "\n")
     # Prepare LLM input (strip element handles)
     llm_candidates = [
         {k: v for k, v in c.items() if k != "element"} for c in candidates
     ]
+    # load sys prompt
     sys_prompt = await load_sys_prompt("micro")
     prompt = (
         f"Prompt action: {target}\n"
@@ -22,12 +24,15 @@ async def click_wrapper(webpage: Page, target: str, workflow_id =None):
         f"{json.dumps(llm_candidates, indent=2)}\n"
         'Return the index of the best match as a JSON object: {"action": <index>}'
     )
+    # get result
     llm_res = await cerebras(prompt, sys_prompt)
     llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
 
     print("LLM Output for text input analysis: ", llm_res, "\n")
     llm_json = json.loads(llm_res)
+    # get result index 
     idx = int(llm_json["action"])
+    # click using index 
     await click(idx, webpage, webpage.url, candidates, workflow_id=workflow_id)
 
 
