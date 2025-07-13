@@ -1,16 +1,21 @@
 import asyncio
 import json
-from typing import cast, List
-from patchright.async_api import Page, async_playwright
-from actions.search import search
+from typing import cast, List, Dict, Any
+from httpx import TimeoutException
+from patchright.async_api import Page, Locator
 from actions.utils import get_best_selector
 from actions.ai import load_sys_prompt, cerebras
-from actions.utils import sanitize_filename
 
 
-async def click_wrapper(webpage: Page, target: str, workflow_id =None):
+async def click_wrapper(webpage: Page, target: str, workflow_id=None):
+    """
+    Wrapper function that 
+    1) gets all button candidates on the webpage
+    2) queries LLM to select one candidate
+    3) attempts to click on that candidate
+    """
     # get candidate button elements
-    candidates = await get_button(webpage)
+    candidates = await get_buttons(webpage)
     print("Candidate buttons: ", candidates, "\n")
     # Prepare LLM input (strip element handles)
     llm_candidates = [
@@ -22,90 +27,107 @@ async def click_wrapper(webpage: Page, target: str, workflow_id =None):
         f"Prompt action: {target}\n"
         f"Here is a list of clickable elements (with their HTML and attributes):\n"
         f"{json.dumps(llm_candidates, indent=2)}\n"
-        'Return the index of the best match as a JSON object: {"action": <index>}'
+        'Return the index of the best match as a JSON object: {"action": <index>, "p": <probability>}'
     )
+
+    micro_schema = {
+        "type": "object",
+        "properties": {
+            "action": {"type": "integer"},
+            "p": {"type": "number"},
+        },
+        "required": ["action", "p"],
+        "additionalProperties": False,
+    }
     # get result
-    llm_res = await cerebras(prompt, sys_prompt)
+    llm_res = await cerebras(prompt, sys_prompt, schema=micro_schema)
     llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
 
     print("LLM Output for text input analysis: ", llm_res, "\n")
     llm_json = json.loads(llm_res)
-    # get result index 
-    idx = int(llm_json["action"])
-    # click using index 
-    await click(idx, webpage, webpage.url, candidates, workflow_id=workflow_id)
+    
+    # click using index
+    try: 
+        idx = int(llm_json["action"])
+        await click(idx, webpage, webpage.url, candidates, workflow_id=workflow_id)
+        print(f"Successfully clicked on target {target}")
+    except TimeoutException as e:
+        print(f"Failed to click on target {target}, exception: {e}")
 
 
-async def extract_candidates(elements, max_candidates=30):
-    candidates = []
-    for el in elements:
-        try:
-            # Only consider visible elements
-            visible = await el.is_visible()
-            if not visible:
-                continue
-            outer_html = await el.evaluate("el => el.outerHTML")
-            inner_html = await el.evaluate("el => el.innerHTML")
-            aria_label = await el.get_attribute("aria-label")
-            title = await el.get_attribute("title")
-            alt = await el.get_attribute("alt")
-            el_class = await el.get_attribute("class")
-            el_id = await el.get_attribute("id")
-            tag = await el.evaluate("el => el.tagName")
-            candidates.append(
-                {
-                    "tag": tag,
-                    "outer_html": outer_html[:300],  # limit length
-                    "inner_html": inner_html[:100],  # limit length
-                    "aria_label": aria_label,
-                    "title": title,
-                    "alt": alt,
-                    "class": el_class,
-                    "id": el_id,
-                    "element": el,
-                }
-            )
-        except Exception:
-            continue
-    # Prioritize candidates with aria-label/title/alt, then trim to max_candidates
-    candidates.sort(
-        key=lambda c: bool(c["aria_label"] or c["title"] or c["alt"]), reverse=True
-    )
-    return candidates[:max_candidates]
+async def extract_element_data(element: Locator) -> Dict[str, Any]:
+    """
+    Extracts relevant data from a single ElementHandle in one browser evaluation.
+    """
+    return await element.evaluate("""el => {
+        if (!el.offsetParent) return null; // A simple visibility check
+
+        return {
+            tag: el.tagName.toLowerCase(),
+            outer_html: el.outerHTML.slice(0, 300),
+            inner_text: el.innerText.slice(0, 200), // innerText is often more useful
+            aria_label: el.getAttribute('aria-label'),
+            title: el.getAttribute('title'),
+            alt: el.getAttribute('alt'),
+            el_class: el.className,
+            el_id: el.id,
+            href: el.getAttribute('href'),
+        };
+    }""")
 
 
-async def get_button(page: Page):
-    # Aggregate all clickable elements
-    all_elements = (
-        await page.get_by_role("link").all()
-        + await page.get_by_role("button").all()
-        + await page.locator(
-            "div[data-click], div[class*='click'], div[class*='button'], div[class*='link'], div[class*='nav'], div[class*='menu'], div[class*='tab'], div[class*='card'], div[class*='item']"
-        ).all()
-        + await page.locator(
-            "[style*='cursor: pointer'], [style*='cursor:pointer'], [class*='cursor-pointer'], [class*='pointer']"
-        ).all()
-        + await page.locator(
-            "[onclick], [onmousedown], [onmouseup], [data-action], [data-click], [data-href], [data-url]"
-        ).all()
-        + await page.locator(
-            "[class*='btn'], [class*='button'], [class*='cta'], [class*='action'], [class*='submit'], [class*='primary'], [class*='secondary']"
-        ).all()
-        + await page.locator("[href]").all()
-    )
-    # Remove duplicates by outerHTML
-    unique_by_html = {}
-    for el in all_elements:
-        try:
-            outer_html = await el.evaluate("el => el.outerHTML")
-            if outer_html not in unique_by_html:
-                unique_by_html[outer_html] = el
-        except Exception:
-            continue
-    unique_elements = list(unique_by_html.values())
-    print("Unique elements: ", unique_elements)
-    candidates = await extract_candidates(unique_elements)
-    return candidates
+async def get_buttons(page: Page, max_candidates: int = 30) -> List[Dict[str, Any]]:
+    """
+    Finds, filters, and extracts data from interactive elements on a page.
+    """
+
+    await page.wait_for_load_state("networkidle")
+    selectors = [
+        "a",
+        "button",
+        "[role='button']",
+        "[role='link']",
+        "[role='menuitem']",
+        "[onclick]",
+        "[onmousedown]",
+        "[data-action]",
+        "[data-click]",
+        "[style*='cursor: pointer']",
+    ]
+
+    # Locate all potential elements in one go
+    all_elements_locator = page.locator(", ".join(selectors))
+    all_elements = await all_elements_locator.all()
+
+    # --- Efficient Data Extraction and Filtering ---
+    # Use asyncio.gather to perform evaluations in parallel
+    tasks = [extract_element_data(el) for el in all_elements]
+    results = await asyncio.gather(*tasks)
+
+    # Filter out invisible or irrelevant elements and add the handle back
+    visible_candidates = []
+    seen_html = set()
+    for i, data in enumerate(results):
+        if data and data["outer_html"] not in seen_html:
+            seen_html.add(data["outer_html"])
+            data["element"] = all_elements[i]  # Re-attach the element handle
+            visible_candidates.append(data)
+
+    # --- Prioritization and Selection ---
+    # Prioritize elements with more specific and meaningful attributes
+    def sort_key(c: Dict[str, Any]) -> tuple:
+        return (
+            bool(c["aria_label"]),  # Most important
+            bool(c["title"]),  # Then title
+            bool(c["href"] and not c["href"] == "#"),  # Then meaningful href
+            bool(c["inner_text"].strip()),  # Finally, non-empty text
+        )
+
+    visible_candidates.sort(key=sort_key, reverse=True)
+
+    print(f"Found {len(visible_candidates)} unique and visible interactive elements.")
+
+    return visible_candidates[:max_candidates]
 
 
 async def click(candidate_idx, page: Page, site: str, candidates, workflow_id=None):
@@ -132,40 +154,3 @@ async def click(candidate_idx, page: Page, site: str, candidates, workflow_id=No
     except Exception:
         pass
     await page.wait_for_load_state("networkidle")
-    await page.wait_for_timeout(10000)
-    filename = sanitize_filename(site) + ".png"
-    await page.screenshot(path=f"tools/actions/ss/{filename}")
-
-
-async def test_get_button():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch_persistent_context(
-            user_data_dir="./browser_data",
-            channel="chrome",
-            headless=False,
-            no_viewport=True,
-        )
-        page = await search("https://auth.openai.com/log-in", browser)
-
-        candidates = await get_button(page)
-        google_btn_idx = None
-        for idx, c in enumerate(candidates):
-            # Look for Google login button by text or aria-label
-            if (
-                (c.get("aria_label") and "google" in c["aria_label"].lower())
-                or (c.get("title") and "google" in c["title"].lower())
-                or (c.get("inner_html") and "google" in c["inner_html"].lower())
-            ):
-                google_btn_idx = idx
-                break
-        if google_btn_idx is None:
-            print("Could not find 'Log in with Google' button.")
-        else:
-            await click(google_btn_idx, page, page.url, candidates)
-        await page.wait_for_load_state("domcontentloaded")
-        res = await get_button(page)
-        print("Candidates: ", res)
-
-
-if __name__ == "__main__":
-    asyncio.run(test_get_button())

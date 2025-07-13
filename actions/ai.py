@@ -105,7 +105,7 @@ async def cerebras_tools(
 ) -> ChatCompletion:
     """
     Enter a prompt to cerebras using information on available tools from @params
-    
+
     Returns a response containing tool call names and arguments
     """
     load_dotenv()
@@ -143,7 +143,7 @@ async def cerebras(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.1,
+        "temperature": 1,
         "response_format": {"type": "json_object"},
         "stream": False,
     }
@@ -210,5 +210,7 @@ async def main():
     user_prompt = "What is the capital of the moon?"
     res = await cerebras(user_prompt, sys_prompt)
     print(res)
+
+
 if __name__ == "__main__":
     asyncio.run(main())

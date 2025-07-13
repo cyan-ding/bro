@@ -17,7 +17,7 @@ def qwen():
     )
     # Read and encode the image
 
-    image_path = "vision/ss/wholepage2.png"
+    image_path = "vision/ss/ab_testing/yes.png"
 
     base64_image = encode_image_to_base64(image_path)
 
@@ -26,29 +26,29 @@ def qwen():
         extra_body={"provider": {"sort": "price"}},
         model="qwen/qwen2.5-vl-72b-instruct",
         messages=[
-            {
-                "role": "system",
-                "content": [
-                     {
-                        "type": "text",
-                        "text": "You are an expert at analyzing screenshots."
-                        "The user will provide a screenshot and an task. You will describe in actions of sentences containing one active verb only how to complete the task in accordance to the screenshot."
-                        "Before giving a response, consider how each step will change the user interface, and what other steps are required to complete the task."
-                        "Be specific regarding what UI elements on the screenshot should be interacted with. "
-                        "Example task: Ask the LLM to give me information on cooking spaghetti and receive a response back"
-                        "Good response: Type 'How do I cook spaghetti?' into the input field labeled 'Ask Gemini.', 'Type enter'"
-                        "Bad response: Type 'How do I cook spaghetti?' into the input field labeled 'Ask Gemini.'"
-                        "Reason: Just typing in a prompt does not receive a response back."
-                        ,
-                    }
-                ]
-            },
+            # {
+            #     "role": "system",
+            #     "content": [
+            #          {
+            #             "type": "text",
+            #             "text": "You are an expert at analyzing screenshots."
+            #             "The user will provide a screenshot and an task. You will describe in actions of sentences containing one active verb only how to complete the task in accordance to the screenshot."
+            #             "Before giving a response, consider how each step will change the user interface, and what other steps are required to complete the task."
+            #             "Be specific regarding what UI elements on the screenshot should be interacted with. "
+            #             "Example task: Ask the LLM to give me information on cooking spaghetti and receive a response back"
+            #             "Good response: Type 'How do I cook spaghetti?' into the input field labeled 'Ask Gemini.', 'Type enter'"
+            #             "Bad response: Type 'How do I cook spaghetti?' into the input field labeled 'Ask Gemini.'"
+            #             "Reason: Just typing in a prompt does not receive a response back."
+            #             ,
+            #         }
+            #     ]
+            # },
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "Change my web page settings from dark model to light mode",
+                        "text": "Is the user able to click Log in with Google at this moment? Answer yes if possible, answer no if not. ",
                     },
                     {
                         "type": "image_url",

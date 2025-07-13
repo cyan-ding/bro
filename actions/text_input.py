@@ -1,180 +1,206 @@
 # function to input text
-
+import asyncio
 import json
-from patchright.async_api import Page
-from actions.utils import get_best_selector, sanitize_filename
-from db.workflows import Workflows
+from httpx import TimeoutException
+from patchright.async_api import Locator, Page
+from actions.utils import get_best_selector
 from actions.ai import load_sys_prompt, cerebras
-from typing import cast, List
+from typing import cast, List, Dict, Any, Callable, Coroutine
 
 
-async def text_input_wrapper(webpage: Page, target: str, input_text: str):
-    # list text inputs
-    input_list = await get_text_input(webpage)
+
+# Standard timeout for waiting for elements to become interactive.
+INTERACTION_TIMEOUT_MS = 5000
+
+async def text_input_wrapper(
+    webpage: Page, target: str, input_text: str, workflow_id=None
+):
+    """
+    Wrapper function that
+    1) gets all text input candidates on the webpage
+    2) queries LLM to select one candidate
+    3) attempts to fill in `input_text` into that candidate
+    """
+    # list text input candidates
+    candidates = await get_text_inputs(webpage)
+    # filter out elemnet handle (interpreter will throw TypeError, Locators aren't serializable)
+    llm_candidates = [
+        {k: v for k, v in c.items() if k != "element"} for c in candidates
+    ]
+    print("Candidate text inputs: ", llm_candidates)
     # ai inference
     sys_prompt = await load_sys_prompt("micro")
-    output_format = "Json format containing html, placeholder, aria_label, aria_describedby, and label properties as provided in the input"
-    prompt = f"Prompt action: {target}, Output format: {output_format}, DOM elements: {input_list}"
-    llm_res = await cerebras(prompt, sys_prompt)
+    
+    prompt = (
+        f"Prompt action: {target}\n"
+        f"Here is a list of text input elements (with their HTML and attributes):\n"
+        f"{json.dumps(llm_candidates, indent=2)}\n"
+        'Return the index of the best match as a JSON object: {"action": <index>, "p": <probability>}'
+    )
+
+    micro_schema = {
+        "type": "object",
+        "properties": {
+            "action": {"type": "integer"},
+            "p": {"type": "number"},
+        },
+        "required": ["action", "p"],
+        "additionalProperties": False,
+    }
+
+    llm_res = await cerebras(prompt, sys_prompt, schema=micro_schema)
 
     # process output
     llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
     print("LLM Output for text input analysis: ", llm_res, "\n")
     llm_json = json.loads(llm_res)
-    await enter_input(
-        llm_json["action"],
-        webpage,
-        sanitize_filename(webpage.url),
-        input_text=input_text,
-    )
+
+    # attempt to enter text
+    try:
+        idx = int(llm_json["action"])
+
+        await enter_input(
+            candidate_idx=idx,
+            candidates=candidates,
+            input_text=input_text,
+            page=webpage,
+            workflow_id=workflow_id,
+        )
+        print(f"Successfully filled in text into target {target}")
+
+    except TimeoutException as e:
+        print(f"Failed to fill in text into target {target}, exception: {e}")
+
+
+async def get_element_metadata(element: Locator) -> Dict[str, Any]:
+    """
+    Fetches essential metadata from a single element handle in a single browser-side evaluation.
+
+    This is more efficient than making multiple `await` calls for each attribute.
+    """
+    js_script = """
+    el => {
+        return {
+            outer_html: el.outerHTML,
+            inner_html: el.innerHTML,
+            placeholder: el.getAttribute('placeholder'),
+            aria_label: el.getAttribute('aria-label'),
+            aria_describedby: el.getAttribute('aria-describedby'),
+            label: el.labels?.[0]?.innerText
+        }
+    }
+    """
+    metadata = await element.evaluate(js_script)
+    metadata["element"] = element  # Keep the handle for later actions
+    return metadata
 
 
 # returns list of metadata corresponding to input_candidates
-async def get_text_input(page: Page):
-    # 1. Typed input fields (textual + special types)
-    typed_inputs = await page.locator(
+async def get_text_inputs(page: Page):
+    # A comprehensive selector for all common text-editable elements.
+    # This combines type, role, and contenteditable attributes for a single, efficient query.
+    TEXT_INPUT_SELECTOR = (
         "input[type='text'], input[type='password'], input[type='email'], input[type='search'], "
-        + "input[type='tel'], input[type='url'], input[type='number'], input[type='date'], input[type='time'], "
-        + "input[type='datetime-local'], input[type='month'], input[type='week'], input[type='color']"
-    ).all()
-
-    # 2. Textareas
-    textareas = await page.locator("textarea").all()
-
-    # 3. ARIA role="textbox" (includes textareas and custom inputs)
-    aria_textboxes = await page.get_by_role("textbox").all()
-
-    # 4. Class-based selectors (common framework input classes)
-    class_based_inputs = await page.locator(
-        "[class*='input'], [class*='field'], [class*='form'], [class*='search'], [class*='textbox'], [class*='text-area']"
-    ).all()
-
-    # 5. Contenteditable elements (e.g., for rich text editors)
-    editable_elements = await page.locator("[contenteditable='true']").all()
-
-    input_candidates = list(
-        set(
-            typed_inputs
-            + textareas
-            + aria_textboxes
-            + class_based_inputs
-            + editable_elements
-        )
+        "input[type='tel'], input[type='url'], input[type='number'], input[type='date'], input[type='time'], "
+        "input[type='datetime-local'], input[type='month'], input[type='week'], input[type='color'], "
+        "textarea, [role='textbox'], [contenteditable='true']"
     )
 
-    element_data = []
-    for el in input_candidates:
-        html = await el.inner_html()
-        placeholder = await el.get_attribute("placeholder")
-        aria_label = await el.get_attribute("aria-label")
-        aria_describedby = await el.get_attribute("aria-describedby")
-        label = await el.evaluate("el => el.labels?.[0]?.innerText")  # linked <label>
-        outer_html = await el.evaluate("el => el.outerHTML")
-        inner_html = html  # already fetched
+    all_input_locators = page.locator(TEXT_INPUT_SELECTOR)
+    all_input_texts = await all_input_locators.all()
 
-        element_data.append(
-            {
-                "element": el,
-                "html": html,
-                "placeholder": placeholder,
-                "aria_label": aria_label,
-                "aria_describedby": aria_describedby,
-                "label": label,
-                "outer_html": outer_html,
-                "inner_html": inner_html,
-            }
-        )
+    # filter out invisible elements
+    input_candidates = [
+        locator
+        for locator in all_input_texts
+         if await locator.is_visible()
+    ]
 
+    if not input_candidates:
+        print("No visible text input elements found.")
+        return []
+
+    # run .evaluate tasks at once using asyncio.gather
+    tasks = [get_element_metadata(el) for el in input_candidates]
+    element_data = await asyncio.gather(*tasks)
+
+    print(f"Found {len(element_data)} visible text-editable elements.")
     return element_data
 
 
 async def enter_input(
-    llm_input, page: Page, site: str, input_text: str, workflow_id=None
-):
+    candidate_idx, candidates, input_text: str, page: Page, workflow_id=None
+) -> bool:
+    if not (0 <= candidate_idx < len(candidates)):
+        print("Invalid candidate index")
+        return False
+    
     try:
-        # Get the current input candidates for this page
-        input_candidates = await get_text_input(page)
-        matched_candidates = []
-        # Find matching input element
-        matched_input = None
-        for candidate_data in input_candidates:
-            if (
-                (candidate_data.get("html") == llm_input.get("html"))
-                or (candidate_data.get("placeholder") == llm_input.get("placeholder"))
-                or (candidate_data.get("aria_label") == llm_input.get("aria_label"))
-                or (
-                    candidate_data.get("aria_describedby")
-                    == llm_input.get("aria_describedby")
-                )
-                or (candidate_data.get("label") == llm_input.get("label"))
-            ):
-                matched_element = candidate_data["element"]
-                matched_input = matched_element
-                matched_candidates.append(matched_element)
+        el = candidates[candidate_idx]["element"]
 
-        if matched_input is None:
-            print("No matching input element found")
-            return
+        # Define a sequence of input strategies to attempt
+        # This avoids the deeply nested try/except blocks ("arrowhead" anti-pattern)
+        # Each strategy is a function that returns True on success.
+        async def strategy_fill() -> bool:
+            print("Attempting strategy: fill()")
+            await el.scroll_into_view_if_needed()
+            await el.click(timeout=INTERACTION_TIMEOUT_MS)
+            await el.fill(input_text, timeout=INTERACTION_TIMEOUT_MS)
+            return True
 
-        # Try multiple strategies to fill the input
-        for candidate in matched_candidates:
+        async def strategy_force_fill() -> bool:
+            print("Attempting strategy: fill(force=True)")
+            await el.fill(input_text, force=True, timeout=INTERACTION_TIMEOUT_MS)
+            return True
+
+        async def strategy_type() -> bool:
+            print("Attempting strategy: type()")
+            await el.scroll_into_view_if_needed()
+            await el.click(timeout=INTERACTION_TIMEOUT_MS)
+            await el.type(input_text, delay=50) # Add a small delay to simulate human typing
+            return True
+
+        async def strategy_keyboard() -> bool:
+            print("Attempting strategy: page.keyboard.type()")
+            await el.focus(timeout=INTERACTION_TIMEOUT_MS)
+            await page.keyboard.type(input_text, delay=50)
+            return True
+
+        strategies: List[Callable[[], Coroutine[Any, Any, bool]]] = [
+            strategy_fill,
+            strategy_force_fill,
+            strategy_type,
+            strategy_keyboard,
+        ]
+
+        # 3. Execute strategies until one succeeds
+        success = False
+        for attempt in strategies:
             try:
-                # Strategy 1: Wait for element to be visible and try fill
-                await candidate.wait_for(state="visible", timeout=5000)
-                await candidate.scroll_into_view_if_needed()
-                await candidate.click()
-                await candidate.fill(input_text)
-                print("Successfully used keyboard input")
-                await add_input_to_workflow(
-                    workflow_id=workflow_id, candidate=candidate, input_text=input_text
+                await attempt()
+                print("Successfully entered text into the element.")
+                success = True
+                break  # Exit the loop on first success
+            except Exception as e:
+                print(f"Strategy failed: {e.__class__.__name__}. Trying next strategy.")
+        
+        if not success:
+            print("All input strategies failed for the target element.")
+            return False
+        else: 
+            if workflow_id is not None:
+                selector = await get_best_selector(el)
+                from db.workflows import Workflows
+
+                workflow = Workflows()
+                workflow.add_step(
+                    id=workflow_id, step={"action": "text_input", "selector": selector, "value": input_text}
                 )
-                break
-            except Exception:
-                try:
-                    await candidate.fill(input_text, force=True)
-                    print("Successfully used keyboard input")
-                    await add_input_to_workflow(
-                        workflow_id=workflow_id,
-                        candidate=candidate,
-                        input_text=input_text,
-                    )
-                    break
-                except Exception:
-                    try:
-                        await candidate.type(input_text)
-                        print("Successfully used keyboard input")
-                        await add_input_to_workflow(
-                            workflow_id=workflow_id,
-                            candidate=candidate,
-                            input_text=input_text,
-                        )
-                        break
-                    except Exception:
-                        await candidate.focus()
-                        await page.keyboard.type(input_text)
-                        print("Successfully used keyboard input")
-                        await add_input_to_workflow(
-                            workflow_id=workflow_id,
-                            candidate=candidate,
-                            input_text=input_text,
-                        )
-                        break
-
-        await page.wait_for_load_state("networkidle")
-        await page.screenshot(path=f"tools/actions/ss/{site}.png")
-
+            await page.wait_for_load_state("networkidle")
+            return True
+        
     except Exception as e:
         print("Text input error: ", e)
         import traceback
-
         traceback.print_exc()
-
-
-async def add_input_to_workflow(workflow_id, candidate, input_text):
-    if workflow_id is not None:
-        workflow = Workflows()
-        selector = await get_best_selector(candidate)
-        workflow.add_step(
-            id=workflow_id,
-            step={"action": "text_input", "selector": selector, "value": input_text},
-        )
+        return False

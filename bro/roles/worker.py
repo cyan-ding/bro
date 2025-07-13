@@ -14,9 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import time
 import os
 import torch
-import numpy as np
 from PIL import Image
-import gc
 
 
 class Worker:

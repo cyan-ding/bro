@@ -9,6 +9,7 @@ The options may be provided in different formats (DOM JSON, image captions, etc.
 - You MUST select the element or elements that best accomplishes the prompt action.
 - If the output format specifies a list/array, you MUST return all matching elements in that format.
 - You MUST return your answer in the exact same format outlined in the input.
+- If none of the options appear to match the prompt action, return with action: -1
 - DO NOT output any reasoning.
 
 ---
@@ -18,7 +19,7 @@ The options may be provided in different formats (DOM JSON, image captions, etc.
 #### Example 1: DOM Elements (JSON Format)
 Input:
 - Prompt action: "Click the submit button"
-- Output format: "Json format containing html, placeholder, aria_label, aria_describedby, and label properties as provided in the input"
+- Output format: "Json format containing html, placeholder, aria_label, aria_describedby, and label properties of the selected element as provided in the input"
 - DOM elements:
 ```
 [
@@ -98,7 +99,7 @@ Output:
 You MUST respond with valid JSON in the following structure:
 ```
 {
-    "action": output that best fits the prompt,
+    "action": output in accordance to the output format,
     "p": how probable your guess is (float)
 }
 ```

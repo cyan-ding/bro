@@ -16,6 +16,137 @@
       "action": "text_input",
       "selector": "#identifierId",
       "value": "abcd"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "text_input",
+      "selector": "[name='hiddenPassword']",
+      "value": "blueplus.d@gmail.com"
+    },
+    {
+      "action": "click",
+      "selector": "[type='button'][class*='VfPpkd-LgbsSe']"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "text_input",
+      "selector": "#identifierId",
+      "value": "blueplus.d@gmail.com"
+    },
+    {
+      "action": "click",
+      "selector": "[type='button'][class*='VfPpkd-LgbsSe']"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "text_input",
+      "selector": "#identifierId",
+      "value": "blueplus.d@gmail.com"
+    },
+    {
+      "action": "click",
+      "selector": "[type='button'][class*='VfPpkd-LgbsSe']"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "click",
+      "selector": "button:has-text('Forgot email?')"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label='Listen and type the numbers you hear']"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "click",
+      "selector": "button:has-text('Forgot email?')"
+    },
+    {
+      "search": "https://chatgpt.com"
+    },
+    {
+      "action": "click",
+      "selector": "button:has-text('Forgot email?')"
+    },
+    {
+      "action": "text_input",
+      "selector": "#identifierId",
+      "value": "blueplus.d@gmail.com"
+    },
+    {
+      "action": "click",
+      "selector": "[type='button'][class*='VfPpkd-LgbsSe']"
+    },
+    {
+      "action": "click",
+      "selector": "div.VV3oRb"
+    },
+    {
+      "search": "https://github.com/"
     }
   ]
 }
