@@ -9,23 +9,43 @@ import re
 import asyncio
 from patchright.async_api import Locator, Page, async_playwright
 from actions.search import search
+import difflib
+
+def fuzzy_action_fallback(target, candidates):
+    # Combine all relevant fields into a single string for each candidate
+    candidate_strings = [
+        c.outerHTML
+        for c in candidates
+    ]
+    print("Fuzzy candidates: ", candidate_strings)
+    # Use difflib to find the best match
+    matches = difflib.get_close_matches(target, candidate_strings, n=1)
+    if matches:
+        best_match = matches[0]
+        print("Best Match", best_match)
+        idx = candidate_strings.index(best_match)
+        print(f"Fuzzy fallback selected index {idx} for target '{target}'")
+        return idx
+    print("Fuzzy fallback found no good match.")
+    return -1
 
 
 def sanitize_filename(name):
     """Sanitize filename to be safe for filesystem"""
     return re.sub(r"[^a-zA-Z0-9_\-\.]", "_", name)
 
+
 class SelectorOptions:
     """Wrapper class to contain all options, to be used in workflows"""
+
     def __init__(self):
         self.options = []
-    
+
     async def create_options(self, locator: Locator):
         best_selector = await get_best_selector(locator)
         xpath_options = await get_xpath_options(locator)
         self.options = xpath_options.append(best_selector)
         return self.options
-        
 
 
 async def get_best_selector(element: Locator) -> str:
@@ -119,6 +139,7 @@ async def get_xpath(locator: Locator):
             return getXPath(node);
         }
     """)
+
 
 async def get_xpath_options(locator: Locator):
     """Get multiple XPath options for an element, including the most specific ones"""
@@ -341,6 +362,7 @@ async def test_detection():
         # wait a bit for developers to monitor browser
         await page.wait_for_timeout(5000)
 
+
 async def test_get_xpath():
     async with async_playwright() as p:
         browser = await p.chromium.launch_persistent_context(
@@ -350,23 +372,45 @@ async def test_get_xpath():
             no_viewport=True,
         )
         page = await search("https://github.com", browser)
-        
+
         # Test with the original XPath
 
         original_xpath = "/html/body/div[1]/div[3]/header/div/div[2]/div/div/div/a"
         locator = page.locator(f"xpath={original_xpath}")
-        
-        print("=== XPath Generation Test ===")        
+
+        print("=== XPath Generation Test ===")
         # Get the improved XPath
         xpath = await get_xpath(locator=locator)
         print(f"Generated XPath: {xpath}")
-        
+
         # Get multiple XPath options
         xpath_options = await get_xpath_options(locator=locator)
         print(f"XPath Options: {xpath_options}")
 
         assert xpath == original_xpath
-        
+
+async def test_fill():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch_persistent_context(
+            user_data_dir="./browser_data",
+            channel="chrome",
+            headless=False,
+            no_viewport=True,
+        )
+        page = await search("https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform", browser)
+
+        # Test with the original XPath
+
+        original_xpath = "//*[@id='mG61Hd']/div[2]/div/div[2]/div[2]/div/div/div[2]/div/div/div[2]/div[1]/div/div[1]/input"
+        locator = page.locator(f"xpath={original_xpath}")
+        before = await locator.input_value()
+        await locator.type("1111", delay=200)
+        await page.wait_for_timeout(3000)
+        after = await locator.input_value()
+        print(before, after)
+
+
+
 
 if __name__ == "__main__":
-    asyncio.run(test_get_xpath())
+    asyncio.run(test_fill())

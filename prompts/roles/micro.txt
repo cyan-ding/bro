@@ -7,6 +7,8 @@ The options may be provided in different formats (DOM JSON, image captions, etc.
   - An output format (describes how your answer should be formatted)
   - A list of UI elements (in the specified format)
 - You MUST select the element or elements that best accomplishes the prompt action.
+- Find the element by examining individual attributes such as placeholder, aria_label, title, el_id, etc for keywords that closely match the prompt action, even if the match is not word-for-word. 
+- Consider synonyms, abbreviations, and related terms. Make sure you consider matches from all attributes of the given UI elements.
 - If the output format specifies a list/array, you MUST return all matching elements in that format.
 - You MUST return your answer in the exact same format outlined in the input.
 - If none of the options appear to match the prompt action, return with action: -1
@@ -14,82 +16,121 @@ The options may be provided in different formats (DOM JSON, image captions, etc.
 
 ---
 
-### Examples
-
-#### Example 1: DOM Elements (JSON Format)
+### Example 1: DOM Elements (JSON Format, Non-Obvious Match)
 Input:
 - Prompt action: "Click the submit button"
 - Output format: "Json format containing html, placeholder, aria_label, aria_describedby, and label properties of the selected element as provided in the input"
 - DOM elements:
 ```
 [
-  {"html": "<button>Submit</button>", "placeholder": null, "aria_label": "submit", "aria_describedby": null, "label": "Submit"},
+  {"html": "<button>Send</button>", "placeholder": null, "aria_label": "submit your response", "aria_describedby": null, "label": "Send"},
   {"html": "<button>Cancel</button>", "placeholder": null, "aria_label": "cancel", "aria_describedby": null, "label": "Cancel"}
 ]
 ```
 Output:
 ```
 {
-  "action": {"html": "<button>Submit</button>", "placeholder": null, "aria_label": "submit", "aria_describedby": null, "label": "Submit"},
-  "p": 0.98
+  "action": {"html": "<button>Send</button>", "placeholder": null, "aria_label": "submit your response", "aria_describedby": null, "label": "Send"},
+  "p": 0.93
 }
 ```
 
 ---
 
-#### Example 2: Image Captions (from Vision Pipeline)
+### Example 1b: DOM Elements (Keyword Hidden in ID)
 Input:
-- Prompt action: "Find the giraffe button"
+- Prompt action: "Click the submit button"
+- Output format: "Json format containing html, placeholder, aria_label, aria_describedby, and label properties of the selected element as provided in the input"
+- DOM elements:
+```
+[
+  {"html": "<button></button>", "placeholder": null, "aria_label": null, "aria_describedby": null, "label": null, "el_id": "composer-submit-button"},
+  {"html": "<button>Cancel</button>", "placeholder": null, "aria_label": "cancel", "aria_describedby": null, "label": "Cancel", "el_id": "cancel-btn"}
+]
+```
+Output:
+```
+{
+  "action": {"html": "<button></button>", "placeholder": null, "aria_label": null, "aria_describedby": null, "label": null, "el_id": "composer-submit-button"},
+  "p": 0.91
+}
+```
+
+---
+
+### Example 2: Image Captions (Synonyms and Paraphrasing)
+Input:
+- Prompt action: "Find the button for uploading files"
 - Output format: "Return the indice of the best match as a JSON object: {\"action\": <index>}"
 - UI elements:
 ```
 [
-  {"caption": "A button with a giraffe icon", "class": "icon-btn", "bbox": [10, 20, 50, 60]},
-  {"caption": "A button with a cat icon", "class": "icon-btn", "bbox": [60, 20, 100, 60]}
+  {"caption": "A button labeled 'Attach files'", "class": "icon-btn", "bbox": [10, 20, 50, 60]},
+  {"caption": "A button with a trash can icon", "class": "icon-btn", "bbox": [60, 20, 100, 60]}
 ]
 ```
 Output:
 ```
 {
   "action": 0,
-  "p": 0.95
+  "p": 0.89
 }
 ```
 
 ---
 
-#### Example 2b: Multiple Image Captions (Return All Matches)
+### Example 3: Plain Text List (Partial and Fuzzy Match)
 Input:
-- Prompt action: "Find all giraffe buttons"
-- Output format: "Return the indices of all matches as a JSON object: {\"action\": [<indices>]}"
-- UI elements:
+- Prompt action: "Choose the login option"
+- Output format: "one element word for word"
+- Options: ["Sign in", "Sign up", "Share"]
+Output:
+```
+{
+  "action": "Sign in",
+  "p": 0.92
+}
+```
+
+---
+
+### Example 4: Multiple Attributes (Match on aria-label)
+Input:
+- Prompt action: "Click the help button"
+- Output format: "Json format containing html, placeholder, aria_label, aria_describedby, and label properties of the selected element as provided in the input"
+- DOM elements:
 ```
 [
-  {"caption": "A button with a giraffe icon", "class": "icon-btn", "bbox": [10, 20, 50, 60]},
-  {"caption": "A button with a cat icon", "class": "icon-btn", "bbox": [60, 20, 100, 60]},
-  {"caption": "A button with a giraffe icon", "class": "icon-btn", "bbox": [110, 20, 150, 60]}
+  {"html": "<button>?</button>", "placeholder": null, "aria_label": "help", "aria_describedby": null, "label": null},
+  {"html": "<button>Cancel</button>", "placeholder": null, "aria_label": "cancel", "aria_describedby": null, "label": "Cancel"}
 ]
 ```
 Output:
 ```
 {
-  "action": [0, 2],
+  "action": {"html": "<button>?</button>", "placeholder": null, "aria_label": "help", "aria_describedby": null, "label": null},
   "p": 0.95
 }
 ```
 
 ---
 
-#### Example 3: Plain Text List
+### Example 5: No Good Match
 Input:
-- Prompt action: "Select the 'Log in' option"
-- Output format: "one element word for word"
-- Options: ["Log in", "Sign up", "Share"]
+- Prompt action: "Click the settings button"
+- Output format: "Json format containing html, placeholder, aria_label, aria_describedby, and label properties of the selected element as provided in the input"
+- DOM elements:
+```
+[
+  {"html": "<button>Help</button>", "placeholder": null, "aria_label": "help", "aria_describedby": null, "label": "Help"},
+  {"html": "<button>Cancel</button>", "placeholder": null, "aria_label": "cancel", "aria_describedby": null, "label": "Cancel"}
+]
+```
 Output:
 ```
 {
-  "action": "Log in",
-  "p": 0.99
+  "action": -1,
+  "p": 0.0
 }
 ```
 

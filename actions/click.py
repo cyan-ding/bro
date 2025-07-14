@@ -3,13 +3,13 @@ import json
 from typing import cast, List, Dict, Any
 from httpx import TimeoutException
 from patchright.async_api import Page, Locator
-from actions.utils import SelectorOptions
+from actions.utils import SelectorOptions, check_if_action_worked, fuzzy_action_fallback
 from actions.ai import load_sys_prompt, cerebras
 
 
-async def click_wrapper(webpage: Page, target: str, workflow_id=None):
+async def click_wrapper(webpage: Page, target: str, workflow_id=None) -> bool:
     """
-    Wrapper function that 
+    Wrapper function that
     1) gets all button candidates on the webpage
     2) queries LLM to select one candidate
     3) attempts to click on that candidate
@@ -28,6 +28,7 @@ async def click_wrapper(webpage: Page, target: str, workflow_id=None):
         f"Here is a list of clickable elements (with their HTML and attributes):\n"
         f"{json.dumps(llm_candidates, indent=2)}\n"
         'Return the index of the best match as a JSON object: {"action": <index>, "p": <probability>}'
+        "Return index -1 if no good match could be found"
     )
 
     micro_schema = {
@@ -40,19 +41,38 @@ async def click_wrapper(webpage: Page, target: str, workflow_id=None):
         "additionalProperties": False,
     }
     # get result
-    llm_res = await cerebras(prompt, sys_prompt, schema=micro_schema)
+    llm_res = await cerebras(
+        prompt, sys_prompt, schema=micro_schema, model="qwen-3-235b-a22b"
+    )
     llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
 
     print("LLM Output for text input analysis: ", llm_res, "\n")
     llm_json = json.loads(llm_res)
-    
+
     # click using index
-    try: 
+    try:
         idx = int(llm_json["action"])
-        await click(idx, webpage, webpage.url, candidates, workflow_id=workflow_id)
-        print(f"Successfully clicked on target {target}")
+        if idx == -1:
+            # try fuzzy fallback
+            idx = fuzzy_action_fallback(target=target, candidates=llm_candidates)
+            if idx == -1:
+                print("No good match found, failed to click on ", target)
+                return False
+        changed, details = await check_if_action_worked(
+            webpage,
+            lambda: click(
+                idx, webpage, webpage.url, candidates, workflow_id=workflow_id
+            ),
+        )
+        if changed:
+            print(f"Successfully clicked on target {target}, induced a {details}")
+        else:
+            print(f"Failed to induce DOM change with click on target {target}")
+        await webpage.wait_for_timeout(5000)
+        return changed
     except TimeoutException as e:
         print(f"Failed to click on target {target}, exception: {e}")
+        return False
 
 
 async def extract_element_data(element: Locator) -> Dict[str, Any]:
@@ -85,14 +105,39 @@ async def get_buttons(page: Page, max_candidates: int = 30) -> List[Dict[str, An
     selectors = [
         "a",
         "button",
+        "input[type='button']",
+        "input[type='submit']",
+        "input[type='reset']",
+        "input[type='radio']",
+        "input[type='checkbox']",
+        "label[for]",
+        "summary",
+        "select",
+        "option",
+        "area[href]",
         "[role='button']",
         "[role='link']",
+        "[role='checkbox']",
+        "[role='radio']",
+        "[role='tab']",
+        "[role='switch']",
+        "[role='option']",
         "[role='menuitem']",
+        "[role='menuitemcheckbox']",
+        "[role='menuitemradio']",
+        "[role='treeitem']",
+        "[role='combobox']",
+        "[role='listbox']",
+        "[role='slider']",
+        "[role='spinbutton']",
         "[onclick]",
         "[onmousedown]",
         "[data-action]",
         "[data-click]",
         "[style*='cursor: pointer']",
+        "[tabindex]:not([tabindex='-1'])",
+        "svg[onclick]",
+        "[role='img'][onclick]",
     ]
 
     # Locate all potential elements in one go
@@ -136,12 +181,8 @@ async def click(candidate_idx, page: Page, site: str, candidates, workflow_id=No
         print("Invalid candidate index")
         return
     el = candidates[candidate_idx]["element"]
-    current_url = page.url
     try:
         await el.click()
-        async with page.expect_navigation(timeout=5000) as navigation_info:
-            await navigation_info.value
-            print(f"Navigation detected: {current_url} -> {page.url}")
         # After successful click, add to workflow if workflow_id is provided
         if workflow_id is not None:
             options = SelectorOptions()

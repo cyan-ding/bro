@@ -1,9 +1,8 @@
-# function to input text
 import asyncio
 import json
 from httpx import TimeoutException
 from patchright.async_api import Locator, Page
-from actions.utils import get_best_selector, SelectorOptions
+from actions.utils import SelectorOptions, check_if_action_worked, fuzzy_action_fallback
 from actions.ai import load_sys_prompt, cerebras
 from typing import cast, List, Dict, Any, Callable, Coroutine
 
@@ -14,7 +13,7 @@ INTERACTION_TIMEOUT_MS = 5000
 
 async def text_input_wrapper(
     webpage: Page, target: str, input_text: str, workflow_id=None
-):
+) -> bool:
     """
     Wrapper function that
     1) gets all text input candidates on the webpage
@@ -23,7 +22,7 @@ async def text_input_wrapper(
     """
     # list text input candidates
     candidates = await get_text_inputs(webpage)
-    # filter out elemnet handle (interpreter will throw TypeError, Locators aren't serializable)
+    # filter out locator (interpreter will throw TypeError, Locators aren't serializable)
     llm_candidates = [
         {k: v for k, v in c.items() if k != "element"} for c in candidates
     ]
@@ -36,6 +35,7 @@ async def text_input_wrapper(
         f"Here is a list of text input elements (with their HTML and attributes):\n"
         f"{json.dumps(llm_candidates, indent=2)}\n"
         'Return the index of the best match as a JSON object: {"action": <index>, "p": <probability>}'
+        "Return index -1 if no good match could be found"
     )
 
     micro_schema = {
@@ -48,7 +48,7 @@ async def text_input_wrapper(
         "additionalProperties": False,
     }
 
-    llm_res = await cerebras(prompt, sys_prompt, schema=micro_schema)
+    llm_res = await cerebras(prompt, sys_prompt, schema=micro_schema, model="llama-4-scout-17b-16e-instruct")
 
     # process output
     llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
@@ -58,18 +58,33 @@ async def text_input_wrapper(
     # attempt to enter text
     try:
         idx = int(llm_json["action"])
+        if idx == -1:
+            idx = fuzzy_action_fallback(target=target, candidates=llm_candidates)
+            if idx == -1: 
+                print("No good match found, failed to input text into ", target)
+                return False
+        changed, details = await check_if_action_worked(
+            webpage, 
+            lambda: enter_input(
+                candidate_idx=idx,
+                candidates=candidates,
+                input_text=input_text,
+                page=webpage,
+                workflow_id=workflow_id,
+            )
+        ) 
+        if changed:
+            print(f"Successfully filled in text to target {target}, induced a {details}")
+        else: 
+            print(f"Failed to induce DOM change with input text into target {target}")
+        # timeout to let developer track the ui changes
+        await webpage.wait_for_timeout(5000)
 
-        await enter_input(
-            candidate_idx=idx,
-            candidates=candidates,
-            input_text=input_text,
-            page=webpage,
-            workflow_id=workflow_id,
-        )
-        print(f"Successfully filled in text into target {target}")
+        return changed
 
     except TimeoutException as e:
         print(f"Failed to fill in text into target {target}, exception: {e}")
+        return False
 
 
 async def get_element_metadata(element: Locator) -> Dict[str, Any]:
@@ -95,8 +110,9 @@ async def get_element_metadata(element: Locator) -> Dict[str, Any]:
     return metadata
 
 
-# returns list of metadata corresponding to input_candidates
+
 async def get_text_inputs(page: Page):
+    """Returns list of metadata corresponding to input_candidates"""
     # A comprehensive selector for all common text-editable elements.
     # This combines type, role, and contenteditable attributes for a single, efficient query.
     TEXT_INPUT_SELECTOR = (
@@ -136,7 +152,7 @@ async def enter_input(
         return False
     
     try:
-        el = candidates[candidate_idx]["element"]
+        el: Locator = candidates[candidate_idx]["element"]
 
         # Define a sequence of input strategies to attempt
         # This avoids the deeply nested try/except blocks ("arrowhead" anti-pattern)
@@ -144,7 +160,9 @@ async def enter_input(
         async def strategy_fill() -> bool:
             print("Attempting strategy: fill()")
             await el.scroll_into_view_if_needed()
-            await el.click(timeout=INTERACTION_TIMEOUT_MS)
+            bounding_box = await el.bounding_box()
+            if bounding_box is not None: 
+                await page.mouse.click(bounding_box["x"]+ 5, (bounding_box["y"] + bounding_box["height"])/2 )
             await el.fill(input_text, timeout=INTERACTION_TIMEOUT_MS)
             return True
 
@@ -156,8 +174,10 @@ async def enter_input(
         async def strategy_type() -> bool:
             print("Attempting strategy: type()")
             await el.scroll_into_view_if_needed()
-            await el.click(timeout=INTERACTION_TIMEOUT_MS)
-            await el.type(input_text, delay=50) # Add a small delay to simulate human typing
+            bounding_box = await el.bounding_box()
+            if bounding_box is not None: 
+                await page.mouse.click(bounding_box["x"]+ 5, (bounding_box["y"] + bounding_box["height"])/2 )
+            await el.type(input_text, delay=200) # Add a small delay to simulate human typing
             return True
 
         async def strategy_keyboard() -> bool:
@@ -167,10 +187,10 @@ async def enter_input(
             return True
 
         strategies: List[Callable[[], Coroutine[Any, Any, bool]]] = [
-            strategy_fill,
-            strategy_force_fill,
             strategy_type,
             strategy_keyboard,
+            strategy_fill,
+            strategy_force_fill,
         ]
 
         # 3. Execute strategies until one succeeds

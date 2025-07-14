@@ -47,25 +47,33 @@ class Worker:
                 headless=False,
                 no_viewport=True,
             )
-            webpage = await search("https://chatgpt.com", browser=browser)
+            webpage = await search("https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform", browser=browser)
             prompt_chain = [
-                "Enter into Chat Gpt instructions on setting up a new Windows",
-                "Click on the submit button",
+                "Fill in the date text field with date: 11111111"
             ]
             await test_tool_chain(webpage=webpage, prompt_chain=prompt_chain)
 
-# Chain of tool (action calls)
-async def test_tool_chain(webpage: Page, prompt_chain):
+async def test_tool_chain(webpage: Page, prompt_chain: List[str]):
+    """ Chain of tool (action calls) """
+
     sys_prompt = await load_sys_prompt("worker")
     for prompt in prompt_chain:
         try:
-            await tool_call(webpage=webpage, sys_prompt=sys_prompt, user_prompt=prompt)
+            success = await tool_call(webpage=webpage, sys_prompt=sys_prompt, user_prompt=prompt)
+            if not success:
+                print("Failed to execute: ", prompt, ", stopping tool chain")
+                break
         except Exception:
             traceback.print_exc()
 
-# given a task, cerebras (micro) will decide on a function to call:
-# either enter input text, or click on an element.
-async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str):
+
+async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str) -> bool:
+    """
+    given a task, cerebras (micro) will decide on a function to call:
+    either enter input text, or click on an element.
+
+    Returns true if tool call was successful
+    """
     # get params
     worker_params = worker_tool(
         user_prompt=user_prompt, system_prompt=sys_prompt, model="qwen-3-32b"
@@ -77,21 +85,27 @@ async def tool_call(webpage: Page, sys_prompt: str, user_prompt: str):
         print(llm_res)
         func = llm_res[0]["function"]
         func_name = func["name"]
-        func_args = func["arguments"]
-        json_func = json.loads(func_args)
+        json_func = json.loads(func["arguments"])
         target = json_func["target"]
         input_text = ""
         if func_name == "input_text":
             input_text = json_func["input"]
         
         # call outputed function
+        success = False
         match func_name:
             case "click":
-                await click_wrapper(webpage, target)
+                success = await click_wrapper(webpage, target)
+                return success
             case "input_text":
-                await text_input_wrapper(webpage, target, input_text)
+                success = await text_input_wrapper(webpage, target, input_text)
+                return success
+            case _:
+                print(f"Unknown function name: {func_name}")
+                return False
     except Exception:
         traceback.print_exc()
+        return False
 
 
 async def test_input():
@@ -176,7 +190,10 @@ def run_inference_on_image(image_path):
         # Use the globally loaded model and tokenizer
         with torch.inference_mode():
             # 1. Encode the image to get visual features
-            res = model.query(image, prompt_text)
+            if model is not None:
+                res = model.query(image, prompt_text)
+            else:
+                res = "Error: Model not initialized"
 
         return (pid, os.path.basename(image_path), res)
 
