@@ -3,7 +3,7 @@ import asyncio
 import json
 from httpx import TimeoutException
 from patchright.async_api import Locator, Page
-from actions.utils import get_best_selector
+from actions.utils import get_best_selector, SelectorOptions
 from actions.ai import load_sys_prompt, cerebras
 from typing import cast, List, Dict, Any, Callable, Coroutine
 
@@ -189,12 +189,13 @@ async def enter_input(
             return False
         else: 
             if workflow_id is not None:
-                selector = await get_best_selector(el)
+                options = SelectorOptions()
+                selectors = await options.create_options(locator=el)
                 from db.workflows import Workflows
 
                 workflow = Workflows()
                 workflow.add_step(
-                    id=workflow_id, step={"action": "text_input", "selector": selector, "value": input_text}
+                    id=workflow_id, step={"action": "text_input", "selector": selectors, "value": input_text}
                 )
             await page.wait_for_load_state("networkidle")
             return True

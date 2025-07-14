@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict
+from typing import List, Dict, Any
 from patchright.async_api import Page
 
 class Workflows():
@@ -36,7 +36,7 @@ class Workflows():
         with open(self.workflows_path, "w") as f:
             json.dump(workflow, f, indent=2)
     
-    def add_step(self, id: str, step: Dict[str, str]):
+    def add_step(self, id: str, step: Dict[str, Any]):
         workflow = self.get_workflow(id)
         workflow.append(step)
         # Load all workflows, update the one with the given id, and write back the full set

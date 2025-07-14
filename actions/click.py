@@ -3,7 +3,7 @@ import json
 from typing import cast, List, Dict, Any
 from httpx import TimeoutException
 from patchright.async_api import Page, Locator
-from actions.utils import get_best_selector
+from actions.utils import SelectorOptions
 from actions.ai import load_sys_prompt, cerebras
 
 
@@ -57,7 +57,7 @@ async def click_wrapper(webpage: Page, target: str, workflow_id=None):
 
 async def extract_element_data(element: Locator) -> Dict[str, Any]:
     """
-    Extracts relevant data from a single ElementHandle in one browser evaluation.
+    Extracts relevant data from a single Locator in one browser evaluation.
     """
     return await element.evaluate("""el => {
         if (!el.offsetParent) return null; // A simple visibility check
@@ -144,12 +144,13 @@ async def click(candidate_idx, page: Page, site: str, candidates, workflow_id=No
             print(f"Navigation detected: {current_url} -> {page.url}")
         # After successful click, add to workflow if workflow_id is provided
         if workflow_id is not None:
-            selector = await get_best_selector(el)
+            options = SelectorOptions()
+            selectors = await options.create_options(locator=el)
             from db.workflows import Workflows
 
             workflow = Workflows()
             workflow.add_step(
-                id=workflow_id, step={"action": "click", "selector": selector}
+                id=workflow_id, step={"action": "click", "selector": selectors}
             )
     except Exception:
         pass

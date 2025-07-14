@@ -7,9 +7,7 @@ It includes selector generation logic for Playwright elements, to support robust
 
 import re
 import asyncio
-import json
-from httpx import TimeoutException
-from patchright.async_api import ElementHandle, Locator, Page, async_playwright
+from patchright.async_api import Locator, Page, async_playwright
 from actions.search import search
 
 
@@ -17,8 +15,20 @@ def sanitize_filename(name):
     """Sanitize filename to be safe for filesystem"""
     return re.sub(r"[^a-zA-Z0-9_\-\.]", "_", name)
 
+class SelectorOptions:
+    """Wrapper class to contain all options, to be used in workflows"""
+    def __init__(self):
+        self.options = []
+    
+    async def create_options(self, locator: Locator):
+        best_selector = await get_best_selector(locator)
+        xpath_options = await get_xpath_options(locator)
+        self.options = xpath_options.append(best_selector)
+        return self.options
+        
 
-async def get_best_selector(element: ElementHandle) -> str:
+
+async def get_best_selector(element: Locator) -> str:
     """
     Generate a robust selector for a Playwright element.
     Tries id, name, aria-label, placeholder, data-testid, type+class, text for buttons/links, then tag+class.
@@ -69,23 +79,109 @@ async def get_xpath(locator: Locator):
     return await locator.evaluate("""
         node => {
             function getXPath(node) {
-                if (node.id)
-                    return '//*[@id=\"' + node.id + '\"]';
+                // If node has an ID, use it for a more specific XPath
+                if (node.id && node.id.trim() !== '')
+                    return '//*[@id="' + node.id + '"]';
+                
+                // If it's the body element
                 if (node === document.body)
                     return '/html/body';
+                
+                // If it's the html element
+                if (node === document.documentElement)
+                    return '/html';
+                
+                // For other elements, build the path
                 let ix = 0;
                 let siblings = node.parentNode.childNodes;
-                for (let i=0; i<siblings.length; i++) {
+                
+                for (let i = 0; i < siblings.length; i++) {
                     let sibling = siblings[i];
-                    if (sibling === node)
-                        return getXPath(node.parentNode) + '/' + node.tagName.toLowerCase() + '[' + (ix+1) + ']';
-                    if (sibling.nodeType === 1 && sibling.tagName === node.tagName)
+                    if (sibling === node) {
+                        let path = getXPath(node.parentNode) + '/' + node.tagName.toLowerCase();
+                        // Only add index if there are multiple siblings of the same type
+                        let sameTagSiblings = 0;
+                        for (let j = 0; j < siblings.length; j++) {
+                            if (siblings[j].nodeType === 1 && siblings[j].tagName === node.tagName) {
+                                sameTagSiblings++;
+                            }
+                        }
+                        if (sameTagSiblings > 1) {
+                            path += '[' + (ix + 1) + ']';
+                        }
+                        return path;
+                    }
+                    if (sibling.nodeType === 1 && sibling.tagName === node.tagName) {
                         ix++;
+                    }
                 }
             }
             return getXPath(node);
         }
-  """)
+    """)
+
+async def get_xpath_options(locator: Locator):
+    """Get multiple XPath options for an element, including the most specific ones"""
+    return await locator.evaluate("""
+        node => {
+            const options = [];
+            
+            // Option 1: ID-based (most specific)
+            if (node.id && node.id.trim() !== '') {
+                options.push('//*[@id="' + node.id + '"]');
+            }
+            
+            // Option 2: Class-based (if unique)
+            if (node.className && node.className.trim() !== '') {
+                const classes = node.className.split(' ').filter(c => c.trim() !== '');
+                if (classes.length > 0) {
+                    const classSelector = classes.map(c => 'contains(@class, "' + c + '")').join(' and ');
+                    options.push('//' + node.tagName.toLowerCase() + '[' + classSelector + ']');
+                }
+            }
+            
+            // Option 3: Text-based (if has text content)
+            if (node.textContent && node.textContent.trim() !== '') {
+                const text = node.textContent.trim().substring(0, 50); // Limit text length
+                options.push('//' + node.tagName.toLowerCase() + '[contains(text(), "' + text + '")]');
+            }
+            
+            // Option 4: Full path (what we had before)
+            function getFullXPath(node) {
+                if (node === document.body)
+                    return '/html/body';
+                if (node === document.documentElement)
+                    return '/html';
+                
+                let ix = 0;
+                let siblings = node.parentNode.childNodes;
+                
+                for (let i = 0; i < siblings.length; i++) {
+                    let sibling = siblings[i];
+                    if (sibling === node) {
+                        let path = getFullXPath(node.parentNode) + '/' + node.tagName.toLowerCase();
+                        let sameTagSiblings = 0;
+                        for (let j = 0; j < siblings.length; j++) {
+                            if (siblings[j].nodeType === 1 && siblings[j].tagName === node.tagName) {
+                                sameTagSiblings++;
+                            }
+                        }
+                        if (sameTagSiblings > 1) {
+                            path += '[' + (ix + 1) + ']';
+                        }
+                        return path;
+                    }
+                    if (sibling.nodeType === 1 && sibling.tagName === node.tagName) {
+                        ix++;
+                    }
+                }
+            }
+            
+            options.push(getFullXPath(node));
+            
+            return options;
+        }
+    """)
 
 
 class DOMChangeDetector:
@@ -245,6 +341,32 @@ async def test_detection():
         # wait a bit for developers to monitor browser
         await page.wait_for_timeout(5000)
 
+async def test_get_xpath():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch_persistent_context(
+            user_data_dir="./browser_data",
+            channel="chrome",
+            headless=False,
+            no_viewport=True,
+        )
+        page = await search("https://github.com", browser)
+        
+        # Test with the original XPath
+
+        original_xpath = "/html/body/div[1]/div[3]/header/div/div[2]/div/div/div/a"
+        locator = page.locator(f"xpath={original_xpath}")
+        
+        print("=== XPath Generation Test ===")        
+        # Get the improved XPath
+        xpath = await get_xpath(locator=locator)
+        print(f"Generated XPath: {xpath}")
+        
+        # Get multiple XPath options
+        xpath_options = await get_xpath_options(locator=locator)
+        print(f"XPath Options: {xpath_options}")
+
+        assert xpath == original_xpath
+        
 
 if __name__ == "__main__":
-    asyncio.run(test_detection())
+    asyncio.run(test_get_xpath())
