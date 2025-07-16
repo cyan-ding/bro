@@ -49,7 +49,7 @@ class Worker:
             )
             webpage = await search("https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform", browser=browser)
             prompt_chain = [
-                "Fill in the date text field with date: 11111111"
+                "Click the rating button in the fifth position"
             ]
             await test_tool_chain(webpage=webpage, prompt_chain=prompt_chain)
 
@@ -61,7 +61,7 @@ async def test_tool_chain(webpage: Page, prompt_chain: List[str]):
         try:
             success = await tool_call(webpage=webpage, sys_prompt=sys_prompt, user_prompt=prompt)
             if not success:
-                print("Failed to execute: ", prompt, ", stopping tool chain")
+                print(f"Failed to execute: {prompt}, stopping tool chain")
                 break
         except Exception:
             traceback.print_exc()

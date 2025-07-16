@@ -7,14 +7,14 @@ It includes selector generation logic for Playwright elements, to support robust
 
 import re
 import asyncio
-from patchright.async_api import Locator, Page, async_playwright
+from patchright.async_api import Locator, Page, async_playwright, TimeoutError as PlaywrightTimoutError
 from actions.search import search
 import difflib
 
 def fuzzy_action_fallback(target, candidates):
     # Combine all relevant fields into a single string for each candidate
     candidate_strings = [
-        c.outerHTML
+        c["outer_html"]
         for c in candidates
     ]
     print("Fuzzy candidates: ", candidate_strings)
@@ -272,61 +272,33 @@ class DOMChangeDetector:
             }
         """)
 
-        async def navigation_watcher():
+        
+        try:
+            async with self.page.expect_navigation(
+                timeout=timeout
+            ) as navigation_info:
+                await action_fn()
+            if await navigation_info.value:
+                return "navigation"
+        except PlaywrightTimoutError:
             try:
-                async with self.page.expect_navigation(
-                    timeout=timeout
-                ) as navigation_info:
-                    await action_fn()
-                if await navigation_info.value:
-                    return "navigation"
-            except TimeoutError:
-                return None
-
-        async def dom_change_watcher():
-            start_time = asyncio.get_event_loop().time()
-            while (asyncio.get_event_loop().time() - start_time) * 1000 < timeout:
-                try:
-                    detected = await self.page.evaluate("window.changeDetected")
-                    # extract changes if desired: await self.page.evalulate("windows.changes")
-                    if detected:
-                        return "dom"
-                except Exception:
-                    pass
-                await asyncio.sleep(0.01)  # 10ms polling
-            return None
-
-        # Start both watchers concurrently, but only call action_fn ONCE
-        nav_task = asyncio.create_task(navigation_watcher())
-        dom_task = asyncio.create_task(dom_change_watcher())
-
-        done, pending = await asyncio.wait(
-            [nav_task, dom_task],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-
-        # Cancel the other task
-        for task in pending:
-            task.cancel()
+                detected = await self.page.evaluate("window.changeDetected")
+                # extract changes if desired: await self.page.evalulate("windows.changes")
+                if detected:
+                    return "dom"
+            except Exception:
+                pass
+            return "none"
 
         await self.page.evaluate("() => { if (window.cleanup) window.cleanup(); }")
-
-        for task in done:
-            result = task.result()
-            if result == "navigation":
-                return True, ["Detected navigation"]
-            elif result == "dom":
-                return True, ["Detected DOM mutation"]
-
-        return False, []
 
 
 # Simple usage
 async def check_if_action_worked(page: Page, action_fn):
     """Returns True if the action caused any DOM changes"""
     detector = DOMChangeDetector(page)
-    changed, details = await detector.detect_any_change(action_fn)
-    return changed, details
+    details = await detector.detect_any_change(action_fn)
+    return details
 
 
 async def test_detection():
@@ -350,14 +322,9 @@ async def test_detection():
             )
 
         # Run the action and DOM change detection
-        page_changed, details = await check_if_action_worked(page, test_action)
+        details = await check_if_action_worked(page, test_action)
 
-        element_changes = page_changed
-
-        if element_changes:
-            print(details)
-        else:
-            print("No change detected")
+        print(details)
 
         # wait a bit for developers to monitor browser
         await page.wait_for_timeout(5000)
@@ -413,4 +380,4 @@ async def test_fill():
 
 
 if __name__ == "__main__":
-    asyncio.run(test_fill())
+    asyncio.run(test_detection())

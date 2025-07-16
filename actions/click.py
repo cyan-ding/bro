@@ -56,20 +56,22 @@ async def click_wrapper(webpage: Page, target: str, workflow_id=None) -> bool:
             # try fuzzy fallback
             idx = fuzzy_action_fallback(target=target, candidates=llm_candidates)
             if idx == -1:
-                print("No good match found, failed to click on ", target)
+                print("No good match found, failed to click on", target)
                 return False
-        changed, details = await check_if_action_worked(
+        details = await check_if_action_worked(
             webpage,
             lambda: click(
                 idx, webpage, webpage.url, candidates, workflow_id=workflow_id
             ),
         )
-        if changed:
+        await webpage.wait_for_timeout(5000)
+
+        if details:
             print(f"Successfully clicked on target {target}, induced a {details}")
+            return True
         else:
             print(f"Failed to induce DOM change with click on target {target}")
-        await webpage.wait_for_timeout(5000)
-        return changed
+            return False
     except TimeoutException as e:
         print(f"Failed to click on target {target}, exception: {e}")
         return False

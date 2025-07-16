@@ -1,7 +1,10 @@
+import asyncio
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import base64
+from patchright.async_api import async_playwright
+from actions.search import search
 
 
 def encode_image_to_base64(image_path):
@@ -9,7 +12,11 @@ def encode_image_to_base64(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def qwen():
+"""
+the plan is to create recursive splits using this prompt: Find where the <target> is, and categorize it as one of these nine options (sectors) relative to the full page: [upper left corner, upper middle, upper right corner, middle left corner, middle middle, middle right corner, bottom left corner, bottom middle, or bottom right corner] Afterward, output a statement that can identify <target> with only the context of that given sector. given the split, calculate the coords by dividing by 9. then you give it the same prompt recursively, with the ss cropped for that sector and the target modified given the identifier statement. also, in the prompt, make sure that the <target> remains visible. ie: check if the <new-target> is visible. always be tracking how many splits and of what kind have occured--goal is to accurately retrieve bounding box of <target> at the end. when the vqa can no longer identify the <new-target>, stop, backtrack, and use the previous crop as a starting point. once you backtrack, swap to a less discriminant split (9->4, ore more generally, just into columns or rows for greater ease) to see if you can capture the target with the required context. the benefit of thsi approach is that with every crop, not only do you know where the crop is relative to the entire page (you have the coords) but you also know the size of the crop. by knowing the size of the crop you could in theory provide the vqa with and have it calculate position of <target> in the more simple context. or, ten use something like moondream hosted with vllm for detection of boxes, input texts, icons, etc. 
+"""
+
+def qwen(prompt: str):
     load_dotenv()
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
@@ -17,38 +24,31 @@ def qwen():
     )
     # Read and encode the image
 
-    image_path = "vision/ss/ab_testing/yes.png"
+    image_path = "vision/ss/qwen/test.png"
 
     base64_image = encode_image_to_base64(image_path)
 
     data_url = f"data:image/jpeg;base64,{base64_image}"
     completion = client.chat.completions.create(
         extra_body={"provider": {"sort": "price"}},
-        model="qwen/qwen2.5-vl-72b-instruct",
+        model="qwen/qwen-vl-max",
         messages=[
-            # {
-            #     "role": "system",
-            #     "content": [
-            #          {
-            #             "type": "text",
-            #             "text": "You are an expert at analyzing screenshots."
-            #             "The user will provide a screenshot and an task. You will describe in actions of sentences containing one active verb only how to complete the task in accordance to the screenshot."
-            #             "Before giving a response, consider how each step will change the user interface, and what other steps are required to complete the task."
-            #             "Be specific regarding what UI elements on the screenshot should be interacted with. "
-            #             "Example task: Ask the LLM to give me information on cooking spaghetti and receive a response back"
-            #             "Good response: Type 'How do I cook spaghetti?' into the input field labeled 'Ask Gemini.', 'Type enter'"
-            #             "Bad response: Type 'How do I cook spaghetti?' into the input field labeled 'Ask Gemini.'"
-            #             "Reason: Just typing in a prompt does not receive a response back."
-            #             ,
-            #         }
-            #     ]
-            # },
+            {
+                "role": "system",
+                "content": [
+                     {
+                        "type": "text",
+                        "text": ""
+                    }
+                ]
+            },
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "Is the user able to click Log in with Google at this moment? Answer yes if possible, answer no if not. ",
+                        "text": "Prompt: " + prompt
+                            
                     },
                     {
                         "type": "image_url",
@@ -59,7 +59,70 @@ def qwen():
         ],
     )
     print(completion.choices[0].message.content)
+    # Actual bounding box tecxt input relative to full page:  {'x': 305, 'y': 764.203125, 'width': 127, 'height': 24}
+
+    # Actual bounding box star:  {'x': 770.2734375, 'y': 1360.203125, 'width': 24, 'height': 24}
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch_persistent_context(
+            user_data_dir="./browser_data",
+            channel="chrome",
+            headless=False,
+            no_viewport=True,
+        )
+        page = await search(
+            "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform",
+            browser,
+        )
+        # for star button 
+        xpath = "//*[@id='mG61Hd']/div[2]/div/div[2]/div[5]/div/div/div[2]/div[1]/span/div/label[5]/div[2]/div/div" 
+        # for date input text
+        # xpath = "//*[@id='mG61Hd']/div[2]/div/div[2]/div[2]/div/div/div[2]/div/div/div[2]/div[1]/div/div[1]/input"
+        el = page.locator(f"xpath={xpath}")
+        await page.screenshot(path="vision/ss/qwen/test.png", full_page=True)
+        actual_bbox = await el.bounding_box()
+        print("Actual bounding box: ", actual_bbox)
+
+        # Get scroll offsets
+        scroll_offsets = await page.evaluate("""
+            () => ({
+                scrollX: window.scrollX,
+                scrollY: window.scrollY,
+            })
+        """)
+        print("Scroll offsets:", scroll_offsets)
+
+        if actual_bbox is not None:
+            # Compute viewport-relative coordinates
+            viewport_relative_bbox = {
+                "x": actual_bbox["x"] - scroll_offsets["scrollX"],
+                "y": actual_bbox["y"] - scroll_offsets["scrollY"],
+                "width": actual_bbox["width"],
+                "height": actual_bbox["height"],
+            }
+            print("Bounding box relative to viewport: ", viewport_relative_bbox)
+        else:
+            print("Bounding box not found (element may not be visible or present)")
+
+        viewport_size = await page.evaluate("""
+            () => ({
+                width: window.innerWidth,
+                height: window.innerHeight,
+            })
+        """)
+        print("Viewport size: ", viewport_size)
+
+        page_dimensions = await page.evaluate("""
+        () => ({
+          width: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
+          height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)
+        })
+        """)
+
+        print(f"Full page dimensions: {page_dimensions}")
 
 
 if __name__ == "__main__":
-    qwen()
+    qwen("Five Star button")
+    # asyncio.run(main())
+

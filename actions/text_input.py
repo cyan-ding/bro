@@ -63,7 +63,7 @@ async def text_input_wrapper(
             if idx == -1: 
                 print("No good match found, failed to input text into ", target)
                 return False
-        changed, details = await check_if_action_worked(
+        details = await check_if_action_worked(
             webpage, 
             lambda: enter_input(
                 candidate_idx=idx,
@@ -73,14 +73,14 @@ async def text_input_wrapper(
                 workflow_id=workflow_id,
             )
         ) 
-        if changed:
-            print(f"Successfully filled in text to target {target}, induced a {details}")
-        else: 
-            print(f"Failed to induce DOM change with input text into target {target}")
-        # timeout to let developer track the ui changes
         await webpage.wait_for_timeout(5000)
 
-        return changed
+        if details != "none":
+            print(f"Successfully filled in text to target {target}, induced a {details}")
+            return True
+        else: 
+            print(f"Failed to induce DOM change with input text into target {target}")
+            return False
 
     except TimeoutException as e:
         print(f"Failed to fill in text into target {target}, exception: {e}")
@@ -187,9 +187,9 @@ async def enter_input(
             return True
 
         strategies: List[Callable[[], Coroutine[Any, Any, bool]]] = [
+            strategy_fill,
             strategy_type,
             strategy_keyboard,
-            strategy_fill,
             strategy_force_fill,
         ]
 
