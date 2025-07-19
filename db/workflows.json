@@ -148,5 +148,12 @@
     {
       "search": "https://github.com/"
     }
+  ],
+  "test_workflow_123": [
+    {
+      "action": "text_input",
+      "selector": null,
+      "value": "John Doe"
+    }
   ]
 }

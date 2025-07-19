@@ -30,9 +30,10 @@ async def gpt(params: Dict[str, Any]):
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     try:
         response = client.responses.create(**params)
-        return response.output
+        return response
     except Exception as e:
         print("Error in OpenAi API: ", e)
+        return None
 
 
 async def claude(

@@ -43,7 +43,6 @@ yolo*.pt
 last.pt
 *crops/
 unlabeled/
-
 blip2_lora_results/
 
 # Training Logs and Checkpoints
@@ -66,3 +65,6 @@ metrics/
 temp/
 tmp/
 *.tmp
+
+# Bro specific files
+worker_history_*.md

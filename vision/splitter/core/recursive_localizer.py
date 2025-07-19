@@ -34,7 +34,7 @@ def recursive_localize(
 
     sys_prompt = multi_grid_selection_prompt(target_description)
     vqa_result = ask_vqa(
-        images=images, target=target_description, sys_prompt=sys_prompt
+        images=images, target=target_description, sys_prompt=sys_prompt, model="qwen/qwen-vl-max"
     )
 
     selected_index = vqa_result.get("selected_image_index")

@@ -63,7 +63,7 @@ def ask_vqa(images: List[Image.Image], target: str, sys_prompt: str, model: str 
                         },
                         "sector": {
                             "type": "number",
-                            "description": "0 based index identifying the sector that the <target> is in. Responses will depend on the selected image, as each image has a different number of sectors",
+                            "description": "0 based index identifying the sector that the <target> is in. Responses should fall between 0-n, where n is the number of sectors in the selected image.",
                         },
                         "identifier": {
                             "type": "string",

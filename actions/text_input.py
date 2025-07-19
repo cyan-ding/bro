@@ -1,10 +1,12 @@
 import asyncio
 import json
+import os
 from httpx import TimeoutException
 from patchright.async_api import Locator, Page
 from actions.utils import SelectorOptions, check_if_action_worked, fuzzy_action_fallback
-from actions.ai import load_sys_prompt, cerebras
-from typing import cast, List, Dict, Any, Callable, Coroutine
+from actions.ai import load_sys_prompt, cerebras, gpt
+from prompts.tools.gpt.gpt_summarizer import gpt_summarizer
+from typing import cast, List, Dict, Any, Callable, Coroutine, Optional
 
 
 
@@ -12,7 +14,7 @@ from typing import cast, List, Dict, Any, Callable, Coroutine
 INTERACTION_TIMEOUT_MS = 5000
 
 async def text_input_wrapper(
-    webpage: Page, target: str, input_text: str, workflow_id=None
+    webpage: Page, target: str, input_text: str, workflow_id: Optional[Any] = None
 ) -> bool:
     """
     Wrapper function that
@@ -24,36 +26,121 @@ async def text_input_wrapper(
     candidates = await get_text_inputs(webpage)
     # filter out locator (interpreter will throw TypeError, Locators aren't serializable)
     llm_candidates = [
-        {k: v for k, v in c.items() if k != "element"} for c in candidates
+        {**{k: v for k, v in c.items() if k != "element"}, "index": i} for i, c in enumerate(candidates)
     ]
     print("Candidate text inputs: ", llm_candidates)
-    # ai inference
+    
+    # Take screenshot with bounding boxes for GPT analysis
+    bounding_boxes = []
+    for c in candidates:
+        bbox = await c["element"].bounding_box()
+        if bbox:
+            bounding_boxes.append(bbox)
+    
+    # Draw bounding boxes on the page
+    js_path = os.path.join(os.path.dirname(__file__), "assets", "draw_bounding_boxes.js")
+    await draw_bounding_boxes(webpage, bounding_boxes, js_path)
+    
+    # Take screenshot with bounding boxes visible
+    screenshot_path = "temp_screenshot_with_boxes.png"
+    await webpage.screenshot(path=screenshot_path, full_page=True)
+    
+    # Remove the overlay after taking screenshot
+    # await webpage.evaluate("() => { const overlay = document.getElementById('bro-bbox-overlay'); if (overlay) overlay.remove(); }")
+    
+    # ai inference using GPT-4.1-nano-2025-04-14
     sys_prompt = await load_sys_prompt("micro")
+    
+    # Read screenshot as base64 for GPT
+    import base64
+    with open(screenshot_path, "rb") as image_file:
+        screenshot_base64 = base64.b64encode(image_file.read()).decode('utf-8')
     
     prompt = (
         f"Prompt action: {target}\n"
-        f"Here is a list of text input elements (with their HTML and attributes):\n"
+        f"Here is a list of text input elements (with their HTML and attributes). Each element is assigned an 'index' field, which matches the red number in the screenshot.\n"
         f"{json.dumps(llm_candidates, indent=2)}\n"
-        'Return the index of the best match as a JSON object: {"action": <index>, "p": <probability>}'
-        "Return index -1 if no good match could be found"
+        "I've also provided a screenshot of the page with red bounding boxes drawn around detected text input elements, each labeled with its index.\n"
+        'Return the index (the integer) of the best match as a JSON object: {"action": <index>, "p": <probability>}'
+        "Return index -1 if no good match could be found. Do not return the full element, only the index."
     )
-
-    micro_schema = {
-        "type": "object",
-        "properties": {
-            "action": {"type": "integer"},
-            "p": {"type": "number"},
+    
+    # GPT inference with image
+    gpt_params = gpt_summarizer(
+        user_prompt=prompt,
+        system_prompt=sys_prompt,
+        model="gpt-4.1-nano-2025-04-14"
+    )
+    
+    # Add image to the user message for Responses API
+    gpt_params["input"][0]["content"] = [
+        {
+            "type": "input_text",
+            "text": prompt
         },
-        "required": ["action", "p"],
-        "additionalProperties": False,
-    }
-
-    llm_res = await cerebras(prompt, sys_prompt, schema=micro_schema, model="llama-4-scout-17b-16e-instruct")
-
-    # process output
-    llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
+        {
+            "type": "input_image",
+            "image_url": f"data:image/png;base64,{screenshot_base64}"
+        }
+    ]
+    
+    llm_res = await gpt(gpt_params)
+    
+    # Clean up temporary screenshot
+    if os.path.exists(screenshot_path):
+        os.remove(screenshot_path)
+    
+    # Process output
     print("LLM Output for text input analysis: ", llm_res, "\n")
-    llm_json = json.loads(llm_res)
+    
+    # Extract the content from GPT Responses API
+    if llm_res is not None and hasattr(llm_res, 'output') and llm_res.output:
+        # Extract the text from the first output message
+        llm_content = llm_res.output[0].content[0].text
+    else:
+        print("Failed to get valid response from GPT")
+        return False
+
+    try:
+        llm_json = json.loads(llm_content)
+    except json.JSONDecodeError:
+        print("Failed to parse LLM response as JSON, trying to extract JSON from text")
+        # Try to extract JSON from the response text
+        import re
+        json_match = re.search(r'\{.*\}', llm_content)
+        if json_match:
+            llm_json = json.loads(json_match.group())
+        else:
+            print("Could not extract JSON from LLM response")
+            return False
+
+    # COMMENTED OUT: Original Cerebras implementation
+    # sys_prompt = await load_sys_prompt("micro")
+    # 
+    # prompt = (
+    #     f"Prompt action: {target}\n"
+    #     f"Here is a list of text input elements (with their HTML and attributes):\n"
+    #     f"{json.dumps(llm_candidates, indent=2)}\n"
+    #     'Return the index of the best match as a JSON object: {"action": <index>, "p": <probability>}'
+    #     "Return index -1 if no good match could be found"
+    # )
+    # 
+    # micro_schema = {
+    #     "type": "object",
+    #     "properties": {
+    #         "action": {"type": "integer"},
+    #         "p": {"type": "number"},
+    #     },
+    #     "required": ["action", "p"],
+    #     "additionalProperties": False,
+    # }
+    #
+    # llm_res = await cerebras(prompt, sys_prompt, schema=micro_schema, model="llama-4-scout-17b-16e-instruct")
+    #
+    # # process output
+    # llm_res = cast(List, llm_res.to_dict()["choices"])[0]["message"]["content"]
+    # print("LLM Output for text input analysis: ", llm_res, "\n")
+    # llm_json = json.loads(llm_res)
 
     # attempt to enter text
     try:
@@ -111,7 +198,7 @@ async def get_element_metadata(element: Locator) -> Dict[str, Any]:
 
 
 
-async def get_text_inputs(page: Page):
+async def get_text_inputs(page: Page) -> List[Dict[str, Any]]:
     """Returns list of metadata corresponding to input_candidates"""
     # A comprehensive selector for all common text-editable elements.
     # This combines type, role, and contenteditable attributes for a single, efficient query.
@@ -144,8 +231,21 @@ async def get_text_inputs(page: Page):
     return element_data
 
 
+async def draw_bounding_boxes(page: Page, bounding_boxes: List[dict], js_path: str) -> None:
+    """
+    Injects the overlay JS file and draws bounding boxes.
+    """
+    with open(js_path, "r") as f:
+        js_code = f.read()
+    await page.evaluate(f"({js_code})", bounding_boxes)
+
+
 async def enter_input(
-    candidate_idx, candidates, input_text: str, page: Page, workflow_id=None
+    candidate_idx: int,
+    candidates: List[Dict[str, Any]],
+    input_text: str,
+    page: Page,
+    workflow_id: Optional[Any] = None
 ) -> bool:
     if not (0 <= candidate_idx < len(candidates)):
         print("Invalid candidate index")
@@ -225,3 +325,57 @@ async def enter_input(
         import traceback
         traceback.print_exc()
         return False
+
+
+async def main():
+    """
+    Test function for text_input_wrapper.
+    Sets up a browser page and tests text input functionality on a sample website.
+    """
+    from patchright.async_api import async_playwright
+    import asyncio
+    
+    async with async_playwright() as p:
+        # Launch browser
+        browser = await p.chromium.launch(headless=False)  # Set to True for headless mode
+        page = await browser.new_page()
+        
+        try:
+            # Navigate to a test page with form elements
+            print("Navigating to test page...")
+            await page.goto("https://httpbin.org/forms/post")
+            
+            # Wait for page to load
+            await page.wait_for_load_state("networkidle")
+            
+            # Test text input wrapper
+            print("Testing text_input_wrapper...")
+            success = await text_input_wrapper(
+                webpage=page,
+                target="customer name",
+                input_text="John Doe",
+                workflow_id="test_workflow_123"
+            )
+
+            await page.wait_for_timeout(5000)
+            
+            if success:
+                print("✅ Text input test successful!")
+            else:
+                print("❌ Text input test failed!")
+            
+            # Wait a bit to see the result
+            await asyncio.sleep(3)
+            
+        except Exception as e:
+            print(f"Error during test: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        finally:
+            # Clean up
+            await browser.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
