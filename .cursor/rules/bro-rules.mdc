@@ -45,4 +45,7 @@ When you create a **new file**:
 
   Write for **people**, not for **computers**. Avoid over-explaining, and skip jargon that is unclear to most users. For trivial functions, a one-liner is often sufficient; for complex ones, provide additional context, arguments, return values, and exceptions. 
 
+* **Do not do any more than asked. Keep code minimal, simple, and readible.** 
+
+* **Do not ask for confirmation when you suggest code changes, just apply**
 ---

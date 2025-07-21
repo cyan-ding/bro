@@ -84,23 +84,25 @@ async def click_wrapper(
     # Clean up temporary screenshot
     if os.path.exists(screenshot_path):
         os.remove(screenshot_path)
-    print("LLM Output for click analysis: ", llm_res, "\n")
     # Extract the content from GPT Responses API
     if llm_res is not None and hasattr(llm_res, 'output') and llm_res.output:
         llm_content = llm_res.output[0].content[0].text
+        print(f"🎯 LLM Click Choice: {llm_content}")
     else:
-        print("Failed to get valid response from GPT")
+        print("❌ Failed to get valid response from GPT")
         return False
     try:
         llm_json = json.loads(llm_content)
+        print(f"✅ Parsed LLM choice - Index: {llm_json.get('action')}, Confidence: {llm_json.get('p', 'N/A')}")
     except json.JSONDecodeError:
-        print("Failed to parse LLM response as JSON, trying to extract JSON from text")
+        print("⚠️ Failed to parse LLM response as JSON, trying to extract JSON from text")
         import re
         json_match = re.search(r'\{.*\}', llm_content)
         if json_match:
             llm_json = json.loads(json_match.group())
+            print(f"✅ Extracted JSON - Index: {llm_json.get('action')}, Confidence: {llm_json.get('p', 'N/A')}")
         else:
-            print("Could not extract JSON from LLM response")
+            print("❌ Could not extract JSON from LLM response")
             return False
     # click using index
     try:
@@ -117,7 +119,6 @@ async def click_wrapper(
                 idx, webpage, webpage.url, candidates, workflow_id=workflow_id
             ),
         )
-        await webpage.wait_for_timeout(5000)
         if details:
             print(f"Successfully clicked on target {target}, induced a {details}")
             return True

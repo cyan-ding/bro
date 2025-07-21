@@ -91,27 +91,28 @@ async def text_input_wrapper(
         os.remove(screenshot_path)
     
     # Process output
-    print("LLM Output for text input analysis: ", llm_res, "\n")
-    
     # Extract the content from GPT Responses API
     if llm_res is not None and hasattr(llm_res, 'output') and llm_res.output:
         # Extract the text from the first output message
         llm_content = llm_res.output[0].content[0].text
+        print(f"📝 LLM Text Input Choice: {llm_content}")
     else:
-        print("Failed to get valid response from GPT")
+        print("❌ Failed to get valid response from GPT")
         return False
 
     try:
         llm_json = json.loads(llm_content)
+        print(f"✅ Parsed LLM choice - Index: {llm_json.get('action')}, Confidence: {llm_json.get('p', 'N/A')}")
     except json.JSONDecodeError:
-        print("Failed to parse LLM response as JSON, trying to extract JSON from text")
+        print("⚠️ Failed to parse LLM response as JSON, trying to extract JSON from text")
         # Try to extract JSON from the response text
         import re
         json_match = re.search(r'\{.*\}', llm_content)
         if json_match:
             llm_json = json.loads(json_match.group())
+            print(f"✅ Extracted JSON - Index: {llm_json.get('action')}, Confidence: {llm_json.get('p', 'N/A')}")
         else:
-            print("Could not extract JSON from LLM response")
+            print("❌ Could not extract JSON from LLM response")
             return False
 
     # COMMENTED OUT: Original Cerebras implementation
