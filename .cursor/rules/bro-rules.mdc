@@ -32,6 +32,8 @@ When you create a **new file**:
 
 * **Always add type annotations and return types and ensure all lint errors are resolved**
 
+* **Use tabs for indents, not spaces**
+
 * **Always add a docstring for all python functions that you make**
   Make sure to include these aspects if appropriate: 
 

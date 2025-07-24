@@ -31,10 +31,12 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
      */
     function getCachedBoundingRect(element) {
         if (!element) return null;
+        // early return with cache hit
         if (DOM_CACHE.boundingRects.has(element)) {
             if (debugMode) PERF_METRICS.cacheMetrics.boundingRectCacheHits++;
             return DOM_CACHE.boundingRects.get(element);
         }
+        // get bounding box normally
         if (debugMode) PERF_METRICS.cacheMetrics.boundingRectCacheMisses++;
         let rect;
         if (debugMode) {
@@ -75,7 +77,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
     }
 
     /**
-     * Retrieves an element's client rectangles, using a cache.
+     * Retrieves an element's client rectangles, using a cache. Used for multi-line elements that can result in multiple client rects. 
      */
     function getCachedClientRects(element) {
         if (!element) return null;
@@ -163,6 +165,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
                     return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
                 }
             }
+            // access the client rects of the text node.
             const range = document.createRange();
             range.selectNodeContents(textNode);
             const rects = range.getClientRects();
@@ -269,9 +272,11 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
         const tagName = element.tagName.toLowerCase();
         const style = getCachedComputedStyle(element);
+        // check cursor
         const interactiveCursors = new Set(['pointer', 'move', 'text', 'grab', 'grabbing', 'cell', 'copy', 'alias', 'all-scroll', 'col-resize', 'context-menu', 'crosshair', 'e-resize', 'ew-resize', 'help', 'n-resize', 'ne-resize', 'nesw-resize', 'ns-resize', 'nw-resize', 'nwse-resize', 'row-resize', 's-resize', 'se-resize', 'sw-resize', 'vertical-text', 'w-resize', 'zoom-in', 'zoom-out']);
         if (interactiveCursors.has(style.cursor)) return true;
         const nonInteractiveCursors = new Set(['not-allowed', 'no-drop', 'wait', 'progress', 'initial', 'inherit']);
+        // check typical tags
         const interactiveElements = new Set(["a", "button", "input", "select", "textarea", "details", "summary", "label", "option", "optgroup", "fieldset", "legend"]);
         if (interactiveElements.has(tagName)) {
             if (nonInteractiveCursors.has(style.cursor)) return false;
@@ -282,10 +287,12 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         }
         if (element.getAttribute("contenteditable") === "true" || element.isContentEditable) return true;
         if (element.classList && (element.classList.contains("button") || element.classList.contains('dropdown-toggle') || element.getAttribute('data-index') || element.getAttribute('data-toggle') === 'dropdown' || element.getAttribute('aria-haspopup') === 'true')) return true;
+        // check roles
         const role = element.getAttribute("role");
         const ariaRole = element.getAttribute("aria-role");
         const interactiveRoles = new Set(['button', 'menuitemradio', 'menuitemcheckbox', 'radio', 'checkbox', 'tab', 'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox', 'option', 'scrollbar']);
         if (interactiveRoles.has(role) || interactiveRoles.has(ariaRole)) return true;
+        // get event listeners
         try {
             if (typeof getEventListeners === 'function') {
                 const listeners = getEventListeners(element);
@@ -304,7 +311,9 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
 
     /**
      * A heuristic check for elements that may be interactive but are not easily detected
-     * by standard properties (e.g., a div with a click handler).
+     * by standard properties (e.g., a div with a click handler) 
+     * used in @isElementDistinctInteraction
+     * uses @isInteractiveElement 
      */
     function isHeuristicallyInteractive(element) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
@@ -322,14 +331,16 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
 
     /**
      * Determines if an element represents a distinct interaction from its parent,
-     * which is crucial for handling nested interactive elements.
+     * which is crucial for handling nested interactive elements. 
      */
     function isElementDistinctInteraction(element) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
         const tagName = element.tagName.toLowerCase();
         const role = element.getAttribute('role');
         if (tagName === 'iframe') return true;
+        // check tags and roles
         if (DISTINCT_INTERACTIVE_TAGS.has(tagName) || (role && INTERACTIVE_ROLES.has(role))) return true;
+        // check content editable, data attributes, event listeners.
         if (element.isContentEditable || element.getAttribute('contenteditable') === 'true') return true;
         if (element.hasAttribute('data-testid') || element.hasAttribute('data-cy') || element.hasAttribute('data-test')) return true;
         if (element.hasAttribute('onclick') || typeof element.onclick === 'function') return true;
@@ -340,7 +351,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
     return {
         DOM_CACHE,
         getCachedBoundingRect,
-        getCachedComputedStyle,
+        getCachedComputedStyle, 
         getCachedClientRects,
         getXPathTree,
         isElementAccepted,

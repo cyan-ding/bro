@@ -49,7 +49,10 @@ def main() -> None:
             # google form test
             # "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform"
             # google doc test
-            "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing"
+            # "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing"
+            # google sheets test
+            "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing"
+        
         )
 
         # Inject the bundled JS code
@@ -65,7 +68,7 @@ def main() -> None:
                 "debugMode": True,
             },
         )
-
+        page.screenshot(path="actions/new/screenshot.png")
         page.wait_for_timeout(10000)
         print(result)
         browser.close()
