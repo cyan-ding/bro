@@ -18,11 +18,11 @@ export function createHighlightUtils(pushTiming, popTiming) {
      * @param {Element} element The DOM element to highlight.
      * @param {number} index The highlight index number to display.
      * @param {Element|null} parentIframe The iframe containing the element, if any.
-     * @returns {number} The next highlight index.
+     * @returns {number} The time taken to highlight the element.
      */
     function highlightElement(element, index, parentIframe = null) {
         pushTiming('highlighting');
-        if (!element) return index;
+        if (!element) return 0;
         const overlays = [];
         let label = null;
         let labelWidth = 20, labelHeight = 16;
@@ -39,7 +39,7 @@ export function createHighlightUtils(pushTiming, popTiming) {
             }
             // early return if no children
             const rects = element.getClientRects();
-            if (!rects || rects.length === 0) return index;
+            if (!rects || rects.length === 0) return 0;
 
             // determine color of box based on index
             const colors = ["#FF0000", "#00FF00", "#0000FF", "#FFA500", "#800080", "#008080", "#FF69B4", "#4B0082", "#FF4500", "#2E8B57", "#DC143C", "#4682B4"];
@@ -153,8 +153,8 @@ export function createHighlightUtils(pushTiming, popTiming) {
             };
             // add fragment containing label + colored boxes to container
             container.appendChild(fragment);
-
-            return index + 1;
+            return popTiming('highlighting');
+        
         } finally {
             popTiming('highlighting');
             if (cleanupFn) {

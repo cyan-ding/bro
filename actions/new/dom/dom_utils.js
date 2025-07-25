@@ -10,7 +10,7 @@
  */
 
 // This module is designed to be instantiated within a closure that provides debugMode and PERF_METRICS.
-export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
+export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation, measureTime) {
 
     /**
      * Caches DOM properties to avoid expensive re-calculations.
@@ -350,17 +350,17 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
 
     return {
         DOM_CACHE,
-        getCachedBoundingRect,
-        getCachedComputedStyle, 
-        getCachedClientRects,
-        getXPathTree,
-        isElementAccepted,
-        isElementVisible,
-        isTextNodeVisible,
-        isTopElement,
-        isInExpandedViewport,
-        isInteractiveCandidate,
-        isInteractiveElement,
-        isElementDistinctInteraction
+        getCachedBoundingRect: measureTime(getCachedBoundingRect, 'getCachedBoundingRect'),
+        getCachedComputedStyle: measureTime(getCachedComputedStyle, 'getCachedComputedStyle'),
+        getCachedClientRects: measureTime(getCachedClientRects, 'getCachedClientRects'),
+        getXPathTree: measureTime(getXPathTree, 'getXPathTree'),
+        isElementAccepted: measureTime(isElementAccepted, 'isElementAccepted'),
+        isElementVisible: measureTime(isElementVisible, 'isElementVisible'),
+        isTextNodeVisible: measureTime(isTextNodeVisible, 'isTextNodeVisible'),
+        isTopElement: measureTime(isTopElement, 'isTopElement'),
+        isInExpandedViewport: measureTime(isInExpandedViewport, 'isInExpandedViewport'),
+        isInteractiveCandidate: measureTime(isInteractiveCandidate, 'isInteractiveCandidate'),
+        isInteractiveElement: measureTime(isInteractiveElement, 'isInteractiveElement'),
+        isElementDistinctInteraction: measureTime(isElementDistinctInteraction, 'isElementDistinctInteraction')
     };
 } 

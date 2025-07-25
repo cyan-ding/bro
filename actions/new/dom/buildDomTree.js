@@ -46,8 +46,8 @@ export default function buildDomTree(args = {
     // --- Instantiate helpers with shared state ---
     const { PERF_METRICS, measureTime, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
     const { highlightElement, cleanupHighlights } = createHighlightUtils(pushTiming, popTiming);
-    const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation);
-
+    const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation, measureTime);
+    
     // --- Main state ---
     let highlightIndex = 0;
     const DOM_HASH_MAP = {};
@@ -66,7 +66,8 @@ export default function buildDomTree(args = {
                 if (doHighlightElements) {
                     // highlight given node if we aren't focusing on one only
                     if (focusHighlightIndex < 0 || focusHighlightIndex === nodeData.highlightIndex) {
-                        highlightElement(node, nodeData.highlightIndex, parentIframe);
+                        const time = highlightElement(node, nodeData.highlightIndex, parentIframe) || 0;
+                        if (debugMode) PERF_METRICS.timings.highlightElement += time;
                     }
                     // return true if successful highlight -- this is to signal that children should not be highlighted.
                     return true;
@@ -91,7 +92,10 @@ export default function buildDomTree(args = {
      * - Applies highlighting logic if enabled.
      */
     function buildTreeRecursive(node, parentIframe = null, isParentHighlighted = false) {
-        if (debugMode) PERF_METRICS.nodeMetrics.totalNodes++;
+        if (debugMode) {
+            PERF_METRICS.nodeMetrics.totalNodes++;
+            PERF_METRICS.buildDomTreeBreakdown.buildDomTreeCalls++;
+        }
         if (!node || node.id === 'playwright-highlight-container' || (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.TEXT_NODE)) {
             if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
             return null;

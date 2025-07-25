@@ -1,4 +1,8 @@
-1) Read through @highlight.js and write inline comments
+1) Figure out why the metrics aren't accurate 
+- bounding rect and client rect hits are always 0
+- highlight label indices are zero based now, see if that's problematic
+
+1.5) Figure out why boxes are overlapping and why some numbers are appearing directly on top (blocking) the element
 
 2) Figure out how to make the buildDOMTree more efficient. 
 - This may entail investigating the utility of having three functions that overlap

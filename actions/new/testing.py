@@ -47,11 +47,11 @@ def main() -> None:
         page = browser.new_page()
         page.goto(
             # google form test
-            # "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform"
+            "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform"
             # google doc test
             # "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing"
             # google sheets test
-            "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing"
+            # "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing"
         
         )
 
