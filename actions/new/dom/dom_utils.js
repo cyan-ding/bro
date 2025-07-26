@@ -10,7 +10,7 @@
  */
 
 // This module is designed to be instantiated within a closure that provides debugMode and PERF_METRICS.
-export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation, measureTime) {
+export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
 
     /**
      * Caches DOM properties to avoid expensive re-calculations.
@@ -38,16 +38,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation, mea
         }
         // get bounding box normally
         if (debugMode) PERF_METRICS.cacheMetrics.boundingRectCacheMisses++;
-        let rect;
-        if (debugMode) {
-            const start = performance.now();
-            rect = element.getBoundingClientRect();
-            const duration = performance.now() - start;
-            PERF_METRICS.buildDomTreeBreakdown.domOperations.getBoundingClientRect += duration;
-            PERF_METRICS.buildDomTreeBreakdown.domOperationCounts.getBoundingClientRect++;
-        } else {
-            rect = element.getBoundingClientRect();
-        }
+        let rect = element.getBoundingClientRect();
         if (rect) DOM_CACHE.boundingRects.set(element, rect);
         return rect;
     }
@@ -62,16 +53,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation, mea
             return DOM_CACHE.computedStyles.get(element);
         }
         if (debugMode) PERF_METRICS.cacheMetrics.computedStyleCacheMisses++;
-        let style;
-        if (debugMode) {
-            const start = performance.now();
-            style = window.getComputedStyle(element);
-            const duration = performance.now() - start;
-            PERF_METRICS.buildDomTreeBreakdown.domOperations.getComputedStyle += duration;
-            PERF_METRICS.buildDomTreeBreakdown.domOperationCounts.getComputedStyle++;
-        } else {
-            style = window.getComputedStyle(element);
-        }
+        let style = window.getComputedStyle(element);
         if (style) DOM_CACHE.computedStyles.set(element, style);
         return style;
     }
@@ -95,6 +77,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation, mea
 
     /**
      * Calculates the 1-based index of an element among its siblings of the same tag.
+     * Not used standalone, used in @getXPathTree
      */
     const xpathCache = new WeakMap();
     function getElementPosition(currentElement) {
@@ -311,7 +294,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation, mea
 
     /**
      * A heuristic check for elements that may be interactive but are not easily detected
-     * by standard properties (e.g., a div with a click handler) 
+     * by standard properties (e.g., a div with a click handler) -- not used standalone
      * used in @isElementDistinctInteraction
      * uses @isInteractiveElement 
      */
@@ -350,17 +333,17 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation, mea
 
     return {
         DOM_CACHE,
-        getCachedBoundingRect: measureTime(getCachedBoundingRect, 'getCachedBoundingRect'),
-        getCachedComputedStyle: measureTime(getCachedComputedStyle, 'getCachedComputedStyle'),
-        getCachedClientRects: measureTime(getCachedClientRects, 'getCachedClientRects'),
-        getXPathTree: measureTime(getXPathTree, 'getXPathTree'),
-        isElementAccepted: measureTime(isElementAccepted, 'isElementAccepted'),
-        isElementVisible: measureTime(isElementVisible, 'isElementVisible'),
-        isTextNodeVisible: measureTime(isTextNodeVisible, 'isTextNodeVisible'),
-        isTopElement: measureTime(isTopElement, 'isTopElement'),
-        isInExpandedViewport: measureTime(isInExpandedViewport, 'isInExpandedViewport'),
-        isInteractiveCandidate: measureTime(isInteractiveCandidate, 'isInteractiveCandidate'),
-        isInteractiveElement: measureTime(isInteractiveElement, 'isInteractiveElement'),
-        isElementDistinctInteraction: measureTime(isElementDistinctInteraction, 'isElementDistinctInteraction')
+        getCachedBoundingRect: measureDomOperation(getCachedBoundingRect, 'getCachedBoundingRect'),
+        getCachedComputedStyle: measureDomOperation(getCachedComputedStyle, 'getCachedComputedStyle'),
+        getCachedClientRects: measureDomOperation(getCachedClientRects, 'getCachedClientRects'),
+        getXPathTree: measureDomOperation(getXPathTree, 'getXPathTree'),
+        isElementAccepted: measureDomOperation(isElementAccepted, 'isElementAccepted'),
+        isElementVisible: measureDomOperation(isElementVisible, 'isElementVisible'),
+        isTextNodeVisible: measureDomOperation(isTextNodeVisible, 'isTextNodeVisible'),
+        isTopElement: measureDomOperation(isTopElement, 'isTopElement'),
+        isInExpandedViewport: measureDomOperation(isInExpandedViewport, 'isInExpandedViewport'),
+        isInteractiveCandidate: measureDomOperation(isInteractiveCandidate, 'isInteractiveCandidate'),
+        isInteractiveElement: measureDomOperation(isInteractiveElement, 'isInteractiveElement'),
+        isElementDistinctInteraction: measureDomOperation(isElementDistinctInteraction, 'isElementDistinctInteraction')
     };
 } 

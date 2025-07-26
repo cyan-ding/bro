@@ -69,8 +69,8 @@ def main() -> None:
             },
         )
         page.screenshot(path="actions/new/screenshot.png")
-        page.wait_for_timeout(10000)
-        print(result)
+        page.wait_for_timeout(1000)
+        print(result['perfMetrics'])
         browser.close()
 
 

@@ -21,7 +21,7 @@ export function createMetrics(debugMode) {
 
     /**
      * Pushes a timestamp onto the timing stack for a given operation type.
-     * Only active in debug mode.
+     * Only active in debug mode. Only used in @highlightElement
      */
     function pushTiming(type) {
         if (!debugMode) return;
@@ -31,7 +31,7 @@ export function createMetrics(debugMode) {
 
     /**
      * Pops a timestamp from the timing stack and returns the elapsed duration.
-     * Only active in debug mode.
+     * Only active in debug mode. Only used in @highlightElement
      */
     function popTiming(type) {
         if (!debugMode) return 0;
@@ -44,16 +44,24 @@ export function createMetrics(debugMode) {
      * Initialized only in debug mode.
      */
     const PERF_METRICS = debugMode ? {
-        buildDomTreeCalls: 0,
-        timings: { buildDomTree: 0, highlightElement: 0, isInteractiveElement: 0, isElementVisible: 0, isTopElement: 0, isInExpandedViewport: 0, isTextNodeVisible: 0, getEffectiveScroll: 0 },
-        cacheMetrics: { boundingRectCacheHits: 0, boundingRectCacheMisses: 0, computedStyleCacheHits: 0, computedStyleCacheMisses: 0, getBoundingClientRectTime: 0, getComputedStyleTime: 0, boundingRectHitRate: 0, computedStyleHitRate: 0, overallHitRate: 0, clientRectsCacheHits: 0, clientRectsCacheMisses: 0 },
+        calls: {
+            buildDomTree: 0, highlightElement: 0, isElementVisible: 0,
+            isTopElement: 0, isInExpandedViewport: 0, isTextNodeVisible: 0, getEffectiveScroll: 0,
+            getCachedBoundingRect: 0, getCachedComputedStyle: 0, getCachedClientRects: 0, getXPathTree: 0,
+            isInteractiveElement: 0, isElementAccepted: 0, isElementDistinctInteraction: 0, isInteractiveCandidate: 0,
+        },
+        timings: {
+            buildDomTree: 0, highlightElement: 0, isElementVisible: 0,
+            isTopElement: 0, isInExpandedViewport: 0, isTextNodeVisible: 0, getEffectiveScroll: 0,
+            getCachedBoundingRect: 0, getCachedComputedStyle: 0, getCachedClientRects: 0, getXPathTree: 0,
+            isInteractiveElement: 0, isElementAccepted: 0, isElementDistinctInteraction: 0, isInteractiveCandidate: 0,
+        },
+        cacheMetrics: {
+            boundingRectCacheHits: 0, boundingRectCacheMisses: 0, computedStyleCacheHits: 0, 
+            computedStyleCacheMisses: 0, clientRectsCacheHits: 0, clientRectsCacheMisses: 0, 
+            boundingRectHitRate: 0, computedStyleHitRate: 0, overallHitRate: 0
+        },
         nodeMetrics: { totalNodes: 0, processedNodes: 0, skippedNodes: 0 },
-        buildDomTreeBreakdown: {
-            totalTime: 0, totalSelfTime: 0, buildDomTreeCalls: 0, domOperations:
-                { getBoundingClientRect: 0, getComputedStyle: 0 }
-            , domOperationCounts:
-                { getBoundingClientRect: 0, getComputedStyle: 0 }
-        }
     } : null;
 
     /**
@@ -76,15 +84,17 @@ export function createMetrics(debugMode) {
      * Records the duration and count in `PERF_METRICS`. Only active in debug mode.
      */
     function measureDomOperation(operation, name) {
-        if (!debugMode) return operation();
-        const start = performance.now();
-        const result = operation();
-        const duration = performance.now() - start;
-        if (PERF_METRICS && name in PERF_METRICS.buildDomTreeBreakdown.domOperations) {
-            PERF_METRICS.buildDomTreeBreakdown.domOperations[name] += duration;
-            PERF_METRICS.buildDomTreeBreakdown.domOperationCounts[name]++;
+        if (!debugMode) return operation;
+        return function (...args) {
+            const start = performance.now();
+            const result = operation.apply(this, args);
+            const duration = performance.now() - start;
+            if (PERF_METRICS && name in PERF_METRICS.calls) {
+                PERF_METRICS.calls[name]++;
+                PERF_METRICS.timings[name] += duration;
+            }
+            return result;
         }
-        return result;
     }
 
     /**
@@ -95,11 +105,6 @@ export function createMetrics(debugMode) {
         if (!debugMode || !PERF_METRICS) return;
         // convert to seconds
         Object.keys(PERF_METRICS.timings).forEach(key => { PERF_METRICS.timings[key] /= 1000; });
-        Object.keys(PERF_METRICS.buildDomTreeBreakdown).forEach(key => {
-            if (typeof PERF_METRICS.buildDomTreeBreakdown[key] === 'number' && key !== 'buildDomTreeCalls') {
-                PERF_METRICS.buildDomTreeBreakdown[key] /= 1000;
-            }
-        });
         // calculate style and bounding rect hit rates
         const boundingRectTotal = PERF_METRICS.cacheMetrics.boundingRectCacheHits + PERF_METRICS.cacheMetrics.boundingRectCacheMisses;
         const computedStyleTotal = PERF_METRICS.cacheMetrics.computedStyleCacheHits + PERF_METRICS.cacheMetrics.computedStyleCacheMisses;
@@ -112,7 +117,6 @@ export function createMetrics(debugMode) {
         pushTiming,
         popTiming,
         PERF_METRICS,
-        measureTime,
         measureDomOperation,
         postProcessMetrics
     };

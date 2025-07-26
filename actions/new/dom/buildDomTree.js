@@ -44,10 +44,10 @@ export default function buildDomTree(args = {
     const { doHighlightElements, focusHighlightIndex, viewportExpansion, debugMode } = args;
 
     // --- Instantiate helpers with shared state ---
-    const { PERF_METRICS, measureTime, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
+    const { PERF_METRICS, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
     const { highlightElement, cleanupHighlights } = createHighlightUtils(pushTiming, popTiming);
-    const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation, measureTime);
-    
+    const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation);
+
     // --- Main state ---
     let highlightIndex = 0;
     const DOM_HASH_MAP = {};
@@ -76,7 +76,7 @@ export default function buildDomTree(args = {
         }
         return false;
     }
-    
+
     /**
      * Recursively traverses the DOM tree and builds a serializable representation of each node.
      * Handles element filtering, visibility, highlighting, and special cases such as iframes, shadow DOM, and text nodes.
@@ -94,7 +94,7 @@ export default function buildDomTree(args = {
     function buildTreeRecursive(node, parentIframe = null, isParentHighlighted = false) {
         if (debugMode) {
             PERF_METRICS.nodeMetrics.totalNodes++;
-            PERF_METRICS.buildDomTreeBreakdown.buildDomTreeCalls++;
+            PERF_METRICS.calls.buildDomTree++;
         }
         if (!node || node.id === 'playwright-highlight-container' || (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.TEXT_NODE)) {
             if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
@@ -199,7 +199,7 @@ export default function buildDomTree(args = {
                 const domElement = buildTreeRecursive(child, parentIframe, nodeWasHighlighted);
                 if (domElement) nodeData.children.push(domElement);
             }
-            
+
         } else {
             // for shadow DOM elements that have internal structure
             if (node.shadowRoot) {
@@ -236,13 +236,11 @@ export default function buildDomTree(args = {
     // --- Execution ---
     domUtils.DOM_CACHE.clearCache();
     if (window._highlightCleanupFunctions) cleanupHighlights();
-
-    const wrappedBuildTree = measureTime(buildTreeRecursive, 'buildDomTree');
+    const wrappedBuildTree = measureDomOperation(buildTreeRecursive, 'buildDomTree');
+    PERF_METRICS.calls.buildDomTree--; // remove this extra call to measureDomOperation
     const rootId = wrappedBuildTree(document.body);
 
-    if (debugMode) {
-        postProcessMetrics();
-    }
+    postProcessMetrics();
 
     return debugMode
         ? { rootId, map: DOM_HASH_MAP, perfMetrics: PERF_METRICS }
