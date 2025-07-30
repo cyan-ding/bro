@@ -183,7 +183,9 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         const tagName = element.tagName.toLowerCase();
         const interactiveElements = new Set(["a", "button", "input", "select", "textarea", "details", "summary", "label"]);
         if (interactiveElements.has(tagName)) return true;
-        return element.hasAttribute("onclick") || element.hasAttribute("role") || element.hasAttribute("tabindex") || element.hasAttribute("aria-") || element.hasAttribute("data-action") || element.getAttribute("contenteditable") === "true";
+        return element.hasAttribute("onclick") || element.hasAttribute("role") || element.hasAttribute("tabindex")
+            || element.hasAttribute("aria-") || element.hasAttribute("data-action")
+            || element.getAttribute("contenteditable") === "true";
     }
 
     /**
@@ -198,10 +200,10 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         const interactiveCursors = new Set(['pointer', 'move', 'grab', 'grabbing', 'cell',
             'copy', 'alias', 'all-scroll', 'col-resize', 'context-menu', 'crosshair', 'e-resize',
             'ew-resize', 'help', 'n-resize', 'ne-resize', 'nesw-resize', 'ns-resize', 'nw-resize',
-            'nwse-resize', 'row-resize', 's-resize', 'se-resize', 'sw-resize', 'vertical-text',
+            'nwse-resize', 'row-resize', 's-resize', 'se-resize', 'sw-resize', 'vertical-text', 'text',
             'w-resize', 'zoom-in', 'zoom-out']);
         if (interactiveCursors.has(style.cursor)) return true;
-        const nonInteractiveCursors = new Set(['not-allowed', 'no-drop', 'wait', 'progress', 'text',
+        const nonInteractiveCursors = new Set(['not-allowed', 'no-drop', 'wait', 'progress',
             'initial', 'inherit']);
         // check typical tags
         const interactiveTags = new Set(["a", "button", "input", "select", "textarea", "details",
@@ -225,7 +227,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         const ariaRole = element.getAttribute("aria-role");
         const interactiveRoles = new Set(['button', 'menuitemradio', 'menuitemcheckbox', 'radio', 'checkbox', 'tab', 'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox', 'option', 'scrollbar']);
         if (interactiveRoles.has(role) || interactiveRoles.has(ariaRole)) return true;
-        // check for event listeners
+        // check for event listeners (currently nonfunctional)
         try {
             if (typeof getEventListeners === 'function') {
                 const listeners = getEventListeners(element);

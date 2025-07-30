@@ -8,9 +8,41 @@
  * (`pushTiming`, `popTiming`) to integrate with performance measurement.
  */
 
-export function createHighlightUtils(pushTiming, popTiming) {
+export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
 
     const HIGHLIGHT_CONTAINER_ID = "playwright-highlight-container";
+    
+    // Array to track all highlighted elements
+    const highlightedElements = [];
+
+    /**
+     * Extracts additional information about an element for tracking purposes.
+     * @param {Element} element The DOM element to extract info from.
+     * @returns {Object} Object containing aria-path, text content, and other relevant info.
+     */
+    function extractElementInfo(element) {
+        const info = {
+            ariaLabel: element.getAttribute('aria-label') || null,
+            ariaLabelledby: element.getAttribute('aria-labelledby') || null,
+            ariaDescribedby: element.getAttribute('aria-describedby') || null,
+            role: element.getAttribute('role') || null,
+            title: element.getAttribute('title') || null,
+            placeholder: element.getAttribute('placeholder') || null,
+            textContent: element.textContent?.trim().substring(0, 100) || null, // Limit to 100 chars
+            id: element.id || null,
+            className: element.className || null,
+            type: element.getAttribute('type') || null,
+            value: element.value || null,
+            href: element.href || null,
+            src: element.src || null,
+            alt: element.getAttribute('alt') || null
+        };
+        
+        // Remove null values to keep the object clean
+        return Object.fromEntries(
+            Object.entries(info).filter(([_, value]) => value !== null)
+        );
+    }
 
     /**
      * Highlights a single element with a colored overlay and a numbered label.
@@ -29,6 +61,15 @@ export function createHighlightUtils(pushTiming, popTiming) {
         let cleanupFn = null;
 
         try {
+            // Track the highlighted element
+            const elementInfo = {
+                xpath: getXPathTree(element),
+                tag: element.tagName.toLowerCase(),
+                index: index,
+                info: extractElementInfo(element)
+            };
+            highlightedElements.push(elementInfo);
+
             // make a container for all highlights to easily delete them all at once
             let container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
             if (!container) {
@@ -161,6 +202,7 @@ export function createHighlightUtils(pushTiming, popTiming) {
             window.addEventListener('scroll', throttledUpdatePositions, true);
             window.addEventListener('resize', throttledUpdatePositions);
 
+            // function to clean up event listeners for the given element
             cleanupFn = () => {
                 window.removeEventListener('scroll', throttledUpdatePositions, true);
                 window.removeEventListener('resize', throttledUpdatePositions);
@@ -174,13 +216,14 @@ export function createHighlightUtils(pushTiming, popTiming) {
         } finally {
             popTiming('highlighting');
             if (cleanupFn) {
+                // add to global array of cleanup functions for the given web page
                 (window._highlightCleanupFunctions = window._highlightCleanupFunctions || []).push(cleanupFn);
             }
         }
     }
 
     /**
-     * Removes all highlight overlays and their associated event listeners from the page at once.
+     * Removes all highlight overlays and their associated event listeners from the page 
      */
     function cleanupHighlights() {
         if (window._highlightCleanupFunctions) {
@@ -189,7 +232,23 @@ export function createHighlightUtils(pushTiming, popTiming) {
         }
         const container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
         if (container) container.remove();
+        
+        // Clear the tracking array
+        highlightedElements.length = 0;
     }
 
-    return { highlightElement, cleanupHighlights };
+    /**
+     * Gets the array of currently highlighted elements.
+     * @returns {Array} Array of highlighted element objects.
+     */
+    function getHighlightedElements() {
+        return [...highlightedElements];
+    }
+
+
+    return { 
+        highlightElement, 
+        cleanupHighlights, 
+        getHighlightedElements,
+    };
 } 

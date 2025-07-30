@@ -73,14 +73,15 @@ async def main() -> None:
 			"(args) => window.buildDomTree(args)",
 			{
 				"doHighlightElements": True,
-				"focusHighlightIndex": -1,
 				"viewportExpansion": -1,
 				"debugMode": True,
 			},
 		)
+
+		await page.wait_for_timeout(10000)
 		# save this result to file
 		await page.screenshot(path="actions/new/screenshot.png")
-		print(result['perfMetrics'])
+		print(result['highlightedElements'])
 		await browser.close()
 
 if __name__ == "__main__":

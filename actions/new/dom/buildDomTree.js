@@ -25,7 +25,6 @@ import { createHighlightUtils } from './highlight.js';
  *
  * @param {Object} args - Configuration options for the DOM tree builder.
  * @param {boolean} args.doHighlightElements - Whether to visually highlight interactive elements.
- * @param {number} args.focusHighlightIndex - If >= 0, only highlight the element with this index.
  * @param {number} args.viewportExpansion - Pixels to expand the viewport bounds for visibility checks. -1 to expand to full page.
  * @param {boolean} args.debugMode - Enables detailed performance metrics and logging.
  *
@@ -37,16 +36,16 @@ import { createHighlightUtils } from './highlight.js';
  */
 export default function buildDomTree(args = {
     doHighlightElements: true,
-    focusHighlightIndex: -1,
     viewportExpansion: -1,
     debugMode: true,
 }) {
-    const { doHighlightElements, focusHighlightIndex, viewportExpansion, debugMode } = args;
+    const { doHighlightElements, viewportExpansion, debugMode } = args;
 
     // --- Instantiate helpers with shared state ---
     const { PERF_METRICS, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
-    const { highlightElement, cleanupHighlights } = createHighlightUtils(pushTiming, popTiming);
     const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation);
+    const { highlightElement, cleanupHighlights, getHighlightedElements } = createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
+
 
     // --- Main state ---
     let highlightIndex = 0;
@@ -57,20 +56,16 @@ export default function buildDomTree(args = {
     function handleHighlighting(nodeData, node, parentIframe, isParentHighlighted) {
         if (!nodeData.isInteractive) return false;
         // only highlight if parent not highlighted (prevent overlaps) or if its distinct
-        let shouldHighlight = !isParentHighlighted || domUtils.isElementDistinctInteraction(node);
-        if (shouldHighlight) {
+        if (!isParentHighlighted || domUtils.isElementDistinctInteraction(node)) {
             // only highlight if in viewport (or if its set to -1)
             nodeData.highlightIndex = highlightIndex++;
             if (doHighlightElements) {
                 // highlight given node if we aren't focusing on one only
-                if (focusHighlightIndex < 0 || focusHighlightIndex === nodeData.highlightIndex) {
-                    const time = highlightElement(node, nodeData.highlightIndex, parentIframe) || 0;
-                    if (debugMode) PERF_METRICS.timings.highlightElement += time;
-                }
+                const time = highlightElement(node, nodeData.highlightIndex, parentIframe) || 0;
+                if (debugMode) PERF_METRICS.timings.highlightElement += time;
                 // return true if successful highlight -- this is to signal that children should not be highlighted.
                 return true;
             }
-
         }
         return false;
     }
@@ -118,7 +113,7 @@ export default function buildDomTree(args = {
                 if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
                 return null;
             }
-            
+
             const id = `${ID.current++}`;
             DOM_HASH_MAP[id] = { type: "TEXT_NODE", text: textContent, isVisible: domUtils.isTextNodeVisible(node, viewportExpansion) };
             if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
@@ -219,6 +214,6 @@ export default function buildDomTree(args = {
 
     postProcessMetrics();
     return debugMode
-        ? { rootId, map: DOM_HASH_MAP, perfMetrics: PERF_METRICS }
-        : { rootId, map: DOM_HASH_MAP };
+        ? { rootId, map: DOM_HASH_MAP, perfMetrics: PERF_METRICS, highlightedElements: getHighlightedElements() }
+        : { rootId, map: DOM_HASH_MAP, highlightedElements: getHighlightedElements() };
 } 

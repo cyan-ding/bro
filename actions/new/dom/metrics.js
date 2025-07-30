@@ -46,13 +46,13 @@ export function createMetrics(debugMode) {
     const PERF_METRICS = debugMode ? {
         calls: {
             buildDomTree: 0, highlightElement: 0, isElementVisible: 0,
-            isTopElement: 0, isInExpandedViewport: 0, isTextNodeVisible: 0, getEffectiveScroll: 0,
+            isTopElement: 0, isInExpandedViewport: 0, isTextNodeVisible: 0, 
             getCachedBoundingRect: 0, getCachedComputedStyle: 0, getCachedClientRects: 0, getXPathTree: 0,
             isInteractiveElement: 0, isElementAccepted: 0, isElementDistinctInteraction: 0, isInteractiveCandidate: 0,
         },
         timings: {
             buildDomTree: 0, highlightElement: 0, isElementVisible: 0,
-            isTopElement: 0, isInExpandedViewport: 0, isTextNodeVisible: 0, getEffectiveScroll: 0,
+            isTopElement: 0, isInExpandedViewport: 0, isTextNodeVisible: 0, 
             getCachedBoundingRect: 0, getCachedComputedStyle: 0, getCachedClientRects: 0, getXPathTree: 0,
             isInteractiveElement: 0, isElementAccepted: 0, isElementDistinctInteraction: 0, isInteractiveCandidate: 0,
         },
