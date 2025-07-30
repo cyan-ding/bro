@@ -155,16 +155,15 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
             if (!rects || rects.length === 0) return false;
             for (const rect of rects) {
                 if (rect.width > 0 && rect.height > 0) {
-                    if (!(rect.bottom < -viewportExpansion || rect.top > window.innerHeight + viewportExpansion || rect.right < -viewportExpansion || rect.left > window.innerWidth + viewportExpansion)) {
-                        const parentElement = textNode.parentElement;
-                        if (!parentElement) return false;
-                        try {
-                            return parentElement.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
-                        } catch (e) {
-                            const style = window.getComputedStyle(parentElement);
-                            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-                        }
+                    const parentElement = textNode.parentElement;
+                    if (!parentElement) return false;
+                    try {
+                        return parentElement.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+                    } catch (e) {
+                        const style = window.getComputedStyle(parentElement);
+                        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
                     }
+
                 }
             }
             return false;
@@ -172,66 +171,6 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
             console.warn('Error checking text node visibility:', e);
             return false;
         }
-    }
-
-    /**
-     * Determines if an element is the topmost element at its screen coordinates.
-     */
-    function isTopElement(element, viewportExpansion) {
-        if (viewportExpansion === -1) return true;
-        const rects = getCachedClientRects(element);
-        if (!rects || rects.length === 0) return false;
-        let isAnyRectInViewport = false;
-        for (const rect of rects) {
-            if (rect.width > 0 && rect.height > 0 && !(rect.bottom < -viewportExpansion || rect.top > window.innerHeight + viewportExpansion || rect.right < -viewportExpansion || rect.left > window.innerWidth + viewportExpansion)) {
-                isAnyRectInViewport = true;
-                break;
-            }
-        }
-        if (!isAnyRectInViewport) return false;
-        const centerX = rects[Math.floor(rects.length / 2)].left + rects[Math.floor(rects.length / 2)].width / 2;
-        const centerY = rects[Math.floor(rects.length / 2)].top + rects[Math.floor(rects.length / 2)].height / 2;
-        const shadowRoot = element.getRootNode();
-        if (shadowRoot instanceof ShadowRoot) {
-            try {
-                const topEl = measureDomOperation(() => shadowRoot.elementFromPoint(centerX, centerY), 'elementFromPoint');
-                let current = topEl;
-                while (current && current !== shadowRoot) {
-                    if (current === element) return true;
-                    current = current.parentElement;
-                }
-                return false;
-            } catch (e) { return true; }
-        }
-        try {
-            const topEl = document.elementFromPoint(centerX, centerY);
-            let current = topEl;
-            while (current && current !== document.documentElement) {
-                if (current === element) return true;
-                current = current.parentElement;
-            }
-            return false;
-        } catch (e) { return true; }
-    }
-
-    /**
-     * Checks if an element is within the expanded viewport boundaries.
-     */
-    function isInExpandedViewport(element, viewportExpansion) {
-        if (viewportExpansion === -1) return true;
-        const rects = element.getClientRects();
-        if (!rects || rects.length === 0) {
-            const boundingRect = getCachedBoundingRect(element);
-            if (!boundingRect || boundingRect.width === 0 || boundingRect.height === 0) return false;
-            return !(boundingRect.bottom < -viewportExpansion || boundingRect.top > window.innerHeight + viewportExpansion || boundingRect.right < -viewportExpansion || boundingRect.left > window.innerWidth + viewportExpansion);
-        }
-        for (const rect of rects) {
-            if (rect.width === 0 || rect.height === 0) continue;
-            if (!(rect.bottom < -viewportExpansion || rect.top > window.innerHeight + viewportExpansion || rect.right < -viewportExpansion || rect.left > window.innerWidth + viewportExpansion)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     // --- Interactivity ---
@@ -256,26 +195,37 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         const tagName = element.tagName.toLowerCase();
         const style = getCachedComputedStyle(element);
         // check cursor
-        const interactiveCursors = new Set(['pointer', 'move', 'text', 'grab', 'grabbing', 'cell', 'copy', 'alias', 'all-scroll', 'col-resize', 'context-menu', 'crosshair', 'e-resize', 'ew-resize', 'help', 'n-resize', 'ne-resize', 'nesw-resize', 'ns-resize', 'nw-resize', 'nwse-resize', 'row-resize', 's-resize', 'se-resize', 'sw-resize', 'vertical-text', 'w-resize', 'zoom-in', 'zoom-out']);
+        const interactiveCursors = new Set(['pointer', 'move', 'grab', 'grabbing', 'cell',
+            'copy', 'alias', 'all-scroll', 'col-resize', 'context-menu', 'crosshair', 'e-resize',
+            'ew-resize', 'help', 'n-resize', 'ne-resize', 'nesw-resize', 'ns-resize', 'nw-resize',
+            'nwse-resize', 'row-resize', 's-resize', 'se-resize', 'sw-resize', 'vertical-text',
+            'w-resize', 'zoom-in', 'zoom-out']);
         if (interactiveCursors.has(style.cursor)) return true;
-        const nonInteractiveCursors = new Set(['not-allowed', 'no-drop', 'wait', 'progress', 'initial', 'inherit']);
+        const nonInteractiveCursors = new Set(['not-allowed', 'no-drop', 'wait', 'progress', 'text',
+            'initial', 'inherit']);
         // check typical tags
-        const interactiveElements = new Set(["a", "button", "input", "select", "textarea", "details", "summary", "label", "option", "optgroup", "fieldset", "legend"]);
-        if (interactiveElements.has(tagName)) {
+        const interactiveTags = new Set(["a", "button", "input", "select", "textarea", "details",
+            "summary", "label", "option", "optgroup", "fieldset", "legend"]);
+        if (interactiveTags.has(tagName)) {
             if (nonInteractiveCursors.has(style.cursor)) return false;
-            if (element.hasAttribute('disabled') || element.getAttribute('disabled') === 'true' || element.getAttribute('disabled') === '') return false;
+            if (element.hasAttribute('disabled') || element.getAttribute('disabled') === 'true'
+                || element.getAttribute('disabled') === '') return false;
             if (element.hasAttribute('readonly')) return false;
             if (element.disabled || element.readOnly || element.inert) return false;
             return true;
         }
+        // check for content editable divs
         if (element.getAttribute("contenteditable") === "true" || element.isContentEditable) return true;
-        if (element.classList && (element.classList.contains("button") || element.classList.contains('dropdown-toggle') || element.getAttribute('data-index') || element.getAttribute('data-toggle') === 'dropdown' || element.getAttribute('aria-haspopup') === 'true')) return true;
+        if (element.classList && (element.classList.contains("button") ||
+            element.classList.contains('dropdown-toggle') || element.getAttribute('data-index')
+            || element.getAttribute('data-toggle') === 'dropdown' ||
+            element.getAttribute('aria-haspopup') === 'true')) return true;
         // check roles
         const role = element.getAttribute("role");
         const ariaRole = element.getAttribute("aria-role");
         const interactiveRoles = new Set(['button', 'menuitemradio', 'menuitemcheckbox', 'radio', 'checkbox', 'tab', 'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox', 'option', 'scrollbar']);
         if (interactiveRoles.has(role) || interactiveRoles.has(ariaRole)) return true;
-        // get event listeners
+        // check for event listeners
         try {
             if (typeof getEventListeners === 'function') {
                 const listeners = getEventListeners(element);
@@ -284,6 +234,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
                     if (listeners[eventType] && listeners[eventType].length > 0) return true;
                 }
             }
+            // check for common mouse attributes
             const commonMouseAttrs = ['onclick', 'onmousedown', 'onmouseup', 'ondblclick'];
             for (const attr of commonMouseAttrs) {
                 if (element.hasAttribute(attr) || typeof element[attr] === 'function') return true;
@@ -293,28 +244,35 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
     }
 
     /**
-     * A heuristic check for elements that may be interactive but are not easily detected
-     * by standard properties (e.g., a div with a click handler) -- not used standalone
+     * Additional checks outside of cursors, tags, roles, event listeners, content editable, data attributes, and common mouse attributes
+     * aka those NOT checked in @isInteractiveElement
      * used in @isElementDistinctInteraction
      * uses @isInteractiveElement 
      */
     function isHeuristicallyInteractive(element) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
         if (!isElementVisible(element)) return false;
-        const hasInteractiveAttributes = element.hasAttribute('role') || element.hasAttribute('tabindex') || element.hasAttribute('onclick') || typeof element.onclick === 'function';
+        const hasInteractiveAttributes = element.hasAttribute('role') || element.hasAttribute('tabindex')
+            || element.hasAttribute('onclick') || typeof element.onclick === 'function';
         const hasInteractiveClass = /\b(btn|clickable|menu|item|entry|link)\b/i.test(element.className || '');
         const isInKnownContainer = Boolean(element.closest('button,a,[role="button"],.menu,.dropdown,.list,.toolbar'));
         const hasVisibleChildren = [...element.children].some(isElementVisible);
         const isParentBody = element.parentElement && element.parentElement.isSameNode(document.body);
-        return (isInteractiveElement(element) || hasInteractiveAttributes || hasInteractiveClass) && hasVisibleChildren && isInKnownContainer && !isParentBody;
+        return (isInteractiveElement(element) || hasInteractiveAttributes || hasInteractiveClass)
+            && hasVisibleChildren && isInKnownContainer && !isParentBody;
     }
 
-    const DISTINCT_INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary', 'details', 'label', 'option']);
-    const INTERACTIVE_ROLES = new Set(['button', 'link', 'menuitem', 'menuitemradio', 'menuitemcheckbox', 'radio', 'checkbox', 'tab', 'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox', 'listbox', 'option', 'scrollbar']);
+    const DISTINCT_INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary',
+        'details', 'label', 'option']);
+    const INTERACTIVE_ROLES = new Set(['button', 'link', 'menuitem', 'menuitemradio', 'menuitemcheckbox',
+        'radio', 'checkbox', 'tab', 'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox',
+        'listbox', 'option', 'scrollbar']);
 
     /**
      * Determines if an element represents a distinct interaction from its parent,
      * which is crucial for handling nested interactive elements. 
+     * Should only be called for elements with children.
+     * -- this function might be the problem that is causing overlapping highlights...
      */
     function isElementDistinctInteraction(element) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
@@ -340,8 +298,6 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         isElementAccepted: measureDomOperation(isElementAccepted, 'isElementAccepted'),
         isElementVisible: measureDomOperation(isElementVisible, 'isElementVisible'),
         isTextNodeVisible: measureDomOperation(isTextNodeVisible, 'isTextNodeVisible'),
-        isTopElement: measureDomOperation(isTopElement, 'isTopElement'),
-        isInExpandedViewport: measureDomOperation(isInExpandedViewport, 'isInExpandedViewport'),
         isInteractiveCandidate: measureDomOperation(isInteractiveCandidate, 'isInteractiveCandidate'),
         isInteractiveElement: measureDomOperation(isInteractiveElement, 'isInteractiveElement'),
         isElementDistinctInteraction: measureDomOperation(isElementDistinctInteraction, 'isElementDistinctInteraction')

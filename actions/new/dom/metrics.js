@@ -65,21 +65,6 @@ export function createMetrics(debugMode) {
     } : null;
 
     /**
-     * A higher-order function that wraps a given function to measure its execution time.
-     * The duration is recorded in `PERF_METRICS`. Only active in debug mode.
-     */
-    function measureTime(fn, name) {
-        if (!debugMode) return fn;
-        return function (...args) {
-            const start = performance.now();
-            const result = fn.apply(this, args);
-            const duration = performance.now() - start;
-            if (PERF_METRICS && name) PERF_METRICS.timings[name] = (PERF_METRICS.timings[name] || 0) + duration;
-            return result;
-        };
-    }
-
-    /**
      * Measures the execution time of a specific DOM operation (e.g., getBoundingClientRect).
      * Records the duration and count in `PERF_METRICS`. Only active in debug mode.
      */

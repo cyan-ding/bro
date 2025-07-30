@@ -1,13 +1,8 @@
-1) Figure out why the metrics aren't accurate 
-- bounding rect and client rect hits are always 0
-- highlight label indices are zero based now, see if that's problematic
+1) Figure out why boxes are overlapping and why some numbers are appearing directly on top (blocking) the element
 
-1.5) Figure out why boxes are overlapping and why some numbers are appearing directly on top (blocking) the element
+1.25) Figure out why text inputs are not tracked but all buttons seem to be tracked
 
-2) Figure out how to make the buildDOMTree more efficient. 
-- This may entail investigating the utility of having three functions that overlap
-
-3) Figure out how to prevent elements that are stacked on top of each other to not stack
+1.5) Figure out how to make the buildDOMTree more efficient. 
 
 4) Figure out how to extract interactive elements which are highlighted into an LLM-comprehensible format
 
@@ -21,3 +16,8 @@
 
 9) Figure out how to use playwright codegen to record a workflow, and reliably repeat it. 
 
+10) Figure out why the metrics aren't accurate 
+- bounding rect and client rect hits are always 0
+- this might be because we aren't storing the cache anywhere and its getting reset. 
+- caches shoudl be written to the browser data. so when the user closes and reopens the browser, the cache remains. 
+- performant code is honestly the least priority thing right now. lets focus on creating an mvp

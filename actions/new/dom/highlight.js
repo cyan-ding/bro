@@ -58,14 +58,22 @@ export function createHighlightUtils(pushTiming, popTiming) {
             for (const rect of rects) {
                 if (rect.width === 0 || rect.height === 0) continue;
                 const overlay = document.createElement("div");
-                Object.assign(overlay.style, { position: "fixed", border: `2px solid ${baseColor}`, backgroundColor, pointerEvents: "none", boxSizing: "border-box", top: `${rect.top + iframeOffset.y}px`, left: `${rect.left + iframeOffset.x}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+                Object.assign(overlay.style, {
+                    position: "fixed", border: `2px solid ${baseColor}`,
+                    backgroundColor, pointerEvents: "none", boxSizing: "border-box",
+                    top: `${rect.top + iframeOffset.y}px`, left: `${rect.left + iframeOffset.x}px`,
+                    width: `${rect.width}px`, height: `${rect.height}px`
+                });
                 fragment.appendChild(overlay);
                 overlays.push({ element: overlay, initialRect: rect });
             }
             // only add label to first child
             const firstRect = rects[0];
             label = document.createElement("div");
-            Object.assign(label.style, { position: "fixed", background: baseColor, color: "white", padding: "1px 4px", borderRadius: "4px", fontSize: `${Math.min(12, Math.max(8, firstRect.height / 2))}px` });
+            Object.assign(label.style, {
+                position: "fixed", background: baseColor, color: "white",
+                padding: "1px 4px", borderRadius: "4px", fontSize: `${Math.min(12, Math.max(8, firstRect.height / 2))}px`
+            });
             label.textContent = index;
             // calculate label dimensions
             labelWidth = label.offsetWidth > 0 ? label.offsetWidth : labelWidth;
@@ -78,7 +86,10 @@ export function createHighlightUtils(pushTiming, popTiming) {
                 if (labelLeft < iframeOffset.x) labelLeft = firstRect.left + iframeOffset.x;
             }
             // add index label onto div
-            Object.assign(label.style, { top: `${Math.max(0, Math.min(labelTop, window.innerHeight - labelHeight))}px`, left: `${Math.max(0, Math.min(labelLeft, window.innerWidth - labelWidth))}px` });
+            Object.assign(label.style, {
+                top: `${Math.max(0, Math.min(labelTop, window.innerHeight - labelHeight))}px`,
+                left: `${Math.max(0, Math.min(labelLeft, window.innerWidth - labelWidth))}px`
+            });
             fragment.appendChild(label);
 
             // hook to update box coords when scrolling
@@ -93,7 +104,12 @@ export function createHighlightUtils(pushTiming, popTiming) {
                 overlays.forEach((overlayData, i) => {
                     if (i < newRects.length) {
                         const newRect = newRects[i];
-                        Object.assign(overlayData.element.style, { top: `${newRect.top + newIframeOffset.y}px`, left: `${newRect.left + newIframeOffset.x}px`, width: `${newRect.width}px`, height: `${newRect.height}px`, display: (newRect.width === 0 || newRect.height === 0) ? 'none' : 'block' });
+                        Object.assign(overlayData.element.style, {
+                            top: `${newRect.top + newIframeOffset.y}px`,
+                            left: `${newRect.left + newIframeOffset.x}px`, width: `${newRect.width}px`,
+                            height: `${newRect.height}px`, display: (newRect.width === 0 || newRect.height === 0)
+                                ? 'none' : 'block'
+                        });
                     } else {
                         overlayData.element.style.display = 'none';
                     }
@@ -154,7 +170,7 @@ export function createHighlightUtils(pushTiming, popTiming) {
             // add fragment containing label + colored boxes to container
             container.appendChild(fragment);
             return popTiming('highlighting');
-        
+
         } finally {
             popTiming('highlighting');
             if (cleanupFn) {

@@ -60,19 +60,17 @@ export default function buildDomTree(args = {
         let shouldHighlight = !isParentHighlighted || domUtils.isElementDistinctInteraction(node);
         if (shouldHighlight) {
             // only highlight if in viewport (or if its set to -1)
-            nodeData.isInViewport = domUtils.isInExpandedViewport(node, viewportExpansion);
-            if (nodeData.isInViewport || viewportExpansion === -1) {
-                nodeData.highlightIndex = highlightIndex++;
-                if (doHighlightElements) {
-                    // highlight given node if we aren't focusing on one only
-                    if (focusHighlightIndex < 0 || focusHighlightIndex === nodeData.highlightIndex) {
-                        const time = highlightElement(node, nodeData.highlightIndex, parentIframe) || 0;
-                        if (debugMode) PERF_METRICS.timings.highlightElement += time;
-                    }
-                    // return true if successful highlight -- this is to signal that children should not be highlighted.
-                    return true;
+            nodeData.highlightIndex = highlightIndex++;
+            if (doHighlightElements) {
+                // highlight given node if we aren't focusing on one only
+                if (focusHighlightIndex < 0 || focusHighlightIndex === nodeData.highlightIndex) {
+                    const time = highlightElement(node, nodeData.highlightIndex, parentIframe) || 0;
+                    if (debugMode) PERF_METRICS.timings.highlightElement += time;
                 }
+                // return true if successful highlight -- this is to signal that children should not be highlighted.
+                return true;
             }
+
         }
         return false;
     }
@@ -120,12 +118,7 @@ export default function buildDomTree(args = {
                 if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
                 return null;
             }
-            // skip node if no parent node (not interactive) or if part of a script (not interactive in DOM)
-            const parentElement = node.parentElement;
-            if (!parentElement || parentElement.tagName.toLowerCase() === 'script') {
-                if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-                return null;
-            }
+            
             const id = `${ID.current++}`;
             DOM_HASH_MAP[id] = { type: "TEXT_NODE", text: textContent, isVisible: domUtils.isTextNodeVisible(node, viewportExpansion) };
             if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
@@ -137,17 +130,6 @@ export default function buildDomTree(args = {
             return null;
         }
 
-        if (viewportExpansion !== -1) {
-            const rect = domUtils.getCachedBoundingRect(node);
-            const style = domUtils.getCachedComputedStyle(node);
-            // check if element doesnt move when scrolling (fixed or sticky)
-            const isFixedOrSticky = style && (style.position === 'fixed' || style.position === 'sticky');
-            // skip node if no cached bounding rect or if not in viewport (and not fixed/sticky)
-            if (!rect || (!isFixedOrSticky && !domUtils.isInExpandedViewport(node, viewportExpansion))) {
-                if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-                return null;
-            }
-        }
 
         const nodeData = {
             tagName: node.tagName.toLowerCase(),
@@ -157,28 +139,23 @@ export default function buildDomTree(args = {
             // other potential node data to populate conditionally
             // isInteractive: false,
             // isVisible: false,
-            // isTopElement: false,
-            // isInViewport: false,
             // highlightIndex: -1,
             // shadowRoot: false,
         };
-        // quick check if element is interactive
-        if (domUtils.isInteractiveCandidate(node) || nodeData.tagName === 'iframe' || nodeData.tagName === 'body') {
+        // only populate attributes if element is interactive
+        if (domUtils.isInteractiveCandidate(node) || nodeData.tagName === 'iframe') {
             const attributeNames = node.getAttributeNames?.() || [];
             for (const name of attributeNames) {
                 nodeData.attributes[name] = node.getAttribute(name);
             }
         }
-        // populate isVisible, isTopElement, isInteractive attributes of nodeData
+        // populate isVisible, isInteractive attributes of nodeData
         let nodeWasHighlighted = false;
-        nodeData.isVisible = domUtils.isElementVisible(node);
+        nodeData.isVisible = domUtils.isElementVisible(node); // this is the only visibility check
         if (nodeData.isVisible) {
-            nodeData.isTopElement = domUtils.isTopElement(node, viewportExpansion);
-            if (nodeData.isTopElement) {
-                nodeData.isInteractive = domUtils.isInteractiveElement(node);
-                // mark element to be highlighted (so that children are not highlighted)
-                nodeWasHighlighted = handleHighlighting(nodeData, node, parentIframe, isParentHighlighted);
-            }
+            nodeData.isInteractive = domUtils.isInteractiveElement(node);
+            // mark element to be highlighted (so that children are not highlighted)
+            nodeWasHighlighted = handleHighlighting(nodeData, node, parentIframe, isParentHighlighted);
         }
         // Check for special types of nodes with internal structures, recurse through those
         const tagName = nodeData.tagName;
@@ -194,21 +171,20 @@ export default function buildDomTree(args = {
                 }
             } catch (e) { console.warn("Unable to access iframe:", e); }
             // for content editable divs
-        } else if (node.isContentEditable || (tagName === "body" && node.getAttribute("data-id")?.startsWith("mce_"))) {
+        } else if (node.isContentEditable) {
             for (const child of node.childNodes) {
                 const domElement = buildTreeRecursive(child, parentIframe, nodeWasHighlighted);
                 if (domElement) nodeData.children.push(domElement);
             }
 
-        } else {
+        } else if (node.shadowRoot) {
             // for shadow DOM elements that have internal structure
-            if (node.shadowRoot) {
-                nodeData.shadowRoot = true;
-                for (const child of node.shadowRoot.childNodes) {
-                    const domElement = buildTreeRecursive(child, parentIframe, nodeWasHighlighted);
-                    if (domElement) nodeData.children.push(domElement);
-                }
+            nodeData.shadowRoot = true;
+            for (const child of node.shadowRoot.childNodes) {
+                const domElement = buildTreeRecursive(child, parentIframe, nodeWasHighlighted);
+                if (domElement) nodeData.children.push(domElement);
             }
+        } else {
             // for all other nodes, recurse through children
             for (const child of node.childNodes) {
                 const passHighlightStatusToChild = nodeWasHighlighted || isParentHighlighted;
@@ -216,7 +192,8 @@ export default function buildDomTree(args = {
                 if (domElement) nodeData.children.push(domElement);
             }
         }
-        // Skip empty anchor tags only if they have no dimensions and no children
+        // Skip empty anchor tags only if they have no dimensions and no children 
+        // -- Many websites include empty <a> tags for layout, tracking, or JS hooks.
         if (tagName === 'a' && nodeData.children.length === 0 && !nodeData.attributes.href) {
             const rect = domUtils.getCachedBoundingRect(node);
             // skip if anchor has no size
@@ -241,7 +218,6 @@ export default function buildDomTree(args = {
     const rootId = wrappedBuildTree(document.body);
 
     postProcessMetrics();
-
     return debugMode
         ? { rootId, map: DOM_HASH_MAP, perfMetrics: PERF_METRICS }
         : { rootId, map: DOM_HASH_MAP };
