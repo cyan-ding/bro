@@ -53,9 +53,9 @@ async def main() -> None:
 		try:
 			await page.goto(
 				# google form test
-				# "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform"
+				"https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform"
 				# google doc test
-				"https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing"
+				# "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing"
 				# google sheets test
 				# "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing"
 			)
@@ -73,14 +73,15 @@ async def main() -> None:
 			"(args) => window.buildDomTree(args)",
 			{
 				"doHighlightElements": True,
-				"viewportExpansion": -1,
 				"debugMode": True,
+				"overlapThreshold": 0.4,
 			},
 		)
 
 		await page.wait_for_timeout(10000)
-		# save this result to file
 		await page.screenshot(path="actions/new/screenshot.png")
+		# input_elements = [el for el in result['highlightedElements'] if el.get('index') == 135]
+		#print(input_elements)
 		print(result['highlightedElements'])
 		await browser.close()
 

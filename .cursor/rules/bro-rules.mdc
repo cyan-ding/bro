@@ -49,5 +49,5 @@ When you create a **new file**:
 
 * **Do not do any more than asked. Keep code minimal, simple, and readible.** 
 
-* **Do not ask for confirmation when you suggest code changes, just apply**
+* **Never add `console.log` logs in any `js` files**
 ---

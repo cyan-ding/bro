@@ -1,10 +1,17 @@
 1) Figure out why boxes are overlapping and why some numbers are appearing directly on top (blocking) the element
-
+- turns out the reason is that there are some generations of no-highlight elements in between two generations of highlighted elements
+- unfortunately, we have to choose between allowing elements that are overlapping over independent elements. 
+- but is there any way to have both??
+- current functionality does not take that into account
 1.25) Figure out why text inputs are not tracked but all buttons seem to be tracked
+- so it turns out that some text inputs are intentionally marked invisible.
+- we might have to resort to NOT highlighting them on the screen, but still keeping track of them separately
+- we will need to create a "possibly hidden interactive elements" -> and provide that to the LLM as well. 
 
 1.5) Figure out how to make the buildDOMTree more efficient. 
 
-4) Figure out how to extract interactive elements which are highlighted into an LLM-comprehensible format
+4) Figure out how to extract interactive elements which are highlighted into an LLM-comprehensible format 
+- did this, although im not sure how comprehensible this is for the LLM.
 
 5) Figure out how to wrap that, the screenshot, instructions, and history together to feed to the LLM
 

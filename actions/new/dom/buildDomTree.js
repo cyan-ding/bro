@@ -25,8 +25,8 @@ import { createHighlightUtils } from './highlight.js';
  *
  * @param {Object} args - Configuration options for the DOM tree builder.
  * @param {boolean} args.doHighlightElements - Whether to visually highlight interactive elements.
- * @param {number} args.viewportExpansion - Pixels to expand the viewport bounds for visibility checks. -1 to expand to full page.
  * @param {boolean} args.debugMode - Enables detailed performance metrics and logging.
+ * @param {number} args.overlapThreshold - Threshold for area overlap detection (0.7 = 70%)
  *
  * @returns {Object} An object containing the root node ID, a map of all node data, and (if debugMode) performance metrics.
  *
@@ -36,10 +36,10 @@ import { createHighlightUtils } from './highlight.js';
  */
 export default function buildDomTree(args = {
     doHighlightElements: true,
-    viewportExpansion: -1,
     debugMode: true,
+    overlapThreshold: 0.7, // Threshold for area overlap detection (0.7 = 70%)
 }) {
-    const { doHighlightElements, viewportExpansion, debugMode } = args;
+    const { doHighlightElements, debugMode, overlapThreshold } = args;
 
     // --- Instantiate helpers with shared state ---
     const { PERF_METRICS, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
@@ -53,21 +53,57 @@ export default function buildDomTree(args = {
     const ID = { current: 0 };
 
     // --- Core Logic ---
-    function handleHighlighting(nodeData, node, parentIframe, isParentHighlighted) {
-        if (!nodeData.isInteractive) return false;
-        // only highlight if parent not highlighted (prevent overlaps) or if its distinct
-        if (!isParentHighlighted || domUtils.isElementDistinctInteraction(node)) {
-            // only highlight if in viewport (or if its set to -1)
+    /**
+     * Handles the highlighting logic for interactive elements, including area overlap detection.
+     * 
+     * @param {Object} nodeData - The data object for the current node.
+     * @param {Element} node - The DOM element to potentially highlight.
+     * @param {Element|null} parentIframe - The parent iframe element if inside an iframe.
+     * @param {boolean} highlightedAncestor - If the element has a highlighted ancestor, null if no ancestor.
+     * @returns {Element|null} The element if it was highlighted, null otherwise.
+     */
+    function handleHighlighting(nodeData, node, parentIframe, highlightedAncestor = null) {
+        if (!nodeData.isInteractive) return highlightedAncestor;
+
+        // only highlight if no highlighted ancestor or if its distinct
+        if (!highlightedAncestor || domUtils.isElementDistinctInteraction(node)) {
+            // Additional safeguard: if parent is highlighted, require stronger evidence of distinctness
+            if (highlightedAncestor) {
+                const tagName = node.tagName.toLowerCase();
+                const isWrapperTag = ['div', 'span', 'section', 'article'].includes(tagName);
+
+                // For wrapper tags, require explicit interactive properties
+                if (isWrapperTag) {
+                    const hasExplicitInteractivity = node.hasAttribute('onclick') || node.hasAttribute('role') ||
+                        node.hasAttribute('tabindex') || /\b(btn|clickable)\b/i.test(node.className || '');
+                    if (!hasExplicitInteractivity) return highlightedAncestor;
+                }
+
+                // Area overlap check: prevent highlighting if element overlaps significantly with highlighted ancestor
+                const nodeRect = domUtils.getCachedBoundingRect(node);
+                if (nodeRect) {
+                    const parentRect = domUtils.getCachedBoundingRect(highlightedAncestor);
+                    if (parentRect) {
+                        const xOverlap = Math.max(0, Math.min(nodeRect.right, parentRect.right) - Math.max(nodeRect.left, parentRect.left));
+                        const yOverlap = Math.max(0, Math.min(nodeRect.bottom, parentRect.bottom) - Math.max(nodeRect.top, parentRect.top));
+                        const overlapArea = xOverlap * yOverlap;
+                        const overlapRatio = overlapArea / Math.max(nodeRect.width * nodeRect.height, parentRect.width * parentRect.height);
+                        if (overlapRatio > overlapThreshold) {
+                            return highlightedAncestor;
+                        }
+                    }
+                }
+            }
+
             nodeData.highlightIndex = highlightIndex++;
             if (doHighlightElements) {
-                // highlight given node if we aren't focusing on one only
                 const time = highlightElement(node, nodeData.highlightIndex, parentIframe) || 0;
                 if (debugMode) PERF_METRICS.timings.highlightElement += time;
-                // return true if successful highlight -- this is to signal that children should not be highlighted.
-                return true;
+                // return element if successful highlight -- this is to signal that children should not be highlighted.
+                return node;
             }
         }
-        return false;
+        return highlightedAncestor;
     }
 
     /**
@@ -76,7 +112,7 @@ export default function buildDomTree(args = {
      *
      * @param {Node} node - The current DOM node to process.
      * @param {Element|null} [parentIframe=null] - The parent iframe element if inside an iframe, otherwise null.
-     * @param {boolean} [isParentHighlighted=false] - Whether the parent node was highlighted, to avoid redundant highlights.
+     * @param {Element|null} [highlightedAncestor=null] - The parent node that was highlighted, to avoid redundant highlights.
      * @returns {string|null} The unique ID of the processed node in the DOM_HASH_MAP, or null if the node is skipped.
      *
      * @remarks
@@ -84,7 +120,7 @@ export default function buildDomTree(args = {
      * - Handles text nodes, shadow DOM, and content-editable regions.
      * - Applies highlighting logic if enabled.
      */
-    function buildTreeRecursive(node, parentIframe = null, isParentHighlighted = false) {
+    function buildTreeRecursive(node, parentIframe = null, highlightedAncestor = null) {
         if (debugMode) {
             PERF_METRICS.nodeMetrics.totalNodes++;
             PERF_METRICS.calls.buildDomTree++;
@@ -97,7 +133,7 @@ export default function buildDomTree(args = {
         if (node === document.body) {
             const nodeData = { tagName: 'body', attributes: {}, xpath: '/body', children: [] };
             for (const child of node.childNodes) {
-                const domElement = buildTreeRecursive(child, parentIframe, false);
+                const domElement = buildTreeRecursive(child, parentIframe, highlightedAncestor);
                 if (domElement) nodeData.children.push(domElement);
             }
             const id = `${ID.current++}`;
@@ -115,7 +151,7 @@ export default function buildDomTree(args = {
             }
 
             const id = `${ID.current++}`;
-            DOM_HASH_MAP[id] = { type: "TEXT_NODE", text: textContent, isVisible: domUtils.isTextNodeVisible(node, viewportExpansion) };
+            DOM_HASH_MAP[id] = { type: "TEXT_NODE", text: textContent, isVisible: domUtils.isTextNodeVisible(node) };
             if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
             return id;
         }
@@ -145,12 +181,12 @@ export default function buildDomTree(args = {
             }
         }
         // populate isVisible, isInteractive attributes of nodeData
-        let nodeWasHighlighted = false;
+        let newHighlightedAncestor = null;
         nodeData.isVisible = domUtils.isElementVisible(node); // this is the only visibility check
         if (nodeData.isVisible) {
             nodeData.isInteractive = domUtils.isInteractiveElement(node);
             // mark element to be highlighted (so that children are not highlighted)
-            nodeWasHighlighted = handleHighlighting(nodeData, node, parentIframe, isParentHighlighted);
+            newHighlightedAncestor = handleHighlighting(nodeData, node, parentIframe, highlightedAncestor);
         }
         // Check for special types of nodes with internal structures, recurse through those
         const tagName = nodeData.tagName;
@@ -160,7 +196,7 @@ export default function buildDomTree(args = {
                 const iframeDoc = node.contentDocument || node.contentWindow?.document;
                 if (iframeDoc) {
                     for (const child of iframeDoc.childNodes) {
-                        const domElement = buildTreeRecursive(child, node, false);
+                        const domElement = buildTreeRecursive(child, node, newHighlightedAncestor);
                         if (domElement) nodeData.children.push(domElement);
                     }
                 }
@@ -168,7 +204,7 @@ export default function buildDomTree(args = {
             // for content editable divs
         } else if (node.isContentEditable) {
             for (const child of node.childNodes) {
-                const domElement = buildTreeRecursive(child, parentIframe, nodeWasHighlighted);
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
                 if (domElement) nodeData.children.push(domElement);
             }
 
@@ -176,14 +212,13 @@ export default function buildDomTree(args = {
             // for shadow DOM elements that have internal structure
             nodeData.shadowRoot = true;
             for (const child of node.shadowRoot.childNodes) {
-                const domElement = buildTreeRecursive(child, parentIframe, nodeWasHighlighted);
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
                 if (domElement) nodeData.children.push(domElement);
             }
         } else {
             // for all other nodes, recurse through children
             for (const child of node.childNodes) {
-                const passHighlightStatusToChild = nodeWasHighlighted || isParentHighlighted;
-                const domElement = buildTreeRecursive(child, parentIframe, passHighlightStatusToChild);
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
                 if (domElement) nodeData.children.push(domElement);
             }
         }
@@ -208,6 +243,7 @@ export default function buildDomTree(args = {
     // --- Execution ---
     domUtils.DOM_CACHE.clearCache();
     if (window._highlightCleanupFunctions) cleanupHighlights();
+
     const wrappedBuildTree = measureDomOperation(buildTreeRecursive, 'buildDomTree');
     PERF_METRICS.calls.buildDomTree--; // remove this extra call to measureDomOperation
     const rootId = wrappedBuildTree(document.body);

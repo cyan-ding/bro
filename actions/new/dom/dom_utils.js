@@ -130,28 +130,24 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
      */
     function isElementVisible(element) {
         const style = getCachedComputedStyle(element);
-        return element.offsetWidth > 0 && element.offsetHeight > 0 && style.visibility !== "hidden" && style.display !== "none";
+        return element.offsetWidth > 0 && element.offsetHeight > 0 &&
+            style.visibility !== "hidden"
+            && style.display !== "none"
+            && parseFloat(style.opacity) > 0
+            && element.getClientRects().length > 0
+
     }
 
     /**
      * Checks if a text node is visible in the viewport.
      */
-    function isTextNodeVisible(textNode, viewportExpansion) {
+    function isTextNodeVisible(textNode) {
         try {
-            if (viewportExpansion === -1) {
-                const parentElement = textNode.parentElement;
-                if (!parentElement) return false;
-                try {
-                    return parentElement.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
-                } catch (e) {
-                    const style = window.getComputedStyle(parentElement);
-                    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-                }
-            }
-            // access the client rects of the text node.
+            // get client rects if text wraps to multiple lines.
             const range = document.createRange();
             range.selectNodeContents(textNode);
             const rects = range.getClientRects();
+
             if (!rects || rects.length === 0) return false;
             for (const rect of rects) {
                 if (rect.width > 0 && rect.height > 0) {
@@ -161,9 +157,8 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
                         return parentElement.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
                     } catch (e) {
                         const style = window.getComputedStyle(parentElement);
-                        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+                        return style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity) !== 0;
                     }
-
                 }
             }
             return false;
@@ -205,6 +200,8 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         if (interactiveCursors.has(style.cursor)) return true;
         const nonInteractiveCursors = new Set(['not-allowed', 'no-drop', 'wait', 'progress',
             'initial', 'inherit']);
+        // check pointer-events - if it's set to 'none', the element can't receive pointer events
+        if (style.pointerEvents === 'none') return false;
         // check typical tags
         const interactiveTags = new Set(["a", "button", "input", "select", "textarea", "details",
             "summary", "label", "option", "optgroup", "fieldset", "legend"]);
@@ -225,7 +222,8 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         // check roles
         const role = element.getAttribute("role");
         const ariaRole = element.getAttribute("aria-role");
-        const interactiveRoles = new Set(['button', 'menuitemradio', 'menuitemcheckbox', 'radio', 'checkbox', 'tab', 'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox', 'option', 'scrollbar']);
+        const interactiveRoles = new Set(['button', 'menuitemradio', 'menuitemcheckbox', 'radio', 'checkbox', 'tab', 
+            'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox', 'option', 'scrollbar']);
         if (interactiveRoles.has(role) || interactiveRoles.has(ariaRole)) return true;
         // check for event listeners (currently nonfunctional)
         try {
@@ -252,16 +250,19 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
      * uses @isInteractiveElement 
      */
     function isHeuristicallyInteractive(element) {
-        if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
         if (!isElementVisible(element)) return false;
+
+        // Only consider elements that have explicit interactive properties
         const hasInteractiveAttributes = element.hasAttribute('role') || element.hasAttribute('tabindex')
             || element.hasAttribute('onclick') || typeof element.onclick === 'function';
         const hasInteractiveClass = /\b(btn|clickable|menu|item|entry|link)\b/i.test(element.className || '');
+
+        // Check if element is inside a known interactive container
         const isInKnownContainer = Boolean(element.closest('button,a,[role="button"],.menu,.dropdown,.list,.toolbar'));
-        const hasVisibleChildren = [...element.children].some(isElementVisible);
-        const isParentBody = element.parentElement && element.parentElement.isSameNode(document.body);
-        return (isInteractiveElement(element) || hasInteractiveAttributes || hasInteractiveClass)
-            && hasVisibleChildren && isInKnownContainer && !isParentBody;
+
+        // Only consider it distinct if it has explicit interactive properties
+        // AND is not just a container div with children
+        return hasInteractiveAttributes && hasInteractiveClass && isInKnownContainer;
     }
 
     const DISTINCT_INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary',
@@ -275,9 +276,11 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
      * which is crucial for handling nested interactive elements. 
      * Should only be called for elements with children.
      * -- this function might be the problem that is causing overlapping highlights...
+     * -- i need to check if the parent element is highlighted. 
      */
     function isElementDistinctInteraction(element) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+
         const tagName = element.tagName.toLowerCase();
         const role = element.getAttribute('role');
         if (tagName === 'iframe') return true;
