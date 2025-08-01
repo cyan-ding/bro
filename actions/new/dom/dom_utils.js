@@ -118,11 +118,12 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
      * Filters out non-essential elements like <script> and <style>.
      */
     function isElementAccepted(element) {
+        if (element.shadowRoot || element instanceof ShadowRoot) return true;
         if (!element || !element.tagName) return false;
-        const alwaysAccept = new Set(["body", "div", "main", "article", "section", "nav", "header", "footer"]);
+        const alwaysAccept = new Set(["body", "div", "main", "article", "section", "nav", "header", "footer", "iframe"]);
         if (alwaysAccept.has(element.tagName.toLowerCase())) return true;
-        const leafElementDenyList = new Set(["svg", "script", "style", "link", "meta", "noscript", "template"]);
-        return !leafElementDenyList.has(element.tagName.toLowerCase());
+        const alwaysDeny = new Set(["svg", "script", "style", "link", "meta", "noscript", "template"]);
+        return !alwaysDeny.has(element.tagName.toLowerCase());
     }
 
     /**
@@ -134,8 +135,12 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
             style.visibility !== "hidden"
             && style.display !== "none"
             && parseFloat(style.opacity) > 0
-            && element.getClientRects().length > 0
+            && element.getClientRects().length > 0;
+    }
 
+    function isInViewport(element) {
+        const rect = element.getBoundingClientRect();
+        return rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth;
     }
 
     /**
@@ -305,6 +310,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         isTextNodeVisible: measureDomOperation(isTextNodeVisible, 'isTextNodeVisible'),
         isInteractiveCandidate: measureDomOperation(isInteractiveCandidate, 'isInteractiveCandidate'),
         isInteractiveElement: measureDomOperation(isInteractiveElement, 'isInteractiveElement'),
-        isElementDistinctInteraction: measureDomOperation(isElementDistinctInteraction, 'isElementDistinctInteraction')
+        isElementDistinctInteraction: measureDomOperation(isElementDistinctInteraction, 'isElementDistinctInteraction'),
+        isInViewport: measureDomOperation(isInViewport, 'isInViewport')
     };
 } 

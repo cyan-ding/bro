@@ -120,12 +120,16 @@ export default function buildDomTree(args = {
      * - Handles text nodes, shadow DOM, and content-editable regions.
      * - Applies highlighting logic if enabled.
      */
-    function buildTreeRecursive(node, parentIframe = null, highlightedAncestor = null) {
+    function buildTreeRecursive(node, parentIframe = null, highlightedAncestor = null, isInViewport = false) {
         if (debugMode) {
             PERF_METRICS.nodeMetrics.totalNodes++;
             PERF_METRICS.calls.buildDomTree++;
         }
-        if (!node || node.id === 'playwright-highlight-container' || (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.TEXT_NODE)) {
+        if (
+            !node ||
+            node.id === 'playwright-highlight-container' ||
+            ![Node.ELEMENT_NODE, Node.TEXT_NODE, Node.DOCUMENT_FRAGMENT_NODE].includes(node.nodeType)
+        ) {
             if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
             return null;
         }
@@ -133,7 +137,7 @@ export default function buildDomTree(args = {
         if (node === document.body) {
             const nodeData = { tagName: 'body', attributes: {}, xpath: '/body', children: [] };
             for (const child of node.childNodes) {
-                const domElement = buildTreeRecursive(child, parentIframe, highlightedAncestor);
+                const domElement = buildTreeRecursive(child, parentIframe, highlightedAncestor, isInViewport);
                 if (domElement) nodeData.children.push(domElement);
             }
             const id = `${ID.current++}`;
@@ -160,12 +164,11 @@ export default function buildDomTree(args = {
             if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
             return null;
         }
-
-
+        // tagname will be null for shadow nodes, so don't call .toLowerCase()
         const nodeData = {
-            tagName: node.tagName.toLowerCase(),
+            tagName: node.tagName ? node.tagName.toLowerCase() : null,
             attributes: {},
-            xpath: domUtils.getXPathTree(node, true),
+            xpath: node.tagName ? domUtils.getXPathTree(node, true) : null,
             children: [],
             // other potential node data to populate conditionally
             // isInteractive: false,
@@ -201,13 +204,6 @@ export default function buildDomTree(args = {
                     }
                 }
             } catch (e) { console.warn("Unable to access iframe:", e); }
-            // for content editable divs
-        } else if (node.isContentEditable) {
-            for (const child of node.childNodes) {
-                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
-                if (domElement) nodeData.children.push(domElement);
-            }
-
         } else if (node.shadowRoot) {
             // for shadow DOM elements that have internal structure
             nodeData.shadowRoot = true;

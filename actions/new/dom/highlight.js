@@ -111,16 +111,23 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             // only add label to first child
             const firstRect = rects[0];
             label = document.createElement("div");
+            // all attributes should scale with overlay size
+
+            // label = box + index number
+            // keeps font size between 8 and 12.
             Object.assign(label.style, {
                 position: "fixed", background: baseColor, color: "white",
                 padding: "1px 4px", borderRadius: "4px", fontSize: `${Math.min(12, Math.max(8, firstRect.height / 2))}px`
             });
             label.textContent = index;
             // calculate label dimensions
+            // if too small, resort to defaults; width 20, height 16
             labelWidth = label.offsetWidth > 0 ? label.offsetWidth : labelWidth;
             labelHeight = label.offsetHeight > 0 ? label.offsetHeight : labelHeight;
+            // calculate paddings for box relative to the bounding rect
             let labelTop = firstRect.top + iframeOffset.y + 2;
             let labelLeft = firstRect.left + iframeOffset.x + firstRect.width - labelWidth - 2;
+            // if label is too small, move it above the box
             if (firstRect.width < labelWidth + 4 || firstRect.height < labelHeight + 4) {
                 labelTop = firstRect.top + iframeOffset.y - labelHeight - 2;
                 labelLeft = firstRect.left + iframeOffset.x + firstRect.width - labelWidth;

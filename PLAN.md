@@ -8,6 +8,15 @@
 - we might have to resort to NOT highlighting them on the screen, but still keeping track of them separately
 - we will need to create a "possibly hidden interactive elements" -> and provide that to the LLM as well. 
 
+1.3)
+- Figuring out what qualitifies an element to be highlighted -- more specifically, if its parent isn't in the viewport
+- MAYBE, still iterate through entire tree -- but only highlight if in viewport. 
+- if parent not in viewport, highlight if no child elements
+- or go area based? but that doesn't solve the problem of a parent being out but the child being in...
+
+1.4)
+- Shadow nodes aren't working. iframes aren't working
+
 1.5) Figure out how to make the buildDOMTree more efficient. 
 
 4) Figure out how to extract interactive elements which are highlighted into an LLM-comprehensible format 
