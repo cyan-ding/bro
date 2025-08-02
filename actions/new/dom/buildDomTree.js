@@ -211,13 +211,18 @@ export default function buildDomTree(args = {
                 const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
                 if (domElement) nodeData.children.push(domElement);
             }
+            for (const child of node.children) {
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
+                if (domElement) nodeData.children.push(domElement);
+            }
         } else {
             // for all other nodes, recurse through children
-            for (const child of node.childNodes) {
+            for (const child of node.children) {
                 const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
                 if (domElement) nodeData.children.push(domElement);
             }
         }
+    
         // Skip empty anchor tags only if they have no dimensions and no children 
         // -- Many websites include empty <a> tags for layout, tracking, or JS hooks.
         if (tagName === 'a' && nodeData.children.length === 0 && !nodeData.attributes.href) {

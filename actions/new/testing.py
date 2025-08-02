@@ -48,27 +48,29 @@ async def main() -> None:
 			channel="chrome",
 			headless=False,
 			no_viewport=True,
+			# Uncomment the line below to automatically open DevTools
+			# devtools=True,
 		)
 		page = await browser.new_page()
 		try:
 			await page.goto(
 				# google form test
-				# "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform"
+				# "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform",
 				# google doc test
-				# "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing"
+				# "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing",
 				# google sheets test
-				# "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing"
+				# "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing",
 				# iframe test
-				"https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
-				wait_until="domcontentloaded",
+				# "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
+				"https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe_frameborder_css",
+				wait_until="load",
 			)
 		except Exception as e:
-			print("Browser timed out:", e)
-			await browser.close()
-			return
+			print("Browser timed out, trying to open DevTools:", e)
+		
 
 		# read from cache file
-		# Inject the bundled JS code
+		# Inject the bundled JS code	
 		await page.evaluate(js_bundle)
 
 		# Call window.buildDomTree with arguments
@@ -80,11 +82,8 @@ async def main() -> None:
 				"overlapThreshold": 0.4,
 			},
 		)
-
-		await page.wait_for_timeout(10000)
-		await page.screenshot(path="actions/new/screenshot.png")
-		# input_elements = [el for el in result['highlightedElements'] if el.get('index') == 135]
-		#print(input_elements)
+		await page.wait_for_timeout(50000)
+		await page.screenshot(path="actions/new/screenshot.png")	
 		print(result['map'])
 		await browser.close()
 
