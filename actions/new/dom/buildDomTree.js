@@ -27,6 +27,7 @@ import { createHighlightUtils } from './highlight.js';
  * @param {boolean} args.doHighlightElements - Whether to visually highlight interactive elements.
  * @param {boolean} args.debugMode - Enables detailed performance metrics and logging.
  * @param {number} args.overlapThreshold - Threshold for area overlap detection (0.7 = 70%)
+ * @param {boolean} args.indexByPosition - Whether to index interactive elements by position for efficient viewport highlighting.
  *
  * @returns {Object} An object containing the root node ID, a map of all node data, and (if debugMode) performance metrics.
  *
@@ -38,19 +39,23 @@ export default function buildDomTree(args = {
     doHighlightElements: true,
     debugMode: true,
     overlapThreshold: 0.7, // Threshold for area overlap detection (0.7 = 70%)
+    indexByPosition: false, // Whether to index interactive elements by position
 }) {
-    const { doHighlightElements, debugMode, overlapThreshold } = args;
+    const { doHighlightElements, debugMode, overlapThreshold, indexByPosition } = args;
 
     // --- Instantiate helpers with shared state ---
     const { PERF_METRICS, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
     const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation);
-    const { highlightElement, cleanupHighlights, getHighlightedElements } = createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
-
+    const { highlightElement, cleanupHighlights, getHighlightedElements, highlightElementsInViewport, createScrollHandler } = createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
 
     // --- Main state ---
     let highlightIndex = 0;
     const DOM_HASH_MAP = {};
     const ID = { current: 0 };
+
+    // --- Position-based indexing for efficient viewport highlighting ---
+    const INTERACTIVE_ELEMENTS_BY_POSITION = new Map(); // y-coordinate -> array of elements
+    const POSITION_GRID_SIZE = 100; // Group elements by 100px vertical sections
 
     // --- Core Logic ---
     /**
@@ -191,6 +196,12 @@ export default function buildDomTree(args = {
             // mark element to be highlighted (so that children are not highlighted)
             newHighlightedAncestor = handleHighlighting(nodeData, node, parentIframe, highlightedAncestor);
         }
+        
+        // Index element by position if enabled and interactive
+        if (indexByPosition && nodeData.isInteractive) {
+            domUtils.indexElementByPosition(node, nodeData, INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
+        }
+        
         // Check for special types of nodes with internal structures, recurse through those
         const tagName = nodeData.tagName;
         // for iframes
@@ -250,7 +261,29 @@ export default function buildDomTree(args = {
     const rootId = wrappedBuildTree(document.body);
 
     postProcessMetrics();
+    
+    // Set up scroll handler if position indexing is enabled
+    if (indexByPosition) {
+        const scrollHandler = createScrollHandler(INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE, debugMode);
+        window.addEventListener('scroll', scrollHandler, { passive: true });
+        
+        // Store handler for cleanup
+        if (!window._scrollHandlers) window._scrollHandlers = [];
+        window._scrollHandlers.push(scrollHandler);
+    }
+    
     return debugMode
-        ? { rootId, map: DOM_HASH_MAP, perfMetrics: PERF_METRICS, highlightedElements: getHighlightedElements() }
-        : { rootId, map: DOM_HASH_MAP, highlightedElements: getHighlightedElements() };
+        ? { 
+            rootId, 
+            map: DOM_HASH_MAP, 
+            perfMetrics: PERF_METRICS, 
+            highlightedElements: getHighlightedElements(),
+            interactiveElementsByPosition: indexByPosition ? INTERACTIVE_ELEMENTS_BY_POSITION : undefined
+          }
+        : { 
+            rootId, 
+            map: DOM_HASH_MAP, 
+            highlightedElements: getHighlightedElements(),
+            interactiveElementsByPosition: indexByPosition ? INTERACTIVE_ELEMENTS_BY_POSITION : undefined
+          };
 } 

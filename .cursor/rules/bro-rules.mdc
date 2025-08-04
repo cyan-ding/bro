@@ -9,7 +9,7 @@ alwaysApply: true
 
 When you create a **new file**:
 
-* **For humans**: At the top of the file, include a docstring in natural language explaining:
+* **For humans**: At the top of the file, include a few sentence docstring in natural language explaining:
 
   * What this file does.
   * How it fits into the Bro system.
@@ -20,7 +20,6 @@ When you create a **new file**:
   ```python
   # @file purpose: Defines <purpose>
   ```
-
 ---
 
 ### Development Rules

@@ -111,6 +111,38 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         return result;
     }
 
+    // --- Position-based indexing ---
+
+    /**
+     * Indexes an interactive element by its vertical position for efficient viewport lookup.
+     * 
+     * @param {Element} element - The DOM element to index.
+     * @param {Object} nodeData - The processed node data.
+     * @param {Map} interactiveElementsByPosition - Map to store indexed elements.
+     * @param {number} gridSize - Size of the position grid (default: 100).
+     */
+    function indexElementByPosition(element, nodeData, interactiveElementsByPosition, gridSize = 100) {
+        if (!nodeData.isInteractive) return;
+        
+        const rect = getCachedBoundingRect(element);
+        if (!rect) return;
+        
+        // Group by vertical position (every gridSize pixels)
+        const gridY = Math.floor(rect.top / gridSize);
+        
+        if (!interactiveElementsByPosition.has(gridY)) {
+            interactiveElementsByPosition.set(gridY, []);
+        }
+        
+        interactiveElementsByPosition.get(gridY).push({
+            element: element,
+            nodeData: nodeData,
+            rect: rect,
+            xpath: nodeData.xpath,
+            highlightIndex: nodeData.highlightIndex
+        });
+    }
+
     // --- Visibility and Acceptance ---
 
     /**
@@ -311,6 +343,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         isInteractiveCandidate: measureDomOperation(isInteractiveCandidate, 'isInteractiveCandidate'),
         isInteractiveElement: measureDomOperation(isInteractiveElement, 'isInteractiveElement'),
         isElementDistinctInteraction: measureDomOperation(isElementDistinctInteraction, 'isElementDistinctInteraction'),
-        isInViewport: measureDomOperation(isInViewport, 'isInViewport')
+        isInViewport: measureDomOperation(isInViewport, 'isInViewport'),
+        indexElementByPosition: measureDomOperation(indexElementByPosition, 'indexElementByPosition')
     };
 } 

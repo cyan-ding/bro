@@ -230,6 +230,95 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
     }
 
     /**
+     * Highlights interactive elements in the current viewport using pre-indexed positions.
+     * 
+     * @param {Map} interactiveElementsByPosition - Map of grid Y coordinates to arrays of element info
+     * @param {Object} viewportInfo - Viewport information { scrollY, innerHeight }
+     * @param {number} gridSize - Size of the position grid (default: 100)
+     * @param {boolean} debugMode - Whether to log debug information
+     * @returns {number} Number of elements highlighted
+     */
+    function highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize = 100, debugMode = false) {
+        const { scrollY, innerHeight } = viewportInfo;
+        const viewportTop = scrollY;
+        const viewportBottom = scrollY + innerHeight;
+        
+        // Calculate which grid sections are in viewport
+        const startGridY = Math.floor(viewportTop / gridSize);
+        const endGridY = Math.floor(viewportBottom / gridSize);
+        
+        const elementsToHighlight = [];
+        
+        // Collect all interactive elements in viewport
+        for (let gridY = startGridY; gridY <= endGridY; gridY++) {
+            const elementsInGrid = interactiveElementsByPosition.get(gridY);
+            if (!elementsInGrid) continue;
+            
+            for (const elementInfo of elementsInGrid) {
+                const { rect, element, nodeData } = elementInfo;
+                
+                // Check if element is actually in current viewport
+                if (rect.bottom >= viewportTop && rect.top <= viewportBottom) {
+                    elementsToHighlight.push(elementInfo);
+                }
+            }
+        }
+        
+        // Sort by vertical position for consistent highlighting order
+        elementsToHighlight.sort((a, b) => a.rect.top - b.rect.top);
+        
+        // Clear existing highlights
+        cleanupHighlights();
+        
+        // Highlight elements
+        elementsToHighlight.forEach((elementInfo, index) => {
+            const { element, nodeData } = elementInfo;
+            highlightElement(element, nodeData.highlightIndex || index);
+        });
+        
+        if (debugMode) {
+            console.log(`Highlighted ${elementsToHighlight.length} elements in viewport`);
+        }
+        
+        return elementsToHighlight.length;
+    }
+
+    /**
+     * Creates a throttled scroll handler for efficient viewport highlighting.
+     * 
+     * @param {Map} interactiveElementsByPosition - Map of grid Y coordinates to arrays of element info
+     * @param {number} gridSize - Size of the position grid (default: 100)
+     * @param {boolean} debugMode - Whether to log debug information
+     * @returns {Function} Throttled scroll handler function
+     */
+    function createScrollHandler(interactiveElementsByPosition, gridSize = 100, debugMode = false) {
+        let lastScrollY = window.scrollY;
+        let lastCall = 0;
+        const throttleDelay = 100; // 100ms throttle
+        
+        return function handleScroll() {
+            const now = performance.now();
+            if (now - lastCall < throttleDelay) return;
+            lastCall = now;
+            
+            const currentScrollY = window.scrollY;
+            
+            // Only re-highlight if scroll position changed significantly
+            if (Math.abs(currentScrollY - lastScrollY) < 50) return;
+            
+            // Highlight elements in new viewport
+            const viewportInfo = {
+                scrollY: currentScrollY,
+                innerHeight: window.innerHeight
+            };
+            
+            highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize, debugMode);
+            
+            lastScrollY = currentScrollY;
+        };
+    }
+
+    /**
      * Removes all highlight overlays and their associated event listeners from the page 
      */
     function cleanupHighlights() {
@@ -257,5 +346,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
         highlightElement, 
         cleanupHighlights, 
         getHighlightedElements,
+        highlightElementsInViewport,
+        createScrollHandler
     };
 } 

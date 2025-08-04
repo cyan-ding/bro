@@ -53,6 +53,7 @@ dependencies = [
     "pyvips>=3.0.0",
     "pyvips-binary>=8.17.1",
     "einops>=0.8.1",
+    "trafilatura>=1.6.1",
 ]
 
 [tool.setuptools.packages.find]
