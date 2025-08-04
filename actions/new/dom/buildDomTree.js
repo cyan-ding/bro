@@ -39,14 +39,14 @@ export default function buildDomTree(args = {
     doHighlightElements: true,
     debugMode: true,
     overlapThreshold: 0.7, // Threshold for area overlap detection (0.7 = 70%)
-    indexByPosition: false, // Whether to index interactive elements by position
+    indexByPosition: true, // Whether to index interactive elements by position
 }) {
     const { doHighlightElements, debugMode, overlapThreshold, indexByPosition } = args;
 
     // --- Instantiate helpers with shared state ---
     const { PERF_METRICS, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
     const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation);
-    const { highlightElement, cleanupHighlights, getHighlightedElements, highlightElementsInViewport, createScrollHandler } = createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
+    const { highlightElement, cleanupHighlights, getHighlightedElements, createScrollHandler } = createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
 
     // --- Main state ---
     let highlightIndex = 0;
@@ -65,7 +65,7 @@ export default function buildDomTree(args = {
      * @param {Element} node - The DOM element to potentially highlight.
      * @param {Element|null} parentIframe - The parent iframe element if inside an iframe.
      * @param {boolean} highlightedAncestor - If the element has a highlighted ancestor, null if no ancestor.
-     * @returns {Element|null} The element if it was highlighted, null otherwise.
+     * @returns {Element|null} The element if it was highlighted, null otherwise.   
      */
     function handleHighlighting(nodeData, node, parentIframe, highlightedAncestor = null) {
         if (!nodeData.isInteractive) return highlightedAncestor;
@@ -191,17 +191,19 @@ export default function buildDomTree(args = {
         // populate isVisible, isInteractive attributes of nodeData
         let newHighlightedAncestor = null;
         nodeData.isVisible = domUtils.isElementVisible(node); // this is the only visibility check
+
+        // Compute isInteractive only once if needed, and avoid redundant domUtils.isInteractiveElement calls
+        
         if (nodeData.isVisible) {
-            nodeData.isInteractive = domUtils.isInteractiveElement(node);
+            nodeData.isInteractive = domUtils.isInteractiveElement(node);;
             // mark element to be highlighted (so that children are not highlighted)
-            newHighlightedAncestor = handleHighlighting(nodeData, node, parentIframe, highlightedAncestor);
+            if (domUtils.isSufficientlyVisibleInViewport(node)) {
+                newHighlightedAncestor = handleHighlighting(nodeData, node, parentIframe, highlightedAncestor);
+            }
+            if (indexByPosition) {
+                domUtils.indexElementByPosition(node, nodeData, INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
+            }
         }
-        
-        // Index element by position if enabled and interactive
-        if (indexByPosition && nodeData.isInteractive) {
-            domUtils.indexElementByPosition(node, nodeData, INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
-        }
-        
         // Check for special types of nodes with internal structures, recurse through those
         const tagName = nodeData.tagName;
         // for iframes
@@ -264,26 +266,15 @@ export default function buildDomTree(args = {
     
     // Set up scroll handler if position indexing is enabled
     if (indexByPosition) {
-        const scrollHandler = createScrollHandler(INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE, debugMode);
-        window.addEventListener('scroll', scrollHandler, { passive: true });
-        
-        // Store handler for cleanup
-        if (!window._scrollHandlers) window._scrollHandlers = [];
-        window._scrollHandlers.push(scrollHandler);
+        const scrollHandler = createScrollHandler(INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
+        window.addEventListener('scroll', scrollHandler, true);
     }
     
-    return debugMode
-        ? { 
-            rootId, 
-            map: DOM_HASH_MAP, 
-            perfMetrics: PERF_METRICS, 
-            highlightedElements: getHighlightedElements(),
-            interactiveElementsByPosition: indexByPosition ? INTERACTIVE_ELEMENTS_BY_POSITION : undefined
-          }
-        : { 
-            rootId, 
-            map: DOM_HASH_MAP, 
-            highlightedElements: getHighlightedElements(),
-            interactiveElementsByPosition: indexByPosition ? INTERACTIVE_ELEMENTS_BY_POSITION : undefined
-          };
+    return {
+    	rootId,
+    	map: DOM_HASH_MAP,
+    	...(debugMode ? { perfMetrics: PERF_METRICS } : {}),
+    	highlightedElements: getHighlightedElements(),
+    	interactiveElementsByPosition: indexByPosition ? INTERACTIVE_ELEMENTS_BY_POSITION : undefined
+    };
 } 

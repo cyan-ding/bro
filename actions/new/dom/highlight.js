@@ -55,6 +55,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
     function highlightElement(element, index, parentIframe = null) {
         pushTiming('highlighting');
         if (!element) return 0;
+        // current overlays for the element
         const overlays = [];
         let label = null;
         let labelWidth = 20, labelHeight = 16;
@@ -120,8 +121,9 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
                 padding: "1px 4px", borderRadius: "4px", fontSize: `${Math.min(12, Math.max(8, firstRect.height / 2))}px`
             });
             label.textContent = index;
+
             // calculate label dimensions
-            // if too small, resort to defaults; width 20, height 16
+            // if invisible, resort to defaults; width 20, height 16
             labelWidth = label.offsetWidth > 0 ? label.offsetWidth : labelWidth;
             labelHeight = label.offsetHeight > 0 ? label.offsetHeight : labelHeight;
             // calculate paddings for box relative to the bounding rect
@@ -148,8 +150,9 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
                     const iframeRect = parentIframe.getBoundingClientRect();
                     newIframeOffset = { x: iframeRect.left, y: iframeRect.top };
                 }
-                // if element is still on the screen (newRects.length > 0), update box
+                // update box coords
                 overlays.forEach((overlayData, i) => {
+                    // find which part of the element is still on the screen (newRects vs overlays)
                     if (i < newRects.length) {
                         const newRect = newRects[i];
                         Object.assign(overlayData.element.style, {
@@ -235,15 +238,15 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
      * @param {Map} interactiveElementsByPosition - Map of grid Y coordinates to arrays of element info
      * @param {Object} viewportInfo - Viewport information { scrollY, innerHeight }
      * @param {number} gridSize - Size of the position grid (default: 100)
-     * @param {boolean} debugMode - Whether to log debug information
      * @returns {number} Number of elements highlighted
      */
-    function highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize = 100, debugMode = false) {
+    function highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize = 100) {
         const { scrollY, innerHeight } = viewportInfo;
+        // viewport bounds relative to full page
         const viewportTop = scrollY;
         const viewportBottom = scrollY + innerHeight;
         
-        // Calculate which grid sections are in viewport
+        // Calculate which grid sections numbers are in viewport
         const startGridY = Math.floor(viewportTop / gridSize);
         const endGridY = Math.floor(viewportBottom / gridSize);
         
@@ -255,7 +258,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             if (!elementsInGrid) continue;
             
             for (const elementInfo of elementsInGrid) {
-                const { rect, element, nodeData } = elementInfo;
+                const { rect } = elementInfo;
                 
                 // Check if element is actually in current viewport
                 if (rect.bottom >= viewportTop && rect.top <= viewportBottom) {
@@ -276,10 +279,6 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             highlightElement(element, nodeData.highlightIndex || index);
         });
         
-        if (debugMode) {
-            console.log(`Highlighted ${elementsToHighlight.length} elements in viewport`);
-        }
-        
         return elementsToHighlight.length;
     }
 
@@ -288,13 +287,12 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
      * 
      * @param {Map} interactiveElementsByPosition - Map of grid Y coordinates to arrays of element info
      * @param {number} gridSize - Size of the position grid (default: 100)
-     * @param {boolean} debugMode - Whether to log debug information
      * @returns {Function} Throttled scroll handler function
      */
-    function createScrollHandler(interactiveElementsByPosition, gridSize = 100, debugMode = false) {
+    function createScrollHandler(interactiveElementsByPosition, gridSize = 100) {
         let lastScrollY = window.scrollY;
         let lastCall = 0;
-        const throttleDelay = 100; // 100ms throttle
+        const throttleDelay = 50; // 50ms throttle
         
         return function handleScroll() {
             const now = performance.now();
@@ -304,7 +302,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             const currentScrollY = window.scrollY;
             
             // Only re-highlight if scroll position changed significantly
-            if (Math.abs(currentScrollY - lastScrollY) < 50) return;
+            if (Math.abs(currentScrollY - lastScrollY) < 20) return;
             
             // Highlight elements in new viewport
             const viewportInfo = {
@@ -312,7 +310,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
                 innerHeight: window.innerHeight
             };
             
-            highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize, debugMode);
+            highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize);
             
             lastScrollY = currentScrollY;
         };

@@ -127,8 +127,12 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         const rect = getCachedBoundingRect(element);
         if (!rect) return;
         
-        // Group by vertical position (every gridSize pixels)
-        const gridY = Math.floor(rect.top / gridSize);
+        // Store absolute positions (relative to document) instead of viewport-relative positions
+        const absoluteTop = rect.top + window.scrollY;
+        const absoluteBottom = rect.bottom + window.scrollY;
+        
+        // Group by vertical position (every gridSize pixels) using absolute position
+        const gridY = Math.floor(absoluteTop / gridSize);
         
         if (!interactiveElementsByPosition.has(gridY)) {
             interactiveElementsByPosition.set(gridY, []);
@@ -137,8 +141,14 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         interactiveElementsByPosition.get(gridY).push({
             element: element,
             nodeData: nodeData,
-            rect: rect,
-            xpath: nodeData.xpath,
+            rect: {
+                top: absoluteTop,
+                bottom: absoluteBottom,
+                left: rect.left + window.scrollX,
+                right: rect.right + window.scrollX,
+                width: rect.width,
+                height: rect.height
+            },
             highlightIndex: nodeData.highlightIndex
         });
     }
@@ -170,9 +180,41 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
             && element.getClientRects().length > 0;
     }
 
-    function isInViewport(element) {
+    /**
+     * Checks if an element is sufficiently visible in the viewport for highlighting.
+     * Uses a more lenient threshold that allows partial visibility.
+     * 
+     * @param {Element} element - The element to check
+     * @param {number} minVisibleRatio - Minimum ratio of element that must be visible (default: 0.3 = 30%)
+     * @returns {boolean} True if element is sufficiently visible for highlighting
+     */
+    function isSufficientlyVisibleInViewport(element, minVisibleRatio = 0.3) {
         const rect = element.getBoundingClientRect();
-        return rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        
+        // Calculate visible dimensions
+        const visibleTop = Math.max(0, rect.top);
+        const visibleBottom = Math.min(viewportHeight, rect.bottom);
+        const visibleLeft = Math.max(0, rect.left);
+        const visibleRight = Math.min(viewportWidth, rect.right);
+        
+        // Check if any part is visible
+        if (visibleBottom <= visibleTop || visibleRight <= visibleLeft) {
+            return false;
+        }
+        // calculate visible area
+        const visibleHeight = visibleBottom - visibleTop;
+        const visibleWidth = visibleRight - visibleLeft;
+        const elementHeight = rect.height;
+        const elementWidth = rect.width;
+        
+        // Calculate visible ratio
+        const visibleArea = visibleHeight * visibleWidth;
+        const totalArea = elementHeight * elementWidth;
+        const visibleRatio = visibleArea / totalArea;
+        
+        return visibleRatio >= minVisibleRatio;
     }
 
     /**
@@ -343,7 +385,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         isInteractiveCandidate: measureDomOperation(isInteractiveCandidate, 'isInteractiveCandidate'),
         isInteractiveElement: measureDomOperation(isInteractiveElement, 'isInteractiveElement'),
         isElementDistinctInteraction: measureDomOperation(isElementDistinctInteraction, 'isElementDistinctInteraction'),
-        isInViewport: measureDomOperation(isInViewport, 'isInViewport'),
+        isSufficientlyVisibleInViewport: measureDomOperation(isSufficientlyVisibleInViewport, 'isSufficientlyVisibleInViewport'),
         indexElementByPosition: measureDomOperation(indexElementByPosition, 'indexElementByPosition')
     };
 } 

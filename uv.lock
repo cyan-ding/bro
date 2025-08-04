@@ -249,21 +249,21 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
-    { name = "anthropic", specifier = ">=0.56.0" },
+    { name = "anthropic" },
     { name = "beautifulsoup4" },
-    { name = "cerebras-cloud-sdk", specifier = ">=1.35.0" },
+    { name = "cerebras-cloud-sdk" },
     { name = "chardet" },
-    { name = "deptry", specifier = ">=0.23.0" },
-    { name = "openai", specifier = ">=1.93.0" },
+    { name = "deptry", specifier = "==0.23.1" },
+    { name = "openai" },
     { name = "patchright" },
     { name = "playwright" },
-    { name = "pre-commit", specifier = ">=3.5.0" },
-    { name = "pydantic", specifier = ">=2.10.6" },
+    { name = "pre-commit" },
+    { name = "pydantic" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
-    { name = "ruff", specifier = ">=0.12.0" },
-    { name = "trafilatura", specifier = ">=1.6.1" },
+    { name = "ruff", specifier = "==0.12.7" },
+    { name = "trafilatura" },
 ]
 
 [[package]]
