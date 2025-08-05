@@ -46,7 +46,8 @@ export default function buildDomTree(args = {
     // --- Instantiate helpers with shared state ---
     const { PERF_METRICS, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
     const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation);
-    const { highlightElement, cleanupHighlights, getHighlightedElements, createScrollHandler } = createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
+    const { highlightElement, cleanupHighlights, getHighlightedElements, createScrollHandler, clearStickyCache } = 
+        createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
 
     // --- Main state ---
     let highlightIndex = 0;

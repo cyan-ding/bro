@@ -49,4 +49,8 @@ When you create a **new file**:
 * **Do not do any more than asked. Keep code minimal, simple, and readible.** 
 
 * **Never add `console.log` logs in any `js` files**
+
+* **Never create extra testing files in any circumstances**
+
+* **Before making any edits, outline what changes you will be making**
 ---

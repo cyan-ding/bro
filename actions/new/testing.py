@@ -57,14 +57,15 @@ async def main() -> None:
         try:
             await page.goto(
                 # google form test
-                # "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform",
+                "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform",
                 # google doc test
                 # "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing",
                 # google sheets test
                 # "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing",
                 # iframe test
-                "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
-                # "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe_frameborder_css",
+                # "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
+                # sticky element test
+                # "https://www.google.com/search?q=giraffes&sca_esv=24f694eca9ca74e2&biw=2087&bih=1047&udm=2&sxsrf=AE3TifOWzSQ029mWGTQiCm6P5PGaDuNjJQ%3A1754366154102&ei=yoCRaPKCBpXDkPIP9OukuQ8&ved=0ahUKEwjyj6-b4_KOAxWVIUQIHfQ1KfcQ4dUDCBE&uact=5&oq=giraffes&gs_lp=EgNpbWciCGdpcmFmZmVzMgcQIxgnGMkCMgYQABgHGB4yBhAAGAcYHjIGEAAYBxgeMgYQABgHGB4yBhAAGAcYHjIGEAAYBxgeMgYQABgHGB4yBhAAGAcYHjIGEAAYBxgeSPUDUABYAHABeACQAQCYAQCgAQCqAQC4AQPIAQCYAgGgAgaYAwCIBgGSBwExoAcAsgcAuAcAwgcDMi0xyAcE&sclient=img",
                 wait_until="domcontentloaded",
             )
         except Exception as e:
@@ -86,7 +87,7 @@ async def main() -> None:
         )
         await page.wait_for_timeout(50000)
         await page.screenshot(path="actions/new/screenshot.png")
-        print(result["map"])
+        print(result["highlightedElements"])
         await browser.close()
 
 

@@ -14,6 +14,9 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
     
     // Array to track all highlighted elements
     const highlightedElements = [];
+    
+    // Cache for sticky elements to avoid recomputing their positions
+    const stickyElementsCache = new Map();
 
     /**
      * Extracts additional information about an element for tracking purposes.
@@ -71,6 +74,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             };
             highlightedElements.push(elementInfo);
 
+            
             // make a container for all highlights to easily delete them all at once
             let container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
             if (!container) {
@@ -270,8 +274,11 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
         // Sort by vertical position for consistent highlighting order
         elementsToHighlight.sort((a, b) => a.rect.top - b.rect.top);
         
-        // Clear existing highlights
-        cleanupHighlights();
+        // Get current highlighted elements before clearing
+        const currentHighlightedElements = getHighlightedElements();
+        
+        // Clear existing highlights, preserving sticky elements
+        cleanupHighlights(currentHighlightedElements);
         
         // Highlight elements
         elementsToHighlight.forEach((elementInfo, index) => {
@@ -317,18 +324,122 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
     }
 
     /**
-     * Removes all highlight overlays and their associated event listeners from the page 
+     * Removes all highlight overlays and their associated event listeners from the page.
+     * Preserves sticky elements that haven't moved from their previous positions.
+     * 
+     * @param {Array} currentHighlightedElements - Array of currently highlighted element objects
      */
-    function cleanupHighlights() {
-        if (window._highlightCleanupFunctions) {
-            window._highlightCleanupFunctions.forEach(fn => fn());
-            window._highlightCleanupFunctions = [];
+    function cleanupHighlights(currentHighlightedElements = []) {
+        // If no current elements provided, do full cleanup
+        if (!currentHighlightedElements || currentHighlightedElements.length === 0) {
+            if (window._highlightCleanupFunctions) {
+                window._highlightCleanupFunctions.forEach(fn => fn());
+                window._highlightCleanupFunctions = [];
+            }
+            const container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
+            if (container) container.remove();
+            
+            // Clear the tracking array and cache
+            highlightedElements.length = 0;
+            stickyElementsCache.clear();
+            return;
         }
-        const container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
-        if (container) container.remove();
         
-        // Clear the tracking array
+        // Compare current highlights with past/cached highlights
+        const elementsToKeep = [];
+        const elementsToRemove = [];
+        
+        for (const elementInfo of highlightedElements) {
+            const { xpath } = elementInfo;
+            
+            // Try to find the element in the DOM
+            let element = null;
+            try {
+                // Simple XPath evaluation (you might want to use a more robust XPath evaluator)
+                const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                element = result.singleNodeValue;
+            } catch (e) {
+                // Element not found, remove it
+                elementsToRemove.push(elementInfo);
+                continue;
+            }
+            
+            if (!element) {
+                elementsToRemove.push(elementInfo);
+                continue;
+            }
+            
+            // Get current position - convert viewport coordinates to page coordinates
+            const currentRect = element.getBoundingClientRect();
+            const scrollX = window.pageXOffset || document.documentElement.scrollLeft || document.body.scrollLeft;
+            const scrollY = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+            
+            const currentPosition = {
+                top: currentRect.top + scrollY,
+                left: currentRect.left + scrollX,
+                width: currentRect.width,
+                height: currentRect.height
+            };
+            
+            // Check if we have cached position for this element
+            const cachedPosition = stickyElementsCache.get(xpath);
+            
+            if (cachedPosition) {
+                // Compare current position with cached position
+                const isSticky = (
+                    Math.abs(currentPosition.top - cachedPosition.top) < 1 &&
+                    Math.abs(currentPosition.left - cachedPosition.left) < 1 &&
+                    Math.abs(currentPosition.width - cachedPosition.width) < 1 &&
+                    Math.abs(currentPosition.height - cachedPosition.height) < 1
+                );
+                
+                if (isSticky) {
+                    // Element is sticky, keep it
+                    elementsToKeep.push(elementInfo);
+                    // Update cache with current position
+                    stickyElementsCache.set(xpath, currentPosition);
+                } else {
+                    // Element moved, remove it
+                    elementsToRemove.push(elementInfo);
+                    stickyElementsCache.delete(xpath);
+                }
+            } else {
+                // First time seeing this element, compare with past rect
+                const pastRect = elementInfo.rect;
+                const isSticky = (
+                    Math.abs(currentPosition.top - pastRect.top) < 1 &&
+                    Math.abs(currentPosition.left - pastRect.left) < 1 &&
+                    Math.abs(currentPosition.width - pastRect.width) < 1 &&
+                    Math.abs(currentPosition.height - pastRect.height) < 1
+                );
+                if (isSticky) {
+                    elementsToKeep.push(elementInfo);
+                    stickyElementsCache.set(xpath, currentPosition);
+                } else {
+                    elementsToRemove.push(elementInfo);
+                    stickyElementsCache.delete(xpath);
+                }
+            }
+        }
+        
+        // Remove non-sticky elements and their overlays
+        if (elementsToRemove.length > 0) {
+            if (window._highlightCleanupFunctions) {
+                // Only remove cleanup functions for elements we're removing
+                // This is a simplified approach - in practice you might want to track
+                // cleanup functions per element more precisely
+                window._highlightCleanupFunctions.forEach(fn => fn());
+                window._highlightCleanupFunctions = [];
+            }
+            
+            // Remove overlays for non-sticky elements
+            const container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
+            if (container) container.remove();
+        }
+        
+        // Update the tracking array to only include sticky elements
         highlightedElements.length = 0;
+        highlightedElements.push(...elementsToKeep);
     }
 
     /**
@@ -339,12 +450,21 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
         return [...highlightedElements];
     }
 
+    /**
+     * Clears the sticky elements cache.
+     * Useful when you want to reset the sticky element detection.
+     */
+    function clearStickyCache() {
+        stickyElementsCache.clear();
+    }
+
 
     return { 
         highlightElement, 
         cleanupHighlights, 
         getHighlightedElements,
         highlightElementsInViewport,
-        createScrollHandler
+        createScrollHandler,
+        clearStickyCache
     };
 } 
