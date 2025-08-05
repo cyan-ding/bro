@@ -127,13 +127,8 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         const rect = getCachedBoundingRect(element);
         if (!rect) return;
         
-        // Store absolute positions (relative to document) instead of viewport-relative positions
-        const absoluteTop = rect.top + window.scrollY;
-        const absoluteBottom = rect.bottom + window.scrollY;
-        
-        // Group by vertical position (every gridSize pixels) using absolute position
-        const gridY = Math.floor(absoluteTop / gridSize);
-        
+        // Group by vertical position (every gridSize pixels) 
+        const gridY = Math.floor(rect.top / gridSize);
         if (!interactiveElementsByPosition.has(gridY)) {
             interactiveElementsByPosition.set(gridY, []);
         }
@@ -141,14 +136,7 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         interactiveElementsByPosition.get(gridY).push({
             element: element,
             nodeData: nodeData,
-            rect: {
-                top: absoluteTop,
-                bottom: absoluteBottom,
-                left: rect.left + window.scrollX,
-                right: rect.right + window.scrollX,
-                width: rect.width,
-                height: rect.height
-            },
+            rect: rect,
             highlightIndex: nodeData.highlightIndex
         });
     }
