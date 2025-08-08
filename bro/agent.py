@@ -23,7 +23,6 @@ from actions import (
     scroll,
     search,
     text_input,
-    write_file,
 )
 from ai import gpt
 from patchright.async_api import Page, async_playwright
@@ -50,7 +49,7 @@ class ActionResult:
         result_dict = {
             "iteration": self.iteration,  # iteration number to limit token use
             "action": self.action,  # name of tool call
-            "result": self.result,  # result of tool call, success or error
+            "result": self.result,  # result of tool call
         }
         if self.arguments is not None:
             result_dict["arguments"] = self.arguments  # arguments of tool call
@@ -137,10 +136,11 @@ class Agent:
         """
         await self._write_todo_list(initial_todo)
 
-    async def start(self, user_prompt: str) -> Dict[str, Any]:
+    async def _start(self, user_prompt: str) -> Dict[str, Any]:
         """
         Initialize the process when there are no webpages to take screenshots of yet.
-        This function focuses on populating the todo list and navigating to the first website.
+        This function focuses only on populating the todo list with a detailed breakdown
+        of the user's task, ensuring the first item is a search action.
 
         Args:
             user_prompt: The user's task description
@@ -151,7 +151,7 @@ class Agent:
         print("Starting initial setup...")
 
         # Initialize the todo list
-        await self._initialize_todo_list(user_prompt)
+        # await self._initialize_todo_list(user_prompt)
 
         # Create initial prompt for the LLM to plan the task
         initial_prompt = f"""
@@ -160,13 +160,12 @@ class Agent:
         You are starting a new web automation task. Your job is to:
         1. Break down the user's task into specific subtasks
         2. Identify the first website to visit
-        3. Plan the initial navigation strategy
+        3. NAVIGATE TO THE WEBSITE FIRST using the search tool
 
-        Please use the write_file tool to update the todo list with a detailed breakdown of subtasks.
-        Then use the search tool to navigate to the first website.
-
-        Current todo list:
-        {await self._read_todo_list()}
+        CRITICAL INSTRUCTIONS:
+        - You MUST call the search tool to navigate to the first website
+        - This is the ONLY way to start navigating to websites
+        - The search tool is your primary navigation method
         """
 
         print("Making initial LLM call for task planning...")
@@ -181,21 +180,20 @@ class Agent:
 
         llm_response = await gpt(params)
 
-        # Parse for tool calls
-        tool_calls = await self._parse_tool_call(llm_response)
+        # Parse for tool call
+        tool_call = await self._parse_tool_call(llm_response)
 
-        if not tool_calls:
+        if not tool_call:
             return {
                 "status": "error",
-                "message": "",
                 "result": "LLM did not make a tool call during initial setup. Initial setup failed",
             }
 
         # For the start function, we'll return the tool call to be executed by the main run loop
         return {
             "status": "success",
-            "tool_call": tool_calls,
-            "result": "Initial setup completed, ready to execute first action",
+            "tool_call": tool_call,
+            "result": "Initial setup completed, tool call ready for execution",
         }
 
     async def _load_js_bundle(self) -> str:
@@ -233,7 +231,9 @@ class Agent:
 		}})();
 		"""
 
-    async def _take_screenshot_with_bounding_boxes(self, page: Page) -> Dict[str, Any]:
+    async def _take_screenshot_with_bounding_boxes(
+        self, page: Page
+    ) -> Optional[Dict[str, Any]]:
         """
         Take a screenshot and analyze the DOM to get bounding boxes and element information.
 
@@ -243,6 +243,8 @@ class Agent:
         Returns:
             Dictionary containing screenshot data and highlighted elements
         """
+        if page.url == "about:blank":
+            return None
         print("Walking DOM Tree...")
         # Load the JavaScript bundle
         js_bundle = await self._load_js_bundle()
@@ -367,56 +369,55 @@ class Agent:
         self, llm_response: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """
-        Parse the LLM response for tool calls according to OpenAI documentation.
+        Parse the LLM response for a single tool call according to OpenAI documentation.
 
         Args:
             llm_response: The response from the LLM
 
         Returns:
-            Tool call data if found, None otherwise
+            Single tool call data if found, None otherwise
         """
-        print("Parsing tool calls...")
-        if not llm_response or "choices" not in llm_response:
+        print("Parsing tool call...")
+        if not llm_response:
             return None
 
-        choice = llm_response["choices"][0]
-        if "message" not in choice:
-            return None
+        # Find the first function call
+        for item in llm_response.output:
+            if item.type == "function_call":
+                function_call = item
+                try:
+                    function_call_arguments = json.loads(function_call.arguments)
+                    return {
+                        "name": function_call.name,
+                        "arguments": function_call_arguments,
+                    }
+                except (json.JSONDecodeError, KeyError) as e:
+                    print(f"Error parsing function call: {e}")
+                    continue
 
-        message = choice["message"]
-        if "tool_calls" not in message or not message["tool_calls"]:
-            return None
+        return None
 
-        # Get the first tool call
-        tool_call = message["tool_calls"][0]
-        try:
-            return {
-                "id": tool_call.get("id"),
-                "name": tool_call["function"]["name"],
-                "arguments": json.loads(tool_call["function"]["arguments"]),
-            }
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"Error parsing tool call: {e}")
-            return None
-
-    async def _execute_tool_call(self, tool_call: Dict[str, Any], page: Page) -> str:
+    async def _execute_tool_call(
+        self,
+        tool_call: Dict[str, Any],
+        page: Page,
+        highlighted_elements: List[Dict[str, Any]],
+    ) -> str:
         """
-        Execute a tool call using the appropriate action function.
+        Execute a single tool call using the appropriate action function.
 
         Args:
-            tool_call: The tool call data to execute
+            tool_call: Single tool call data to execute
             page: The Playwright page object
+            highlighted_elements: List of highlighted element data for mapping indices to xpaths
 
         Returns:
             Result message from the tool execution
         """
-        print("Executing tool call...")
         tool_name = tool_call["name"]
         arguments = tool_call["arguments"]
 
-        # Get the current highlighted elements to map indices to xpaths
-        page_data = await self._take_screenshot_with_bounding_boxes(page)
-        highlighted_elements = page_data["highlighted_elements"]
+        print(f"Executing tool: {tool_name}")
 
         try:
             match tool_name:
@@ -432,6 +433,7 @@ class Agent:
                     target_xpath = highlighted_elements[target_index]["xpath"]
                     await click(page, target_xpath)
                     return f"Successfully clicked on element at index {target_index}"
+
                 case "text_input":
                     target_index = arguments.get("target")
                     input_text = arguments.get("input_text")
@@ -456,35 +458,40 @@ class Agent:
                     target_xpath = highlighted_elements[target_index]["xpath"]
                     await text_input(page, target_xpath, input_text)
                     return f"Successfully entered text '{input_text}' into element at index {target_index}"
+
                 case "scroll":
                     how_much = arguments.get("how_much")
                     if how_much is None:
                         return "Error: how_much is required for scroll"
                     await scroll(page, how_much)
                     return f"Successfully scrolled by {how_much} pixels"
+
                 case "search":
                     query = arguments.get("query")
                     if not query:
                         return "Error: query is required for search"
                     await search(page, query)
                     return f"Successfully searched for: {query}"
-                # case "extract":  # Commented out - will implement later
-                #     await extract(page)
-                #     return "Successfully extracted page content"
-                case "write_file":
-                    content = arguments.get("content")
-                    done_info = arguments.get("done")
 
-                    if not content:
-                        return "Error: content is required for write_file"
+                # case "write_file":
+                #     content = arguments.get("content")
+                #     done_info = arguments.get("done")
 
-                    await write_file(content, self.session_id)
+                #     if not content:
+                #         return "Error: content is required for write_file"
 
-                    if done_info:
-                        status = done_info.get("status", "unknown")
-                        return f"Successfully updated {self.todo_file} and marked task as {status}"
-                    else:
-                        return f"Successfully updated {self.todo_file} with new content"
+                #     await write_file(content, self.session_id)
+
+                #     if done_info:
+                #         status = done_info.get("status", "unknown")
+                #         return f"Successfully updated {self.todo_file} and marked task as {status}"
+                #     else:
+                #         return f"Successfully updated {self.todo_file} with new content"
+
+                # case "read_file":
+                #     # This is handled separately - just return the current todo list
+                #     return await self._read_todo_list()
+
                 case _:
                     return f"Unknown tool: {tool_name}"
 
@@ -519,7 +526,7 @@ class Agent:
             # If no URL provided, use the start function to initialize the process
             if not url:
                 print("No initial URL provided, running start function...")
-                start_result = await self.start(user_prompt)
+                start_result = await self._start(user_prompt)
 
                 if start_result["status"] == "error":
                     return [
@@ -532,16 +539,22 @@ class Agent:
 
                 # Execute the initial tool call from start function
                 initial_tool_call = start_result["tool_call"]
-                result_message = await self._execute_tool_call(initial_tool_call, page)
+                result_message = await self._execute_tool_call(
+                    initial_tool_call, page, []
+                )
 
-                results = [
+                # Initialize results list
+                results = []
+
+                # Create ActionResult object for the initial tool call
+                results.append(
                     ActionResult(
                         iteration=0,
                         action=initial_tool_call["name"],
                         arguments=initial_tool_call["arguments"],
                         result=result_message,
                     )
-                ]
+                )
 
                 # Continue with the main loop starting from iteration 1
                 start_iteration = 1
@@ -551,15 +564,19 @@ class Agent:
                 start_iteration = 0
 
             try:
-                if url:  # Only initialize todo list if we have a URL (start function handles it otherwise)
-                    print("Initializing todo list... ")
-                    await self._initialize_todo_list(user_prompt)
+                # if url:  # Only initialize todo list if we have a URL (start function handles it otherwise)
+                #     print("Initializing todo list... ")
+                #     await self._initialize_todo_list(user_prompt)
 
                 print("Starting agentic cycle...")
                 for iteration in range(start_iteration, max_iterations):
                     # Take screenshot and get element information
                     page_data = await self._take_screenshot_with_bounding_boxes(page)
 
+                    if not page_data:
+                        raise RuntimeError(
+                            "Invalid page: unable to take screenshot or analyze DOM. Please check the URL and try again."
+                        )
                     # Format the user prompt with current page information
                     elements_text = await self._format_elements_text(
                         page_data["highlighted_elements"]
@@ -567,14 +584,11 @@ class Agent:
                     viewport_info = page_data["viewport_info"]
 
                     # Read current todo list
-                    todo_list = await self._read_todo_list()
+                    # todo_list = await self._read_todo_list()
 
                     enhanced_prompt = f"""
                             User prompt: 
 							{user_prompt}
-
-							Current Todo List:
-							{todo_list}
 
 							Current page information:
 							{elements_text}
@@ -586,9 +600,9 @@ class Agent:
 							The screenshot shows the current page with bounding boxes around interactive elements. 
 							Each box has an index number that corresponds to the elements listed above. 
 
-							Please choose the next action to take to complete the task. You must also use the write_file tool to update the todo list as you progress.
+							Please choose the next action to take to complete the task.
 							"""
-                    print("Sending LLM Query...")
+                    print(f"Sending LLM Query {iteration}...")
                     # Call the LLM
                     params = gpt_actions(
                         user_prompt=enhanced_prompt,
@@ -599,7 +613,7 @@ class Agent:
 
                     llm_response = await gpt(params)
 
-                    # Parse for tool calls
+                    # Parse for tool call
                     tool_call = await self._parse_tool_call(llm_response)
 
                     if not tool_call:
@@ -613,8 +627,11 @@ class Agent:
                         break
 
                     # Execute the tool call
-                    result_message = await self._execute_tool_call(tool_call, page)
+                    result_message = await self._execute_tool_call(
+                        tool_call, page, page_data["highlighted_elements"]
+                    )
 
+                    # Create ActionResult object for the tool call
                     results.append(
                         ActionResult(
                             iteration=iteration,
@@ -625,10 +642,10 @@ class Agent:
                     )
 
                     # Check if the agent signaled task completion via write_file with done parameter
-                    if tool_call["name"] == "write_file" and tool_call["arguments"].get(
-                        "done"
-                    ):
-                        break
+                    # if tool_call["name"] == "write_file" and tool_call["arguments"].get(
+                    #     "done"
+                    # ):
+                    #     break
 
                     # Wait a moment for the page to update
                     await asyncio.sleep(1)

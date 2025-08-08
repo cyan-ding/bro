@@ -343,7 +343,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree, getCac
         if (!currentHighlightedElements || currentHighlightedElements.length === 0) {
             if (window._highlightCleanupFunctions) {
                 window._highlightCleanupFunctions.forEach(fn => fn());
-                window._highlightCleanupFunctions = [];
+                window._highlightCleanupFunctions = new Map();
             }
             const container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
             if (container) container.remove();

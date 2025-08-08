@@ -115,13 +115,13 @@ def gpt_actions(
             {
                 "type": "function",
                 "name": "search",
-                "description": "Search Google for a query and navigate to results",
+                "description": "CRITICAL: This is your PRIMARY navigation method. Search Google for a query and navigate to results. Use this to navigate to any website. Do not input direct URLs into this tool - only search queries.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "The search query to perform on Google",
+                            "description": "The search query to perform on Google (e.g., 'google accounts login', 'facebook login', 'amazon.com', etc.)",
                         }
                     },
                     "required": ["query"],
@@ -136,40 +136,48 @@ def gpt_actions(
             #     "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
             #     "strict": True,
             # },
-            {
-                "type": "function",
-                "name": "write_file",
-                "description": "Update the current session's todo list with new content. This will replace the entire content of the todo.md file for this session."
-                "This function should be called after each step to mark off what subtasks have been completed and update what subtasks have yet to be done."
-                "When the user's task is complete or you cannot continue, include a completion section in the content with status (success/failed) and reason.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "content": {
-                            "type": "string",
-                            "description": "The new content to write to the todo.md file. This should contain the updated todo list with boxes checked off if completed. If the task is finished, include a completion section with status and reason.",
-                        },
-                        "done": {
-                            "type": "object",
-                            "description": "Optional parameter to signal task completion. If provided, the agent will stop after writing the file.",
-                            "properties": {
-                                "status": {
-                                    "type": "string",
-                                    "description": "Status of the task completion - either 'success' or 'failed'",
-                                    "enum": ["success", "failed"],
-                                },
-                                "reason": {
-                                    "type": "string",
-                                    "description": "Optional reason for completion or stopping (e.g., 'Task completed successfully', 'Unable to proceed due to missing elements')",
-                                },
-                            },
-                            "required": ["status"],
-                        },
-                    },
-                    "required": ["content"],
-                    "additionalProperties": False,
-                },
-            },
+            # {
+            #     "type": "function",
+            #     "name": "write_file",
+            #     "description": "Update the current session's todo list with new content. This will replace the entire content of the todo.md file for this session. This function should be called after each step to mark off what subtasks have been completed and update what subtasks have yet to be done. When the user's task is complete or you cannot continue, include a completion section in the content with status (success/failed) and reason.",
+            #     "parameters": {
+            #         "type": "object",
+            #         "properties": {
+            #             "content": {
+            #                 "type": "string",
+            #                 "description": "The new content to write to the todo.md file. This should contain the updated todo list with boxes checked off if completed. If the task is finished, include a completion section with status and reason.",
+            #             },
+            #             "done": {
+            #                 "type": "object",
+            #                 "description": "Optional parameter to signal task completion. If provided, the agent will stop after writing the file.",
+            #                 "properties": {
+            #                 "status": {
+            #                     "type": "string",
+            #                     "description": "Status of the task completion - either 'success' or 'failed'",
+            #                     "enum": ["success", "failed"],
+            #                 },
+            #                 "reason": {
+            #                     "type": "string",
+            #                     "description": "Optional reason for completion or stopping (e.g., 'Task completed successfully', 'Unable to proceed due to missing elements')",
+            #                 },
+            #             },
+            #             "required": ["status"],
+            #         },
+            #     },
+            #     "required": ["content"],
+            #     "additionalProperties": False,
+            # },
+            # {
+            #     "type": "function",
+            #     "name": "read_file",
+            #     "description": "Read the current session's todo list to understand the current progress and remaining tasks. Use this to check what has been completed and what still needs to be done.",
+            #     "parameters": {
+            #         "type": "object",
+            #         "properties": {},
+            #         "required": [],
+            #         "additionalProperties": False,
+            #     },
+            # },
         ],
         "tool_choice": "auto",
     }
