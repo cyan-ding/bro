@@ -14,7 +14,7 @@ from typing import Optional
 def gpt_actions(
     user_prompt: str,
     system_prompt: str,
-    model: str = "gpt-4o",
+    model: str = "gpt-5-nano-2025-08-07",
     screenshot: Optional[str] = None,
 ):
     """
@@ -29,120 +29,145 @@ def gpt_actions(
     Returns:
         Dictionary containing the model configuration and tool definitions
     """
-    messages = [
+    query = [
         {"role": "system", "content": system_prompt},
     ]
 
     # Add screenshot if provided
     if screenshot:
-        messages.append(
+        query.append(
             {
                 "role": "user",
                 "content": [
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{screenshot}"},
+                        "type": "input_image",
+                        "image_url": f"data:image/png;base64,{screenshot}",
                     },
-                    {"type": "text", "text": user_prompt},
+                    {"type": "input_text", "text": user_prompt},
                 ],
             }
         )
     else:
-        messages.append({"role": "user", "content": user_prompt})
+        query.append({"role": "user", "content": user_prompt})
 
     return {
         "model": model,
-        "messages": messages,
+        "input": query,
         "tools": [
             {
                 "type": "function",
-                "function": {
-                    "name": "click",
-                    "description": "Click on an interactive element on the page using its index number",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "target": {
-                                "type": "integer",
-                                "description": "The index number of the element to click (e.g., 0, 1, 2, etc.)",
-                            },
+                "name": "click",
+                "description": "Click on an interactive element on the page using its index number",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {
+                            "type": "integer",
+                            "description": "The index number of the element to click (e.g., 0, 1, 2, etc.)",
                         },
-                        "required": ["target"],
                     },
+                    "required": ["target"],
+                    "additionalProperties": False,
+                },
+                "strict": True,
+            },
+            {
+                "type": "function",
+                "name": "text_input",
+                "description": "Enter text into an input field on the page using multiple strategies (fill, type, keyboard)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {
+                            "type": "integer",
+                            "description": "The index number of the input field (e.g., 0, 1, 2, etc.) as provided in the current page information",
+                        },
+                        "input_text": {
+                            "type": "string",
+                            "description": "The text to enter into the input field",
+                        },
+                        "login": {
+                            "type": "string",
+                            "description": "Optional login credential type (e.g., 'GOOGLE_EMAIL', 'GOOGLE_PASSWORD')",
+                        },
+                    },
+                    "required": ["target", "input_text"],
+                    "additionalProperties": False,
                 },
             },
             {
                 "type": "function",
-                "function": {
-                    "name": "text_input",
-                    "description": "Enter text into an input field on the page using multiple strategies (fill, type, keyboard)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "target": {
-                                "type": "integer",
-                                "description": "The index number of the input field (e.g., 0, 1, 2, etc.) as provided in the current page information",
-                            },
-                            "input_text": {
-                                "type": "string",
-                                "description": "The text to enter into the input field",
-                            },
-                            "login": {
-                                "type": "object",
-                                "description": "Optional login credentials object",
-                                "properties": {
-                                    "placeholder": {
-                                        "type": "string",
-                                        "description": "Placeholder for credential type (e.g., 'GOOGLE_EMAIL', 'GOOGLE_PASSWORD')",
-                                    }
+                "name": "scroll",
+                "description": "Scroll the page up or down based on current viewport position",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "how_much": {
+                            "type": "integer",
+                            "description": "Number of pixels to scroll (positive for down, negative for up). Consider current viewport position when choosing amount.",
+                        }
+                    },
+                    "required": ["how_much"],
+                    "additionalProperties": False,
+                },
+                "strict": True,
+            },
+            {
+                "type": "function",
+                "name": "search",
+                "description": "Search Google for a query and navigate to results",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The search query to perform on Google",
+                        }
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+                "strict": True,
+            },
+            # {
+            #     "type": "function",
+            #     "name": "extract",
+            #     "description": "Extract and return the main text content from the current page using Trafilatura",
+            #     "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+            #     "strict": True,
+            # },
+            {
+                "type": "function",
+                "name": "write_file",
+                "description": "Update the current session's todo list with new content. This will replace the entire content of the todo.md file for this session."
+                "This function should be called after each step to mark off what subtasks have been completed and update what subtasks have yet to be done."
+                "When the user's task is complete or you cannot continue, include a completion section in the content with status (success/failed) and reason.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "description": "The new content to write to the todo.md file. This should contain the updated todo list with boxes checked off if completed. If the task is finished, include a completion section with status and reason.",
+                        },
+                        "done": {
+                            "type": "object",
+                            "description": "Optional parameter to signal task completion. If provided, the agent will stop after writing the file.",
+                            "properties": {
+                                "status": {
+                                    "type": "string",
+                                    "description": "Status of the task completion - either 'success' or 'failed'",
+                                    "enum": ["success", "failed"],
                                 },
-                                "required": ["placeholder"],
+                                "reason": {
+                                    "type": "string",
+                                    "description": "Optional reason for completion or stopping (e.g., 'Task completed successfully', 'Unable to proceed due to missing elements')",
+                                },
                             },
+                            "required": ["status"],
                         },
-                        "required": ["target", "input_text"],
                     },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "scroll",
-                    "description": "Scroll the page up or down based on current viewport position",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "how_much": {
-                                "type": "integer",
-                                "description": "Number of pixels to scroll (positive for down, negative for up). Consider current viewport position when choosing amount.",
-                            }
-                        },
-                        "required": ["how_much"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "search",
-                    "description": "Search Google for a query and navigate to results",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "The search query to perform on Google",
-                            }
-                        },
-                        "required": ["query"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "extract",
-                    "description": "Extract and return the main text content from the current page using Trafilatura",
-                    "parameters": {"type": "object", "properties": {}, "required": []},
+                    "required": ["content"],
+                    "additionalProperties": False,
                 },
             },
         ],

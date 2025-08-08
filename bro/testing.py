@@ -63,9 +63,9 @@ async def main() -> None:
                 # google sheets test
                 # "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing",
                 # iframe test
-                "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
+                # "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
                 # sticky element test
-                # "https://en.wikipedia.org/wiki/English_Wikipedia",
+                "https://en.wikipedia.org/wiki/English_Wikipedia",
                 wait_until="domcontentloaded",
             )
         except Exception as e:

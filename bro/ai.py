@@ -13,15 +13,16 @@ different tool sets (CEO, Manager, Worker) used in the Bro agent hierarchy.
 @file purpose: Provides AI interaction functions with caching and tool calling support
 """
 
+import asyncio
 import json
 import os
+from typing import Any, Dict, cast
+
 import aiohttp
 import anthropic
-import asyncio
 from cerebras.cloud.sdk import AsyncCerebras
 from cerebras.cloud.sdk.types.chat.chat_completion import ChatCompletion
 from dotenv import load_dotenv
-from typing import Any, Dict, cast
 from openai import OpenAI
 
 

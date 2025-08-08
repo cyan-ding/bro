@@ -260,7 +260,7 @@ export default function buildDomTree(args = {
     if (window._highlightCleanupFunctions) cleanupHighlights();
 
     const wrappedBuildTree = measureDomOperation(buildTreeRecursive, 'buildDomTree');
-    PERF_METRICS.calls.buildDomTree--; // remove this extra call to measureDomOperation
+    if (debugMode) PERF_METRICS.calls.buildDomTree--; // remove this extra call to measureDomOperation
     const rootId = wrappedBuildTree(document.body);
 
     postProcessMetrics();

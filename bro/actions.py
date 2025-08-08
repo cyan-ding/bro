@@ -145,3 +145,24 @@ async def search(page: Page, query: str):
     search_url = f"https://www.google.com/search?q={encoded_query}"
 
     await page.goto(search_url, wait_until="load")
+
+
+async def write_file(content: str, session_id: str = None):
+    """
+    Write content to the session's todo.md file.
+
+    Args:
+            content: The content to write to the todo.md file
+            session_id: Optional session ID for session-specific files
+    """
+    from pathlib import Path
+
+    # Use session-specific filename if session_id is provided
+    if session_id:
+        file_path = Path(f"todo_{session_id}.md")
+    else:
+        file_path = Path("todo.md")
+
+    # Write the content to the file
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)
