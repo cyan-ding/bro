@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from actions import (
+from .actions import (
     click,
     done,
     input_text,
@@ -24,10 +24,10 @@ from actions import (
     scroll,
     search,
 )
-from ai import gpt
+from .ai import gpt
 from patchright.async_api import Page, async_playwright
 
-from prompts.tools.gpt import gpt_actions
+from prompts.tools.gpt.gpt_actions import gpt_actions
 
 # Import utility functions
 from .action_utils import get_previous_action_description
@@ -545,7 +545,7 @@ class Agent:
 
 async def main():
     # Load the Bro system prompt
-    system_prompt = Path("prompts/roles/bro.txt").read_text(encoding="utf-8")
+    system_prompt = Path("prompts/bro.txt").read_text(encoding="utf-8")
 
     # Create and run the agent
     agent = Agent(system_prompt)

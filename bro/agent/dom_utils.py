@@ -17,7 +17,7 @@ from patchright.async_api import Page
 
 async def load_js_bundle() -> str:
     """Load and bundle the JavaScript code for DOM analysis with caching."""
-    base_path = Path(__file__).parent / "dom"
+    base_path = Path(__file__).parent.parent / "dom"
     cache_file = base_path / "js_bundle_cache.txt"
     files_in_order = [
         "metrics.js",
