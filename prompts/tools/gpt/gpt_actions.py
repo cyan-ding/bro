@@ -115,7 +115,7 @@ def gpt_actions(
             {
                 "type": "function",
                 "name": "search",
-                "description": "CRITICAL: This is your PRIMARY navigation method. Search Google for a query and navigate to results. Use this to navigate to any website. Do not input direct URLs into this tool - only search queries.",
+                "description": "Search Google for a query and navigate to results. Use this to navigate to any website. Do not input direct URLs into this tool - only search queries.",
                 "parameters": {
                     "type": "object",
                     "properties": {

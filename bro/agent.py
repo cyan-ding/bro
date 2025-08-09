@@ -10,7 +10,6 @@ uses element indices for targeting and automatically maps them to XPath selector
 """
 
 import asyncio
-import base64
 import json
 import uuid
 from dataclasses import dataclass
@@ -29,6 +28,14 @@ from ai import gpt
 from patchright.async_api import Page, async_playwright
 
 from prompts.tools.gpt import gpt_actions
+
+# Import utility functions
+from .action_utils import get_previous_action_description
+from .credentials import get_credentials
+from .dom_utils import (
+    format_elements_text,
+    take_screenshot_with_bounding_boxes,
+)
 
 
 @dataclass
@@ -197,194 +204,6 @@ class Agent:
             "result": "Initial setup completed, tool call ready for execution",
         }
 
-    async def _load_js_bundle(self) -> str:
-        """Load and bundle the JavaScript code for DOM analysis with caching."""
-        base_path = Path(__file__).parent / "dom"
-        cache_file = base_path / "js_bundle_cache.txt"
-        files_in_order = [
-            "metrics.js",
-            "highlight.js",
-            "dom_utils.js",
-            "buildDomTree.js",
-        ]
-
-        # Check if cache exists and use it
-        if cache_file.exists():
-            try:
-                cached_bundle = cache_file.read_text(encoding="utf-8")
-                return cached_bundle
-            except (OSError, IOError) as e:
-                print(f"Error reading cache file: {e}")
-                # Continue to rebuild if cache read fails
-
-        # Rebuild the bundle
-        import re
-
-        full_code = []
-        for file_name in files_in_order:
-            file_path = base_path / file_name
-            try:
-                code = file_path.read_text(encoding="utf-8")
-                # Remove import/export statements
-                code = re.sub(r"^\s*import .*from .*", "", code, flags=re.MULTILINE)
-                code = re.sub(r"^\s*export (default )?", "", code, flags=re.MULTILINE)
-                full_code.append(code)
-            except (FileNotFoundError, PermissionError) as e:
-                print(f"Error loading JavaScript file {file_name}: {e}")
-                raise RuntimeError(
-                    f"Failed to load required JavaScript file: {file_name}"
-                )
-
-        # Wrap in an IIFE to expose the main function
-        bundle = f"""
-		(() => {{
-			{"".join(full_code)}
-			window.buildDomTree = buildDomTree;
-		}})();
-		"""
-
-        # Cache the bundle
-        try:
-            cache_file.write_text(bundle, encoding="utf-8")
-        except (OSError, IOError) as e:
-            print(f"Warning: Could not write cache file: {e}")
-
-        return bundle
-
-    async def _take_screenshot_with_bounding_boxes(
-        self, page: Page
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Take a screenshot and analyze the DOM to get bounding boxes and element information.
-
-        Args:
-            page: The Playwright page object
-
-        Returns:
-            Dictionary containing screenshot data and highlighted elements
-        """
-        if page.url == "about:blank":
-            return None
-        print("Walking DOM Tree...")
-        # Load the JavaScript bundle
-        js_bundle = await self._load_js_bundle()
-        await page.evaluate(js_bundle)
-
-        # Call buildDomTree to get element information and highlighting
-        result = await page.evaluate(
-            "(args) => window.buildDomTree(args)",
-            {
-                "doHighlightElements": True,
-                "debugMode": False,
-                "overlapThreshold": 0.4,
-                "indexByPosition": True,
-            },
-        )
-
-        # Get viewport information for smart scrolling
-        viewport_info = await page.evaluate("""
-			() => {
-				const scrollY = window.scrollY;
-				const innerHeight = window.innerHeight;
-				const documentHeight = document.documentElement.scrollHeight;
-				return {
-					innerHeight: innerHeight,
-					documentHeight: documentHeight,
-					pixelsAbove: scrollY,
-					pixelsBelow: documentHeight - (scrollY + innerHeight)
-				};
-			}
-		""")
-        print("Highlighted elements: ", result.get("highlightedElements", []))
-        # Take screenshot
-        screenshot_bytes = await page.screenshot()
-        screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-
-        return {
-            "screenshot": screenshot_base64,
-            "highlighted_elements": result.get("highlightedElements", []),
-            "viewport_info": viewport_info,
-        }
-
-    async def _format_elements_text(self, highlighted_elements: List[Dict]) -> str:
-        """
-        Format the highlighted elements into readable text for the LLM.
-
-        Args:
-            highlighted_elements: List of highlighted element data
-
-        Returns:
-            Formatted text describing all interactive elements
-        """
-        if not highlighted_elements:
-            return "No interactive elements found on the page."
-        print("Formatting elements...")
-        elements_text = "Interactive elements on the page:\n\n"
-        for i, element in enumerate(highlighted_elements):
-            elements_text += f"Index {i}: {element.get('tag', 'unknown')}"
-            if element.get("info", {}).get("textContent"):
-                elements_text += f" - '{element['info']['textContent']}'"
-            if element.get("info", {}).get("href"):
-                elements_text += f" (href: {element['info']['href']})"
-            if element.get("info", {}).get("placeholder"):
-                elements_text += f" (placeholder: {element['info']['placeholder']})"
-            elements_text += "\n"
-
-        return elements_text
-
-    async def _get_credentials(self, placeholder: str) -> Optional[str]:
-        """
-        Get credentials from the credentials file based on placeholder.
-
-        Args:
-            placeholder: The placeholder string (e.g., 'GOOGLE_EMAIL', 'GOOGLE_PASSWORD')
-
-        Returns:
-            The credential value if found, None otherwise
-        """
-        print("Retrieving credentials...")
-        credentials_file = Path("credentials.txt")
-        if not credentials_file.exists():
-            print(
-                "No credentials detected, generating file. Please fill in credentials before proceeding."
-            )
-            credentials_file.write_text(
-                "# Sample credentials file for Bro\n"
-                "# Format: PLACEHOLDER=actual_value\n"
-                "# \n"
-            )
-            value = input(f"Enter value for {placeholder}: ").strip()
-            if value:
-                with open(credentials_file, "a", encoding="utf-8") as f:
-                    f.write(f"{placeholder}={value}\n")
-                return value
-            return None
-
-        credentials = {}
-        try:
-            with open(credentials_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and "=" in line:
-                        key, value = line.split("=", 1)
-                        credentials[key.strip()] = value.strip()
-        except (FileNotFoundError, PermissionError) as e:
-            print(f"Error reading credentials file: {e}")
-            return None
-
-        # Use fuzzy matching to locate the closest key in credentials for the given placeholder
-        import difflib
-
-        if placeholder in credentials:
-            return credentials[placeholder]
-        # Find the closest match using difflib
-        matches = difflib.get_close_matches(
-            placeholder, credentials.keys(), n=1, cutoff=0.6
-        )
-        if matches:
-            return credentials[matches[0]]
-        return None
-
     async def _parse_tool_call(
         self, llm_response: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
@@ -483,7 +302,7 @@ class Agent:
 
                         # Handle login credentials if provided
                         if placeholder:
-                            credentials = await self._get_credentials(placeholder)
+                            credentials = await get_credentials(placeholder)
                             if credentials:
                                 input_text_value = credentials
 
@@ -611,16 +430,17 @@ class Agent:
 
                 print("Starting agentic cycle...")
                 previous_action = None
+                previous_elements = None
                 for iteration in range(start_iteration, max_iterations):
                     # Take screenshot and get element information
-                    page_data = await self._take_screenshot_with_bounding_boxes(page)
+                    page_data = await take_screenshot_with_bounding_boxes(page)
 
                     if not page_data:
                         raise RuntimeError(
                             "Invalid page: unable to take screenshot or analyze DOM. Please check the URL and try again."
                         )
                     # Format the user prompt with current page information
-                    elements_text = await self._format_elements_text(
+                    elements_text = await format_elements_text(
                         page_data["highlighted_elements"]
                     )
                     viewport_info = page_data["viewport_info"]
@@ -630,16 +450,13 @@ class Agent:
 
                     # Add previous action information to the prompt
                     previous_action_text = ""
-                    if previous_action:
+                    if previous_action and previous_elements:
                         if isinstance(previous_action, dict):
-                            action_name = previous_action.get("name", "unknown")
-                            action_args = previous_action.get("arguments", {})
-                            args_str = (
-                                f" with arguments: {action_args}" if action_args else ""
+                            previous_action_text = get_previous_action_description(
+                                previous_action, previous_elements
                             )
-                            previous_action_text = f"\nPrevious action: You executed '{action_name}{args_str}' in the last iteration. Please follow up on this action or continue with the task."
                         else:
-                            previous_action_text = f"\nPrevious action: You executed '{previous_action}' in the last iteration. Please follow up on this action or continue with the task."
+                            previous_action_text = f"\nPrevious action: You executed '{previous_action}' in the last iteration. Please follow up on this action to continue with the task."
 
                     enhanced_prompt = f"""
                             User prompt: 
@@ -709,6 +526,7 @@ class Agent:
                             "name": tool_call["name"],
                             "arguments": tool_call["arguments"],
                         }
+                        previous_elements = page_data["highlighted_elements"]
 
                     # Check if the agent signaled task completion via done function
                     if "STOP_AGENT" in result_messages:
