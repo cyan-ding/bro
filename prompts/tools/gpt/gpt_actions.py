@@ -73,7 +73,7 @@ def gpt_actions(
             },
             {
                 "type": "function",
-                "name": "text_input",
+                "name": "input_text",
                 "description": "Enter text into an input field on the page using multiple strategies (fill, type, keyboard)",
                 "parameters": {
                     "type": "object",
@@ -136,36 +136,39 @@ def gpt_actions(
             #     "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
             #     "strict": True,
             # },
+            {
+                "type": "function",
+                "name": "done",
+                "description": "Signal that the user's task is completed or that the agent is unable to proceed. This will stop the agent execution.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "reason": {
+                            "type": "string",
+                            "description": "Reason for completion or stopping (e.g., 'Task completed successfully', 'Unable to proceed due to missing credentials', 'No interactive elements found')",
+                        },
+                    },
+                    "required": ["reason"],
+                    "additionalProperties": False,
+                },
+                "strict": True,
+            },
             # {
             #     "type": "function",
             #     "name": "write_file",
-            #     "description": "Update the current session's todo list with new content. This will replace the entire content of the todo.md file for this session. This function should be called after each step to mark off what subtasks have been completed and update what subtasks have yet to be done. When the user's task is complete or you cannot continue, include a completion section in the content with status (success/failed) and reason.",
+            #     "description": "Update the current session's todo list with new content. This will replace the entire content of the todo.md file for this session. This function should be called after each step to mark off what subtasks have been completed and update what subtasks have yet to be done.",
             #     "parameters": {
             #         "type": "object",
             #         "properties": {
             #             "content": {
             #                 "type": "string",
-            #                 "description": "The new content to write to the todo.md file. This should contain the updated todo list with boxes checked off if completed. If the task is finished, include a completion section with status and reason.",
+            #                 "description": "The new content to write to the todo.md file. This should contain the updated todo list with boxes checked off if completed.",
             #             },
-            #             "done": {
-            #                 "type": "object",
-            #                 "description": "Optional parameter to signal task completion. If provided, the agent will stop after writing the file.",
-            #                 "properties": {
-            #                 "status": {
-            #                     "type": "string",
-            #                     "description": "Status of the task completion - either 'success' or 'failed'",
-            #                     "enum": ["success", "failed"],
-            #                 },
-            #                 "reason": {
-            #                     "type": "string",
-            #                     "description": "Optional reason for completion or stopping (e.g., 'Task completed successfully', 'Unable to proceed due to missing elements')",
-            #                 },
-            #             },
-            #             "required": ["status"],
             #         },
+            #         "required": ["content"],
+            #         "additionalProperties": False,
             #     },
-            #     "required": ["content"],
-            #     "additionalProperties": False,
+            #     "strict": True,
             # },
             # {
             #     "type": "function",
@@ -177,7 +180,8 @@ def gpt_actions(
             #         "required": [],
             #         "additionalProperties": False,
             #     },
+            #     "strict": True,
             # },
         ],
-        "tool_choice": "auto",
+        "tool_choice": "required",
     }

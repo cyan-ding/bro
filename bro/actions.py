@@ -7,7 +7,7 @@ import trafilatura
 from patchright.async_api import Page
 
 
-async def text_input(page: Page, target: str, input_text: str):
+async def input_text(page: Page, target: str, input_text: str):
     """
     Enter text into an input field using multiple strategies.
 
@@ -26,7 +26,6 @@ async def text_input(page: Page, target: str, input_text: str):
     async def strategy_fill() -> bool:
         """Try fill() method"""
         try:
-            await element.scroll_into_view_if_needed()
             await element.fill(input_text, timeout=5000)
             return True
         except Exception as e:
@@ -36,7 +35,6 @@ async def text_input(page: Page, target: str, input_text: str):
     async def strategy_type() -> bool:
         """Try type() method with delay"""
         try:
-            await element.scroll_into_view_if_needed()
             await element.type(input_text, delay=200)
             return True
         except Exception as e:
@@ -166,3 +164,16 @@ async def write_file(content: str, session_id: str = None):
     # Write the content to the file
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
+
+
+async def done(reason: str):
+    """
+    Signal that the user's task is completed or that the agent is unable to proceed.
+
+    Args:
+            reason: The reason for completion or stopping
+    """
+    # This function serves as a signal to stop the agent execution
+    # The actual stopping logic is handled in the agent loop
+    print(f"Task completion signaled: {reason}")
+    return f"Task completed: {reason}"

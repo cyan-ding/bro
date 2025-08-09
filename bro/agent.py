@@ -19,10 +19,11 @@ from typing import Any, Dict, List, Optional
 
 from actions import (
     click,
+    done,
+    input_text,
     # extract,  # Commented out - will implement later
     scroll,
     search,
-    text_input,
 )
 from ai import gpt
 from patchright.async_api import Page, async_playwright
@@ -180,25 +181,26 @@ class Agent:
 
         llm_response = await gpt(params)
 
-        # Parse for tool call
-        tool_call = await self._parse_tool_call(llm_response)
+        # Parse for tool calls
+        tool_calls = await self._parse_tool_call(llm_response)
 
-        if not tool_call:
+        if not tool_calls:
             return {
                 "status": "error",
                 "result": "LLM did not make a tool call during initial setup. Initial setup failed",
             }
 
-        # For the start function, we'll return the tool call to be executed by the main run loop
+        # For the start function, we'll return the first tool call to be executed by the main run loop
         return {
             "status": "success",
-            "tool_call": tool_call,
+            "tool_call": tool_calls[0],  # Take the first tool call
             "result": "Initial setup completed, tool call ready for execution",
         }
 
     async def _load_js_bundle(self) -> str:
-        """Load and bundle the JavaScript code for DOM analysis."""
+        """Load and bundle the JavaScript code for DOM analysis with caching."""
         base_path = Path(__file__).parent / "dom"
+        cache_file = base_path / "js_bundle_cache.txt"
         files_in_order = [
             "metrics.js",
             "highlight.js",
@@ -206,6 +208,16 @@ class Agent:
             "buildDomTree.js",
         ]
 
+        # Check if cache exists and use it
+        if cache_file.exists():
+            try:
+                cached_bundle = cache_file.read_text(encoding="utf-8")
+                return cached_bundle
+            except (OSError, IOError) as e:
+                print(f"Error reading cache file: {e}")
+                # Continue to rebuild if cache read fails
+
+        # Rebuild the bundle
         import re
 
         full_code = []
@@ -224,12 +236,20 @@ class Agent:
                 )
 
         # Wrap in an IIFE to expose the main function
-        return f"""
+        bundle = f"""
 		(() => {{
 			{"".join(full_code)}
 			window.buildDomTree = buildDomTree;
 		}})();
 		"""
+
+        # Cache the bundle
+        try:
+            cache_file.write_text(bundle, encoding="utf-8")
+        except (OSError, IOError) as e:
+            print(f"Warning: Could not write cache file: {e}")
+
+        return bundle
 
     async def _take_screenshot_with_bounding_boxes(
         self, page: Page
@@ -275,7 +295,7 @@ class Agent:
 				};
 			}
 		""")
-        print("Taking screenshot...")
+        print("Highlighted elements: ", result.get("highlightedElements", []))
         # Take screenshot
         screenshot_bytes = await page.screenshot()
         screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
@@ -367,136 +387,151 @@ class Agent:
 
     async def _parse_tool_call(
         self, llm_response: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         """
-        Parse the LLM response for a single tool call according to OpenAI documentation.
+        Parse the LLM response for multiple tool calls according to OpenAI documentation.
 
         Args:
             llm_response: The response from the LLM
 
         Returns:
-            Single tool call data if found, None otherwise
+            List of tool call data if found, empty list otherwise
         """
-        print("Parsing tool call...")
+        print("Parsing tool calls...")
         if not llm_response:
-            return None
+            return []
 
-        # Find the first function call
+        tool_calls = []
+        # Find all function calls
         for item in llm_response.output:
             if item.type == "function_call":
                 function_call = item
                 try:
                     function_call_arguments = json.loads(function_call.arguments)
-                    return {
-                        "name": function_call.name,
-                        "arguments": function_call_arguments,
-                    }
+                    tool_calls.append(
+                        {
+                            "name": function_call.name,
+                            "arguments": function_call_arguments,
+                        }
+                    )
                 except (json.JSONDecodeError, KeyError) as e:
                     print(f"Error parsing function call: {e}")
                     continue
 
-        return None
+        return tool_calls
 
     async def _execute_tool_call(
         self,
-        tool_call: Dict[str, Any],
+        tool_calls: List[Dict[str, Any]],
         page: Page,
         highlighted_elements: List[Dict[str, Any]],
-    ) -> str:
+    ) -> List[str]:
         """
-        Execute a single tool call using the appropriate action function.
+        Execute multiple tool calls using the appropriate action functions.
 
         Args:
-            tool_call: Single tool call data to execute
+            tool_calls: List of tool call data to execute
             page: The Playwright page object
             highlighted_elements: List of highlighted element data for mapping indices to xpaths
 
         Returns:
-            Result message from the tool execution
+            List of result messages from the tool executions
         """
-        tool_name = tool_call["name"]
-        arguments = tool_call["arguments"]
+        results = []
 
-        print(f"Executing tool: {tool_name}")
+        for tool_call in tool_calls:
+            tool_name = tool_call.get("name")
+            arguments = tool_call.get("arguments")
 
-        try:
-            match tool_name:
-                case "click":
-                    target_index = arguments.get("target")
+            print(f"Executing tool: {tool_name}")
 
-                    if target_index is None:
-                        return "Error: target is required for click"
+            try:
+                match tool_name:
+                    case "click":
+                        target_index = arguments.get("target")
 
-                    if target_index >= len(highlighted_elements):
-                        return f"Error: Invalid target index {target_index}"
+                        if target_index is None:
+                            results.append("Error: target is required for click")
+                            continue
 
-                    target_xpath = highlighted_elements[target_index]["xpath"]
-                    await click(page, target_xpath)
-                    return f"Successfully clicked on element at index {target_index}"
+                        if target_index >= len(highlighted_elements):
+                            results.append(
+                                f"Error: Invalid target index {target_index}"
+                            )
+                            continue
 
-                case "text_input":
-                    target_index = arguments.get("target")
-                    input_text = arguments.get("input_text")
-                    login_info = arguments.get("login")
+                        target_xpath = highlighted_elements[target_index]["xpath"]
+                        await click(page, target_xpath)
+                        results.append(
+                            f"Successfully clicked on element at index {target_index}"
+                        )
 
-                    if target_index is None:
-                        return "Error: target is required for text_input"
+                    case "input_text":
+                        target_index = arguments.get("target")
+                        input_text_value = arguments.get("input_text")
+                        placeholder = arguments.get("login")
 
-                    if target_index >= len(highlighted_elements):
-                        return f"Error: Invalid target index {target_index}"
+                        if target_index is None:
+                            results.append("Error: target is required for text_input")
+                            continue
 
-                    # Handle login credentials if provided
-                    if login_info:
-                        placeholder = login_info.get("placeholder")
-                        credentials = await self._get_credentials(placeholder)
-                        if credentials:
-                            input_text = credentials
+                        if target_index >= len(highlighted_elements):
+                            results.append(
+                                f"Error: Invalid target index {target_index}"
+                            )
+                            continue
 
-                    if not input_text:
-                        return "Error: input_text is required for text_input"
+                        # Handle login credentials if provided
+                        if placeholder:
+                            credentials = await self._get_credentials(placeholder)
+                            if credentials:
+                                input_text_value = credentials
 
-                    target_xpath = highlighted_elements[target_index]["xpath"]
-                    await text_input(page, target_xpath, input_text)
-                    return f"Successfully entered text '{input_text}' into element at index {target_index}"
+                        if not input_text_value:
+                            results.append(
+                                "Error: input_text is required for text_input"
+                            )
+                            continue
 
-                case "scroll":
-                    how_much = arguments.get("how_much")
-                    if how_much is None:
-                        return "Error: how_much is required for scroll"
-                    await scroll(page, how_much)
-                    return f"Successfully scrolled by {how_much} pixels"
+                        target_xpath = highlighted_elements[target_index]["xpath"]
+                        await input_text(page, target_xpath, input_text_value)
+                        results.append(
+                            f"Successfully entered text '{input_text_value}' into element at index {target_index}"
+                        )
 
-                case "search":
-                    query = arguments.get("query")
-                    if not query:
-                        return "Error: query is required for search"
-                    await search(page, query)
-                    return f"Successfully searched for: {query}"
+                    case "scroll":
+                        how_much = arguments.get("how_much")
+                        if how_much is None:
+                            results.append("Error: how_much is required for scroll")
+                            continue
+                        await scroll(page, how_much)
+                        results.append(f"Successfully scrolled by {how_much} pixels")
 
-                # case "write_file":
-                #     content = arguments.get("content")
-                #     done_info = arguments.get("done")
+                    case "search":
+                        query = arguments.get("query")
+                        if not query:
+                            results.append("Error: query is required for search")
+                            continue
+                        await search(page, query)
+                        results.append(f"Successfully searched for: {query}")
 
-                #     if not content:
-                #         return "Error: content is required for write_file"
+                    case "done":
+                        reason = arguments.get("reason")
+                        if not reason:
+                            results.append("Error: reason is required for done")
+                            continue
+                        result = await done(reason)
+                        results.append(result)
+                        # Signal to stop the agent loop
+                        results.append("STOP_AGENT")
 
-                #     await write_file(content, self.session_id)
+                    case _:
+                        results.append(f"Unknown tool: {tool_name}")
 
-                #     if done_info:
-                #         status = done_info.get("status", "unknown")
-                #         return f"Successfully updated {self.todo_file} and marked task as {status}"
-                #     else:
-                #         return f"Successfully updated {self.todo_file} with new content"
+            except Exception as e:
+                results.append(f"Error executing {tool_name}: {str(e)}")
 
-                # case "read_file":
-                #     # This is handled separately - just return the current todo list
-                #     return await self._read_todo_list()
-
-                case _:
-                    return f"Unknown tool: {tool_name}"
-
-        except Exception as e:
-            return f"Error executing {tool_name}: {str(e)}"
+        return results
 
     async def run(
         self, user_prompt: str, url: str = "", max_iterations: int = 10
@@ -539,8 +574,8 @@ class Agent:
 
                 # Execute the initial tool call from start function
                 initial_tool_call = start_result["tool_call"]
-                result_message = await self._execute_tool_call(
-                    initial_tool_call, page, []
+                result_messages = await self._execute_tool_call(
+                    [initial_tool_call], page, []
                 )
 
                 # Initialize results list
@@ -552,9 +587,15 @@ class Agent:
                         iteration=0,
                         action=initial_tool_call["name"],
                         arguments=initial_tool_call["arguments"],
-                        result=result_message,
+                        result=result_messages[0] if result_messages else "No result",
                     )
                 )
+
+                # Set the previous action for the main loop
+                previous_action = {
+                    "name": initial_tool_call["name"],
+                    "arguments": initial_tool_call["arguments"],
+                }
 
                 # Continue with the main loop starting from iteration 1
                 start_iteration = 1
@@ -569,6 +610,7 @@ class Agent:
                 #     await self._initialize_todo_list(user_prompt)
 
                 print("Starting agentic cycle...")
+                previous_action = None
                 for iteration in range(start_iteration, max_iterations):
                     # Take screenshot and get element information
                     page_data = await self._take_screenshot_with_bounding_boxes(page)
@@ -586,6 +628,19 @@ class Agent:
                     # Read current todo list
                     # todo_list = await self._read_todo_list()
 
+                    # Add previous action information to the prompt
+                    previous_action_text = ""
+                    if previous_action:
+                        if isinstance(previous_action, dict):
+                            action_name = previous_action.get("name", "unknown")
+                            action_args = previous_action.get("arguments", {})
+                            args_str = (
+                                f" with arguments: {action_args}" if action_args else ""
+                            )
+                            previous_action_text = f"\nPrevious action: You executed '{action_name}{args_str}' in the last iteration. Please follow up on this action or continue with the task."
+                        else:
+                            previous_action_text = f"\nPrevious action: You executed '{previous_action}' in the last iteration. Please follow up on this action or continue with the task."
+
                     enhanced_prompt = f"""
                             User prompt: 
 							{user_prompt}
@@ -600,6 +655,8 @@ class Agent:
 							The screenshot shows the current page with bounding boxes around interactive elements. 
 							Each box has an index number that corresponds to the elements listed above. 
 
+							{previous_action_text}
+
 							Please choose the next action to take to complete the task.
 							"""
                     print(f"Sending LLM Query {iteration}...")
@@ -613,10 +670,11 @@ class Agent:
 
                     llm_response = await gpt(params)
 
-                    # Parse for tool call
-                    tool_call = await self._parse_tool_call(llm_response)
+                    print("LLM Response: ", llm_response)
+                    # Parse for tool calls
+                    tool_calls = await self._parse_tool_call(llm_response)
 
-                    if not tool_call:
+                    if not tool_calls:
                         results.append(
                             ActionResult(
                                 iteration=iteration,
@@ -626,26 +684,36 @@ class Agent:
                         )
                         break
 
-                    # Execute the tool call
-                    result_message = await self._execute_tool_call(
-                        tool_call, page, page_data["highlighted_elements"]
+                    # Execute the tool calls
+                    result_messages = await self._execute_tool_call(
+                        tool_calls, page, page_data["highlighted_elements"]
                     )
 
-                    # Create ActionResult object for the tool call
-                    results.append(
-                        ActionResult(
-                            iteration=iteration,
-                            action=tool_call["name"],
-                            arguments=tool_call["arguments"],
-                            result=result_message,
+                    # Create ActionResult objects for each tool call
+                    for i, tool_call in enumerate(tool_calls):
+                        result_message = (
+                            result_messages[i]
+                            if i < len(result_messages)
+                            else "No result"
                         )
-                    )
+                        results.append(
+                            ActionResult(
+                                iteration=iteration,
+                                action=tool_call["name"],
+                                arguments=tool_call["arguments"],
+                                result=result_message,
+                            )
+                        )
+                        # Update previous action for next iteration
+                        previous_action = {
+                            "name": tool_call["name"],
+                            "arguments": tool_call["arguments"],
+                        }
 
-                    # Check if the agent signaled task completion via write_file with done parameter
-                    # if tool_call["name"] == "write_file" and tool_call["arguments"].get(
-                    #     "done"
-                    # ):
-                    #     break
+                    # Check if the agent signaled task completion via done function
+                    if "STOP_AGENT" in result_messages:
+                        print("Agent signaled task completion, stopping execution.")
+                        break
 
                     # Wait a moment for the page to update
                     await asyncio.sleep(1)
