@@ -160,12 +160,36 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
      * Checks if an element is visually rendered on the page (has non-zero dimensions and is not hidden).
      */
     function isElementVisible(element) {
-        const style = getCachedComputedStyle(element);
-        return element.offsetWidth > 0 && element.offsetHeight > 0 &&
-            style.visibility !== "hidden"
-            && style.display !== "none"
-            && parseFloat(style.opacity) > 0
-            && element.getClientRects().length > 0;
+    	// Filter common hidden patterns
+    	return !(
+    		element.closest('[aria-hidden="true"]') ||
+    		element.hasAttribute('hidden') ||
+    		element.getAttribute('type') === 'hidden' ||
+    		(() => {
+    			try {
+    				if (typeof element.checkVisibility === 'function') {
+    					if (!element.checkVisibility()) return true;
+    				}
+    			} catch (_) {}
+    			return false;
+    		})() ||
+    		(() => {
+    			const style = getCachedComputedStyle(element);
+    			return (
+    				!style ||
+    				style.visibility === 'hidden' ||
+    				style.display === 'none' ||
+    				style.pointerEvents === 'none' ||
+    				parseFloat(style.opacity) === 0
+    			);
+    		})() ||
+    		(() => {
+    			const rects = element.getClientRects();
+    			return !rects || rects.length === 0;
+    		})() ||
+    		element.offsetWidth <= 0 ||
+    		element.offsetHeight <= 0
+    	);
     }
 
     /**

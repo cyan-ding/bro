@@ -37,17 +37,20 @@ import { createHighlightUtils } from './highlight.js';
  */
 export default function buildDomTree(args = {
     doHighlightElements: true,
-    debugMode: true,
+    debugMode: false,
     overlapThreshold: 0.7, // Threshold for area overlap detection (0.7 = 70%)
     indexByPosition: true, // Whether to index interactive elements by position
 }) {
+    // mark that dom tree has been injnected
+    window.domTreeInjected = true;
+    
     const { doHighlightElements, debugMode, overlapThreshold, indexByPosition } = args;
 
     // --- Instantiate helpers with shared state ---
     const { PERF_METRICS, measureDomOperation, postProcessMetrics, pushTiming, popTiming } = createMetrics(debugMode);
     const domUtils = createDomUtils(debugMode, PERF_METRICS, measureDomOperation);
     const { highlightElement, cleanupHighlights, getHighlightedElements, createScrollHandler } = 
-        createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree, domUtils.getCachedBoundingRect);
+        createHighlightUtils(pushTiming, popTiming, domUtils.getXPathTree);
 
     // --- Main state ---
     let highlightIndex = 0;
@@ -258,6 +261,11 @@ export default function buildDomTree(args = {
     // --- Execution ---
     domUtils.DOM_CACHE.clearCache();
     if (window._highlightCleanupFunctions) cleanupHighlights();
+    if (window._scrollHandler) { 
+        // remove scroll handler after every buildDomTree call; this happens by default on opening new pages, but needs to be done manually for SPAs
+        window.removeEventListener('scroll', window._scrollHandler, true);
+        window._scrollHandler = null;
+    }
 
     const wrappedBuildTree = measureDomOperation(buildTreeRecursive, 'buildDomTree');
     if (debugMode) PERF_METRICS.calls.buildDomTree--; // remove this extra call to measureDomOperation
@@ -269,6 +277,7 @@ export default function buildDomTree(args = {
     if (indexByPosition) {
         const scrollHandler = createScrollHandler(INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
         window.addEventListener('scroll', scrollHandler, true);
+        window._scrollHandler = scrollHandler;
     }
     
     return {

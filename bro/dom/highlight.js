@@ -8,7 +8,7 @@
  * (`pushTiming`, `popTiming`) to integrate with performance measurement.
  */
 
-export function createHighlightUtils(pushTiming, popTiming, getXPathTree, getCachedBoundingRect) {
+export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
 
     const HIGHLIGHT_CONTAINER_ID = "playwright-highlight-container";
     
@@ -342,7 +342,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree, getCac
         // If no current elements provided, do full cleanup
         if (!currentHighlightedElements || currentHighlightedElements.length === 0) {
             if (window._highlightCleanupFunctions) {
-                window._highlightCleanupFunctions.forEach(fn => fn());
+                window._highlightCleanupFunctions.forEach((fn, _) => fn());
                 window._highlightCleanupFunctions = new Map();
             }
             const container = document.getElementById(HIGHLIGHT_CONTAINER_ID);

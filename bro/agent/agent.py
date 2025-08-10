@@ -16,6 +16,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from patchright.async_api import Page, async_playwright
+
+from prompts.tools.gpt.gpt_actions import gpt_actions
+
+# Import utility functions
+from .action_utils import get_previous_action_description
 from .actions import (
     click,
     done,
@@ -25,12 +31,6 @@ from .actions import (
     search,
 )
 from .ai import gpt
-from patchright.async_api import Page, async_playwright
-
-from prompts.tools.gpt.gpt_actions import gpt_actions
-
-# Import utility functions
-from .action_utils import get_previous_action_description
 from .credentials import get_credentials
 from .dom_utils import (
     format_elements_text,
@@ -62,6 +62,12 @@ class ActionResult:
         if self.arguments is not None:
             result_dict["arguments"] = self.arguments  # arguments of tool call
         return result_dict
+
+    def __str__(self) -> str:
+        """Return a formatted string representation for real-time visibility."""
+        status = "✅ SUCCESS" if not self.result.startswith("Error") else "❌ ERROR"
+        args_str = f" | Args: {self.arguments}" if self.arguments else ""
+        return f"[Iteration {self.iteration}] {status} | {self.action}{args_str} | {self.result}"
 
 
 class Agent:
@@ -262,7 +268,7 @@ class Agent:
             tool_name = tool_call.get("name")
             arguments = tool_call.get("arguments")
 
-            print(f"Executing tool: {tool_name}")
+            print(f"🔧 Executing tool: {tool_name} with arguments: {arguments}")
 
             try:
                 match tool_name:
@@ -270,20 +276,27 @@ class Agent:
                         target_index = arguments.get("target")
 
                         if target_index is None:
-                            results.append("Error: target is required for click")
+                            error_msg = "Error: target is required for click"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
 
                         if target_index >= len(highlighted_elements):
-                            results.append(
-                                f"Error: Invalid target index {target_index}"
-                            )
+                            error_msg = f"Error: Invalid target index {target_index} (max: {len(highlighted_elements) - 1})"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
 
                         target_xpath = highlighted_elements[target_index]["xpath"]
+                        print(
+                            f"🎯 Clicking element at index {target_index} with xpath: {target_xpath}"
+                        )
                         await click(page, target_xpath)
-                        results.append(
+                        success_msg = (
                             f"Successfully clicked on element at index {target_index}"
                         )
+                        print(f"✅ {success_msg}")
+                        results.append(success_msg)
 
                     case "input_text":
                         target_index = arguments.get("target")
@@ -291,64 +304,96 @@ class Agent:
                         placeholder = arguments.get("login")
 
                         if target_index is None:
-                            results.append("Error: target is required for text_input")
+                            error_msg = "Error: target is required for text_input"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
 
                         if target_index >= len(highlighted_elements):
-                            results.append(
-                                f"Error: Invalid target index {target_index}"
-                            )
+                            error_msg = f"Error: Invalid target index {target_index} (max: {len(highlighted_elements) - 1})"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
 
                         # Handle login credentials if provided
                         if placeholder:
+                            print(
+                                f"🔐 Looking up credentials for placeholder: {placeholder}"
+                            )
                             credentials = await get_credentials(placeholder)
                             if credentials:
                                 input_text_value = credentials
+                                print(f"🔐 Found credentials for {placeholder}")
 
                         if not input_text_value:
-                            results.append(
-                                "Error: input_text is required for text_input"
-                            )
+                            error_msg = "Error: input_text is required for text_input"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
 
                         target_xpath = highlighted_elements[target_index]["xpath"]
-                        await input_text(page, target_xpath, input_text_value)
-                        results.append(
-                            f"Successfully entered text '{input_text_value}' into element at index {target_index}"
+                        print(
+                            f"📝 Entering text '{input_text_value}' into element at index {target_index} with xpath: {target_xpath}"
                         )
+                        await input_text(page, target_xpath, input_text_value)
+                        success_msg = f"Successfully entered text '{input_text_value}' into element at index {target_index}"
+                        print(f"✅ {success_msg}")
+                        results.append(success_msg)
 
                     case "scroll":
                         how_much = arguments.get("how_much")
                         if how_much is None:
-                            results.append("Error: how_much is required for scroll")
+                            error_msg = "Error: how_much is required for scroll"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
+                        print(f"📜 Scrolling by {how_much} pixels")
                         await scroll(page, how_much)
-                        results.append(f"Successfully scrolled by {how_much} pixels")
+                        success_msg = f"Successfully scrolled by {how_much} pixels"
+                        print(f"✅ {success_msg}")
+                        results.append(success_msg)
 
                     case "search":
                         query = arguments.get("query")
                         if not query:
-                            results.append("Error: query is required for search")
+                            error_msg = "Error: query is required for search"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
+                        print(f"🔍 Searching for: {query}")
                         await search(page, query)
-                        results.append(f"Successfully searched for: {query}")
+                        success_msg = f"Successfully searched for: {query}"
+                        print(f"✅ {success_msg}")
+                        results.append(success_msg)
 
                     case "done":
                         reason = arguments.get("reason")
                         if not reason:
-                            results.append("Error: reason is required for done")
+                            error_msg = "Error: reason is required for done"
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
                             continue
+                        print(f"🏁 Task completed with reason: {reason}")
                         result = await done(reason)
                         results.append(result)
+                        print(f"✅ {result}")
                         # Signal to stop the agent loop
                         results.append("STOP_AGENT")
+                        print("🛑 Agent signaled task completion")
 
                     case _:
-                        results.append(f"Unknown tool: {tool_name}")
+                        error_msg = f"Unknown tool: {tool_name}"
+                        print(f"❌ {error_msg}")
+                        results.append(error_msg)
 
             except Exception as e:
-                results.append(f"Error executing {tool_name}: {str(e)}")
+                error_msg = f"Error executing {tool_name}: {str(e)}"
+                print(f"💥 EXCEPTION: {error_msg}")
+                print(f"💥 Exception type: {type(e).__name__}")
+                import traceback
+
+                print(f"💥 Traceback: {traceback.format_exc()}")
+                results.append(error_msg)
 
         return results
 
@@ -383,16 +428,17 @@ class Agent:
                 start_result = await self._start(user_prompt)
 
                 if start_result["status"] == "error":
-                    return [
-                        ActionResult(
-                            iteration=0,
-                            action="start",
-                            result=start_result["result"],
-                        )
-                    ]
+                    error_result = ActionResult(
+                        iteration=0,
+                        action="start",
+                        result=start_result["result"],
+                    )
+                    print(f"❌ {error_result}")
+                    return [error_result]
 
                 # Execute the initial tool call from start function
                 initial_tool_call = start_result["tool_call"]
+                print(f"🚀 Executing initial tool call: {initial_tool_call['name']}")
                 result_messages = await self._execute_tool_call(
                     [initial_tool_call], page, []
                 )
@@ -401,14 +447,14 @@ class Agent:
                 results = []
 
                 # Create ActionResult object for the initial tool call
-                results.append(
-                    ActionResult(
-                        iteration=0,
-                        action=initial_tool_call["name"],
-                        arguments=initial_tool_call["arguments"],
-                        result=result_messages[0] if result_messages else "No result",
-                    )
+                initial_result = ActionResult(
+                    iteration=0,
+                    action=initial_tool_call["name"],
+                    arguments=initial_tool_call["arguments"],
+                    result=result_messages[0] if result_messages else "No result",
                 )
+                print(f"📊 {initial_result}")
+                results.append(initial_result)
 
                 # Set the previous action for the main loop
                 previous_action = {
@@ -487,20 +533,23 @@ class Agent:
 
                     llm_response = await gpt(params)
 
-                    print("LLM Response: ", llm_response)
                     # Parse for tool calls
                     tool_calls = await self._parse_tool_call(llm_response)
 
                     if not tool_calls:
-                        results.append(
-                            ActionResult(
-                                iteration=iteration,
-                                action="no_tool_call",
-                                result="LLM did not make a tool call - task may be complete, or tool call failed",
-                            )
+                        print(f"⚠️  Iteration {iteration}: No tool calls made by LLM")
+                        no_tool_result = ActionResult(
+                            iteration=iteration,
+                            action="no_tool_call",
+                            result="ERROR: LLM did not make a tool call - task may be complete, or tool call failed",
                         )
+                        print(f"📊 {no_tool_result}")
+                        results.append(no_tool_result)
                         break
 
+                    print(
+                        f"🔄 Iteration {iteration}: Executing {len(tool_calls)} tool call(s)"
+                    )
                     # Execute the tool calls
                     result_messages = await self._execute_tool_call(
                         tool_calls, page, page_data["highlighted_elements"]
@@ -513,14 +562,14 @@ class Agent:
                             if i < len(result_messages)
                             else "No result"
                         )
-                        results.append(
-                            ActionResult(
-                                iteration=iteration,
-                                action=tool_call["name"],
-                                arguments=tool_call["arguments"],
-                                result=result_message,
-                            )
+                        action_result = ActionResult(
+                            iteration=iteration,
+                            action=tool_call["name"],
+                            arguments=tool_call["arguments"],
+                            result=result_message,
                         )
+                        print(f"📊 {action_result}")
+                        results.append(action_result)
                         # Update previous action for next iteration
                         previous_action = {
                             "name": tool_call["name"],
@@ -530,9 +579,10 @@ class Agent:
 
                     # Check if the agent signaled task completion via done function
                     if "STOP_AGENT" in result_messages:
-                        print("Agent signaled task completion, stopping execution.")
+                        print("🛑 Agent signaled task completion, stopping execution.")
                         break
 
+                    print("⏳ Waiting 1 second for page to update...")
                     # Wait a moment for the page to update
                     await asyncio.sleep(1)
 

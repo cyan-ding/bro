@@ -78,10 +78,16 @@ async def take_screenshot_with_bounding_boxes(page: Page) -> Optional[Dict[str, 
     """
     if page.url == "about:blank":
         return None
+
+    # Wait a moment for the page to be fully stable
+    await page.wait_for_load_state("networkidle")
+
     print("Walking DOM Tree...")
     # Load the JavaScript bundle
-    js_bundle = await load_js_bundle()
-    await page.evaluate(js_bundle)
+    domTreeInjected = await page.evaluate("window.domTreeInjected")
+    if not domTreeInjected:
+        js_bundle = await load_js_bundle()
+        await page.evaluate(js_bundle)
 
     # Call buildDomTree to get element information and highlighting
     result = await page.evaluate(
@@ -89,10 +95,12 @@ async def take_screenshot_with_bounding_boxes(page: Page) -> Optional[Dict[str, 
         {
             "doHighlightElements": True,
             "debugMode": False,
-            "overlapThreshold": 0.4,
+            "overlapThreshold": 0.7,
             "indexByPosition": True,
         },
     )
+
+    print("Highlighted Elements: ", result.get("highlightedElements"))
 
     # Get viewport information for smart scrolling
     viewport_info = await page.evaluate("""
@@ -108,7 +116,6 @@ async def take_screenshot_with_bounding_boxes(page: Page) -> Optional[Dict[str, 
             };
         }
     """)
-    print("Highlighted elements: ", result.get("highlightedElements", []))
     # Take screenshot
     screenshot_bytes = await page.screenshot()
     screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")

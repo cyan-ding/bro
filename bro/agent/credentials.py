@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 
-def get_credentials(placeholder: str) -> Optional[str]:
+async def get_credentials(placeholder: str) -> Optional[str]:
     """
     Get credentials from the credentials file based on placeholder.
 
