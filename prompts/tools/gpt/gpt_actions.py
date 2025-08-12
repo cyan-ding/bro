@@ -90,6 +90,10 @@ def gpt_actions(
                             "type": "string",
                             "description": "Optional login credential type (e.g., 'GOOGLE_EMAIL', 'GOOGLE_PASSWORD')",
                         },
+                        "retry_login": {
+                            "type": "boolean",
+                            "description": "Set to true if the web page shows an error message about incorrect credentials.",
+                        },
                     },
                     "required": ["target", "input_text"],
                     "additionalProperties": False,

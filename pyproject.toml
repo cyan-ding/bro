@@ -22,7 +22,6 @@ dependencies = [
     "pre-commit",
     "pydantic",
     "cerebras-cloud-sdk",
-    "beautifulsoup4",
     "anthropic",
     "openai",
     "chardet",

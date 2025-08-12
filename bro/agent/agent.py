@@ -291,6 +291,7 @@ class Agent:
                         print(
                             f"🎯 Clicking element at index {target_index} with xpath: {target_xpath}"
                         )
+
                         await click(page, target_xpath)
                         success_msg = (
                             f"Successfully clicked on element at index {target_index}"
@@ -302,6 +303,7 @@ class Agent:
                         target_index = arguments.get("target")
                         input_text_value = arguments.get("input_text")
                         placeholder = arguments.get("login")
+                        retry_login = bool(arguments.get("retry_login", False))
 
                         if target_index is None:
                             error_msg = "Error: target is required for text_input"
@@ -320,10 +322,19 @@ class Agent:
                             print(
                                 f"🔐 Looking up credentials for placeholder: {placeholder}"
                             )
-                            credentials = await get_credentials(placeholder)
+                            credentials = await get_credentials(
+                                placeholder, retry_login=retry_login
+                            )
                             if credentials:
                                 input_text_value = credentials
                                 print(f"🔐 Found credentials for {placeholder}")
+                            else:
+                                # If missing and retry requested, get_credentials already prompted and may have updated file
+                                # When still None, we just report that credential is unavailable and allow agent to continue.
+                                msg = f"Credential '{placeholder}' is unavailable."
+                                print(msg)
+                                results.append(msg)
+                                continue
 
                         if not input_text_value:
                             error_msg = "Error: input_text is required for text_input"
@@ -420,6 +431,7 @@ class Agent:
                 no_viewport=True,
             )
 
+            # Install DOM change detector early so it persists across navigations
             page = await browser_context.new_page()
 
             # If no URL provided, use the start function to initialize the process
@@ -477,19 +489,39 @@ class Agent:
                 print("Starting agentic cycle...")
                 previous_action = None
                 previous_elements = None
+                last_signature: Optional[str] = None
                 for iteration in range(start_iteration, max_iterations):
-                    # Take screenshot and get element information
-                    page_data = await take_screenshot_with_bounding_boxes(page)
+                    # Require a DOM change before proceeding to next iteration
+                    # Take screenshot and get element information (optionally wait for change)
+                    should_wait_for_change = False
+                    if previous_action and isinstance(previous_action, dict):
+                        action_name = previous_action.get("name")
+                        # Wait for change primarily after actions that likely cause SPA updates
+                        should_wait_for_change = action_name in (
+                            "click",
+                            "input_text",
+                            "search",
+                        )
+
+                    page_data = await take_screenshot_with_bounding_boxes(
+                        page,
+                        wait_for_change=should_wait_for_change,
+                        previous_signature=last_signature,
+                    )
 
                     if not page_data:
                         raise RuntimeError(
                             "Invalid page: unable to take screenshot or analyze DOM. Please check the URL and try again."
                         )
+
+                    viewport_info = page_data["viewport_info"]
+                    # Update signature for next iteration change detection
+                    last_signature = page_data.get("signature")
+
                     # Format the user prompt with current page information
                     elements_text = await format_elements_text(
                         page_data["highlighted_elements"]
                     )
-                    viewport_info = page_data["viewport_info"]
 
                     # Read current todo list
                     # todo_list = await self._read_todo_list()
@@ -582,10 +614,8 @@ class Agent:
                         print("🛑 Agent signaled task completion, stopping execution.")
                         break
 
-                    print("⏳ Waiting 1 second for page to update...")
-                    # Wait a moment for the page to update
-                    await asyncio.sleep(1)
-
+                    # For testing, skip waiting on DOM change; observer prints when changes occur
+                    await asyncio.sleep(2)
                 return results
 
             finally:
@@ -599,7 +629,10 @@ async def main():
 
     # Create and run the agent
     agent = Agent(system_prompt)
-    results = await agent.run("Log into my google account")
+    results = await agent.run(
+        "Log into my google account",
+        "https://accounts.google.com/v3/signin/identifier?checkedDomains=youtube&continue=https%3A%2F%2Faccounts.google.com%2F&flowEntry=ServiceLogin&flowName=GlifWebSignIn&followup=https%3A%2F%2Faccounts.google.com%2F&ifkv=AdBytiOYvUAqRJUi6-iHJ04pgCOhk2j6OcoLbvaXOx0XwJgfuW3iXQLuT72oPUhYKHIGRfbxqqxE&pstMsg=1&dsh=S757206094%3A1754856863191091",
+    )
 
     # Print results
     for result in results:

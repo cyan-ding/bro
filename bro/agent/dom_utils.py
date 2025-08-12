@@ -7,7 +7,10 @@ screenshot capture, and element description formatting.
 @file purpose: Provides DOM analysis and element utilities for Bro
 """
 
+import asyncio
 import base64
+import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -66,21 +69,181 @@ async def load_js_bundle() -> str:
     return bundle
 
 
-async def take_screenshot_with_bounding_boxes(page: Page) -> Optional[Dict[str, Any]]:
+def _compute_highlight_signature(highlighted_elements: List[Dict[str, Any]]) -> str:
+    """Compute a stable signature for a list of highlighted elements.
+
+    The signature intentionally ignores volatile fields like element indices and
+    bounding rectangles. It focuses on relatively stable identifiers to detect
+    meaningful DOM/state transitions between iterations (e.g., Google auth steps).
+
+    Args:
+        highlighted_elements: The list of highlighted element dicts returned by buildDomTree
+
+    Returns:
+        Hex-encoded SHA-256 signature string
     """
-    Take a screenshot and analyze the DOM to get bounding boxes and element information.
+    stable_fingerprints: List[str] = []
+    for element in highlighted_elements or []:
+        tag = element.get("tag", "")
+        xpath = element.get("xpath", "")
+        info = element.get("info", {}) or {}
+        # Include a minimal set of relatively stable attributes
+        placeholder = info.get("placeholder", "")
+        role = info.get("role", "")
+        aria_label = info.get("ariaLabel", "")
+        input_type = info.get("type", "")
+        text = (info.get("textContent", "") or "")[:64]
+        stable_fingerprints.append(
+            f"{tag}|{xpath}|{placeholder}|{role}|{aria_label}|{input_type}|{text}"
+        )
+
+    stable_fingerprints.sort()
+    payload = json.dumps(stable_fingerprints, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+async def _wait_for_dom_change_or_navigation(
+    page: Page,
+    previous_signature: Optional[str],
+    timeout_ms: int = 1500,
+    poll_interval_ms: int = 100,
+) -> Dict[str, Any]:
+    """Wait for either a navigation or a detectable DOM change via highlighted elements.
 
     Args:
         page: The Playwright page object
+        previous_signature: The prior signature to compare against. If None, returns immediately
+        timeout_ms: Maximum time to wait in milliseconds
+        poll_interval_ms: Polling interval in milliseconds
 
     Returns:
-        Dictionary containing screenshot data and highlighted elements
+        Dict with keys:
+            - signature: latest observed or changed signature
+            - highlighted_elements: latest observed list of highlighted elements
+    """
+    # If there's no prior signature, nothing to compare; return immediately.
+    if not previous_signature:
+        return {"signature": None, "highlighted_elements": []}
+
+    # Start a short navigation wait in parallel. It will resolve only if a real navigation occurs.
+    nav_task = asyncio.create_task(page.wait_for_navigation(timeout=timeout_ms))
+
+    deadline = asyncio.get_running_loop().time() + (timeout_ms / 1000.0)
+    latest_signature: Optional[str] = None
+    latest_highlighted: List[Dict[str, Any]] = []
+
+    # Ensure JS bundle is available for polling
+    domTreeInjected = await page.evaluate("window.domTreeInjected")
+    if not domTreeInjected:
+        js_bundle = await load_js_bundle()
+        await page.evaluate(js_bundle)
+
+    while True:
+        # If navigation completed, wait for DOM to be ready once and compute new signature
+        if nav_task.done():
+            try:
+                # Ensure the navigated document is at least DOMContentLoaded
+                await page.wait_for_load_state("domcontentloaded")
+            except Exception:
+                pass
+            # One fresh build and signature
+            result_after_nav = await page.evaluate(
+                "(args) => window.buildDomTree(args)",
+                {
+                    "doHighlightElements": True,
+                    "debugMode": False,
+                    "overlapThreshold": 0.7,
+                    "indexByPosition": True,
+                },
+            )
+            latest_highlighted = result_after_nav.get("highlightedElements", [])
+            latest_signature = _compute_highlight_signature(latest_highlighted)
+            return {
+                "signature": latest_signature,
+                "highlighted_elements": latest_highlighted,
+            }
+
+        # Poll DOM by rebuilding
+        result = await page.evaluate(
+            "(args) => window.buildDomTree(args)",
+            {
+                "doHighlightElements": True,
+                "debugMode": False,
+                "overlapThreshold": 0.7,
+                "indexByPosition": True,
+            },
+        )
+        current_highlighted = result.get("highlightedElements", [])
+        latest_highlighted = current_highlighted
+        latest_signature = _compute_highlight_signature(current_highlighted)
+
+        if latest_signature != previous_signature:
+            # Detected a real change; stop waiting for nav and proceed
+            if not nav_task.done():
+                try:
+                    nav_task.cancel()
+                except Exception:
+                    pass
+            return {
+                "signature": latest_signature,
+                "highlighted_elements": latest_highlighted,
+            }
+
+        # Timeout check
+        if asyncio.get_running_loop().time() >= deadline:
+            return {
+                "signature": latest_signature,
+                "highlighted_elements": latest_highlighted,
+            }
+
+        await asyncio.sleep(poll_interval_ms / 1000.0)
+
+
+async def take_screenshot_with_bounding_boxes(
+    page: Page,
+    wait_for_change: bool = False,
+    previous_signature: Optional[str] = None,
+    timeout_ms: int = 1500,
+    poll_interval_ms: int = 100,
+) -> Optional[Dict[str, Any]]:
+    """
+    Take a screenshot and analyze the DOM to get bounding boxes and element information.
+
+    Optionally waits for either a navigation or a detected DOM change compared to a
+    provided previous signature, which helps synchronize with SPA updates.
+
+    Args:
+        page: The Playwright page object
+        wait_for_change: Whether to wait for a DOM change or navigation before capturing
+        previous_signature: The previous signature to compare against when wait_for_change is True
+        timeout_ms: Max wait duration for change/navigation
+        poll_interval_ms: Polling interval when waiting for change
+
+    Returns:
+        Dictionary containing screenshot data, highlighted elements, viewport info, and signature
     """
     if page.url == "about:blank":
         return None
 
-    # Wait a moment for the page to be fully stable
-    await page.wait_for_load_state("networkidle")
+    # Ensure document is at least DOMContentLoaded once
+    await page.wait_for_load_state("domcontentloaded")
+
+    # If requested, wait until either navigation or a genuine DOM change occurs
+    if wait_for_change:
+        try:
+            change_result = await _wait_for_dom_change_or_navigation(
+                page,
+                previous_signature=previous_signature,
+                timeout_ms=timeout_ms,
+                poll_interval_ms=poll_interval_ms,
+            )
+            # If we detected a change (different signature), we can use these highlighted elements
+            cached_highlighted_elements = change_result.get("highlighted_elements", [])
+            cached_signature = change_result.get("signature")
+        except Exception:
+            # Best-effort wait; proceed even if waiting throws
+            cached_highlighted_elements = []
+            cached_signature = None
 
     print("Walking DOM Tree...")
     # Load the JavaScript bundle
@@ -89,16 +252,20 @@ async def take_screenshot_with_bounding_boxes(page: Page) -> Optional[Dict[str, 
         js_bundle = await load_js_bundle()
         await page.evaluate(js_bundle)
 
-    # Call buildDomTree to get element information and highlighting
-    result = await page.evaluate(
-        "(args) => window.buildDomTree(args)",
-        {
-            "doHighlightElements": True,
-            "debugMode": False,
-            "overlapThreshold": 0.7,
-            "indexByPosition": True,
-        },
-    )
+    # If we have cached highlighted elements from a detected change, reuse them to avoid another call
+    if wait_for_change and cached_highlighted_elements:
+        result = {"highlightedElements": cached_highlighted_elements}
+    else:
+        # Call buildDomTree to get element information and highlighting
+        result = await page.evaluate(
+            "(args) => window.buildDomTree(args)",
+            {
+                "doHighlightElements": True,
+                "debugMode": False,
+                "overlapThreshold": 0.7,
+                "indexByPosition": True,
+            },
+        )
 
     print("Highlighted Elements: ", result.get("highlightedElements"))
 
@@ -120,10 +287,18 @@ async def take_screenshot_with_bounding_boxes(page: Page) -> Optional[Dict[str, 
     screenshot_bytes = await page.screenshot()
     screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
+    # Compute and return a stable signature for next-iteration comparisons
+    signature = (
+        cached_signature
+        if wait_for_change and cached_signature
+        else _compute_highlight_signature(result.get("highlightedElements", []))
+    )
+
     return {
         "screenshot": screenshot_base64,
         "highlighted_elements": result.get("highlightedElements", []),
         "viewport_info": viewport_info,
+        "signature": signature,
     }
 
 
