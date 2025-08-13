@@ -2,8 +2,7 @@
 GPT Actions Prompt Function
 
 This module provides a prompt function for GPT that includes all available action tools
-for interacting with web pages. The LLM is instructed to choose one tool call at a time
-based on bounding box indices provided with screenshots.
+for interacting with web pages.
 
 @file purpose: Provides GPT prompt function with action tools for web interaction
 """
@@ -53,6 +52,10 @@ def gpt_actions(
     return {
         "model": model,
         "input": query,
+        "reasoning": {
+            "effort": "medium",
+            "summary": "auto",
+        },
         "tools": [
             {
                 "type": "function",

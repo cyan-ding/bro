@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from patchright.async_api import Page, async_playwright
+from pydantic import BaseModel, Field
 
 from prompts.tools.gpt.gpt_actions import gpt_actions
 
@@ -51,6 +52,7 @@ class ActionResult:
     action: str
     result: str
     arguments: Optional[Dict[str, Any]] = None
+    reasoning: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the dataclass to a dictionary for backward compatibility."""
@@ -61,13 +63,44 @@ class ActionResult:
         }
         if self.arguments is not None:
             result_dict["arguments"] = self.arguments  # arguments of tool call
+        if self.reasoning is not None:
+            result_dict["reasoning"] = self.reasoning
         return result_dict
 
     def __str__(self) -> str:
         """Return a formatted string representation for real-time visibility."""
         status = "✅ SUCCESS" if not self.result.startswith("Error") else "❌ ERROR"
         args_str = f" | Args: {self.arguments}" if self.arguments else ""
-        return f"[Iteration {self.iteration}] {status} | {self.action}{args_str} | {self.result}"
+        reason_str = f" | Reasoning: {self.reasoning}" if self.reasoning else ""
+        return f"[Iteration {self.iteration}] {status} | {self.action}{args_str}{reason_str} | {self.result}"
+
+
+class OutputTextBlock(BaseModel):
+    type: Optional[str] = None
+    text: Optional[str] = None
+
+
+class SummaryTextBlock(BaseModel):
+    type: Optional[str] = None
+    text: Optional[str] = None
+
+
+class OutputItem(BaseModel):
+    # For assistant message blocks
+    type: Optional[str] = None
+    id: Optional[str] = None
+    status: Optional[str] = None
+    role: Optional[str] = None
+    content: Optional[List[OutputTextBlock]] = None
+    # For function call blocks
+    name: Optional[str] = None
+    arguments: Optional[str] = None
+    # For reasoning blocks
+    summary: Optional[List[SummaryTextBlock]] = None
+
+
+class OpenAIResponse(BaseModel):
+    output: List[OutputItem] = Field(default_factory=list)
 
 
 class Agent:
@@ -95,6 +128,34 @@ class Agent:
         self.system_prompt = system_prompt
         self.session_id = str(uuid.uuid4())[:8]  # Short session ID
         self.todo_file = f"todo_{self.session_id}.md"
+
+    async def _extract_reasoning_from_llm_response(
+        self, llm_response: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Extract reasoning summary from either assistant message or reasoning block.
+        """
+        if not llm_response:
+            return None
+
+        try:
+            parsed = OpenAIResponse.model_validate(llm_response, from_attributes=True)
+        except Exception:
+            return None
+
+        if not parsed.output:
+            return None
+
+        # Prefer explicit reasoning summary if present
+        for item in parsed.output:
+            if item.type == "reasoning" and item.summary:
+                texts: List[str] = [
+                    s.text for s in item.summary if s and isinstance(s.text, str)
+                ]
+                if texts:
+                    combined = "\n".join(texts)
+                    return combined.strip()
+        return None
 
     async def _read_todo_list(self) -> str:
         """
@@ -193,6 +254,7 @@ class Agent:
         )
 
         llm_response = await gpt(params)
+        reasoning = await self._extract_reasoning_from_llm_response(llm_response)
 
         # Parse for tool calls
         tool_calls = await self._parse_tool_call(llm_response)
@@ -208,6 +270,7 @@ class Agent:
             "status": "success",
             "tool_call": tool_calls[0],  # Take the first tool call
             "result": "Initial setup completed, tool call ready for execution",
+            "reasoning": reasoning,
         }
 
     async def _parse_tool_call(
@@ -227,21 +290,20 @@ class Agent:
             return []
 
         tool_calls = []
-        # Find all function calls
-        for item in llm_response.output:
-            if item.type == "function_call":
-                function_call = item
+        try:
+            parsed = OpenAIResponse.model_validate(llm_response, from_attributes=True)
+        except Exception as e:
+            print(f"Error validating OpenAI response: {e}")
+            return []
+
+        for item in parsed.output:
+            if item.type == "function_call" and item.name and item.arguments:
                 try:
-                    function_call_arguments = json.loads(function_call.arguments)
-                    tool_calls.append(
-                        {
-                            "name": function_call.name,
-                            "arguments": function_call_arguments,
-                        }
-                    )
-                except (json.JSONDecodeError, KeyError) as e:
-                    print(f"Error parsing function call: {e}")
+                    args_obj = json.loads(item.arguments)
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing function_call arguments JSON: {e}")
                     continue
+                tool_calls.append({"name": item.name, "arguments": args_obj})
 
         return tool_calls
 
@@ -464,6 +526,7 @@ class Agent:
                     action=initial_tool_call["name"],
                     arguments=initial_tool_call["arguments"],
                     result=result_messages[0] if result_messages else "No result",
+                    reasoning=start_result.get("reasoning"),
                 )
                 print(f"📊 {initial_result}")
                 results.append(initial_result)
@@ -559,12 +622,15 @@ class Agent:
                     params = gpt_actions(
                         user_prompt=enhanced_prompt,
                         system_prompt=self.system_prompt,
-                        model="gpt-5-nano-2025-08-07",
+                        model="gpt-5-mini-2025-08-07",
                         screenshot=page_data["screenshot"],
                     )
 
                     llm_response = await gpt(params)
-
+                    reasoning = await self._extract_reasoning_from_llm_response(
+                        llm_response
+                    )
+                    print(f"Reasoning: {reasoning}")
                     # Parse for tool calls
                     tool_calls = await self._parse_tool_call(llm_response)
 
@@ -574,6 +640,7 @@ class Agent:
                             iteration=iteration,
                             action="no_tool_call",
                             result="ERROR: LLM did not make a tool call - task may be complete, or tool call failed",
+                            reasoning=reasoning,
                         )
                         print(f"📊 {no_tool_result}")
                         results.append(no_tool_result)
@@ -599,6 +666,7 @@ class Agent:
                             action=tool_call["name"],
                             arguments=tool_call["arguments"],
                             result=result_message,
+                            reasoning=reasoning,
                         )
                         print(f"📊 {action_result}")
                         results.append(action_result)

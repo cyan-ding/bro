@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from patchright.async_api import Page
 
@@ -107,6 +107,7 @@ async def _wait_for_dom_change_or_navigation(
     previous_signature: Optional[str],
     timeout_ms: int = 1500,
     poll_interval_ms: int = 100,
+    stabilize_after_change_ms: int = 400,
 ) -> Dict[str, Any]:
     """Wait for either a navigation or a detectable DOM change via highlighted elements.
 
@@ -115,6 +116,9 @@ async def _wait_for_dom_change_or_navigation(
         previous_signature: The prior signature to compare against. If None, returns immediately
         timeout_ms: Maximum time to wait in milliseconds
         poll_interval_ms: Polling interval in milliseconds
+        stabilize_after_change_ms: After detecting the first real DOM change, keep
+            waiting up to this additional duration (reset if further changes occur)
+            so the UI can settle before returning.
 
     Returns:
         Dict with keys:
@@ -138,63 +142,91 @@ async def _wait_for_dom_change_or_navigation(
         js_bundle = await load_js_bundle()
         await page.evaluate(js_bundle)
 
+    build_args = {
+        "doHighlightElements": True,
+        "debugMode": False,
+        "overlapThreshold": 0.7,
+        "indexByPosition": True,
+    }
+
+    async def _get_highlight_and_signature() -> Tuple[List[Dict[str, Any]], str]:
+        """Rebuild DOM tree and compute highlighted elements and signature."""
+        result_local = await page.evaluate(
+            "(args) => window.buildDomTree(args)",
+            build_args,
+        )
+        highlighted_local = result_local.get("highlightedElements", [])
+        signature_local = _compute_highlight_signature(highlighted_local)
+        return highlighted_local, signature_local
+
+    async def _compute_after_navigation() -> Tuple[List[Dict[str, Any]], str]:
+        """After navigation completes, ensure DOM is ready and compute fresh values."""
+        try:
+            await page.wait_for_load_state("domcontentloaded")
+        except Exception:
+            pass
+        return await _get_highlight_and_signature()
+
+    def _make_result(
+        signature: Optional[str], highlighted: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Convert signature and highlights into dict for return"""
+        return {
+            "signature": signature,
+            "highlighted_elements": highlighted,
+        }
+
     while True:
-        # If navigation completed, wait for DOM to be ready once and compute new signature
+        # If navigation completed, compute fresh values and return
         if nav_task.done():
-            try:
-                # Ensure the navigated document is at least DOMContentLoaded
-                await page.wait_for_load_state("domcontentloaded")
-            except Exception:
-                pass
-            # One fresh build and signature
-            result_after_nav = await page.evaluate(
-                "(args) => window.buildDomTree(args)",
-                {
-                    "doHighlightElements": True,
-                    "debugMode": False,
-                    "overlapThreshold": 0.7,
-                    "indexByPosition": True,
-                },
-            )
-            latest_highlighted = result_after_nav.get("highlightedElements", [])
-            latest_signature = _compute_highlight_signature(latest_highlighted)
-            return {
-                "signature": latest_signature,
-                "highlighted_elements": latest_highlighted,
-            }
+            latest_highlighted, latest_signature = await _compute_after_navigation()
+            return _make_result(latest_signature, latest_highlighted)
 
         # Poll DOM by rebuilding
-        result = await page.evaluate(
-            "(args) => window.buildDomTree(args)",
-            {
-                "doHighlightElements": True,
-                "debugMode": False,
-                "overlapThreshold": 0.7,
-                "indexByPosition": True,
-            },
-        )
-        current_highlighted = result.get("highlightedElements", [])
-        latest_highlighted = current_highlighted
-        latest_signature = _compute_highlight_signature(current_highlighted)
+        latest_highlighted, latest_signature = await _get_highlight_and_signature()
 
         if latest_signature != previous_signature:
-            # Detected a real change; stop waiting for nav and proceed
-            if not nav_task.done():
-                try:
-                    nav_task.cancel()
-                except Exception:
-                    pass
-            return {
-                "signature": latest_signature,
-                "highlighted_elements": latest_highlighted,
-            }
+            # Detected a real change; linger briefly to allow UI to stabilize.
+            # Keep the navigation wait alive in case a real navigation follows.
+            stabilization_deadline = min(
+                asyncio.get_running_loop().time()
+                + (stabilize_after_change_ms / 1000.0),
+                deadline,
+            )
+            last_signature = latest_signature
+            # Continue polling until we observe a quiet period or hit deadlines
+            while True:
+                # If navigation happens during stabilization, treat as navigation path
+                if nav_task.done():
+                    (
+                        latest_highlighted,
+                        latest_signature,
+                    ) = await _compute_after_navigation()
+                    return _make_result(latest_signature, latest_highlighted)
+
+                now = asyncio.get_running_loop().time()
+                if now >= stabilization_deadline or now >= deadline:
+                    return _make_result(latest_signature, latest_highlighted)
+
+                await asyncio.sleep(poll_interval_ms / 1000.0)
+                # Track most recent observation to return
+                (
+                    latest_highlighted,
+                    current_signature,
+                ) = await _get_highlight_and_signature()
+                latest_signature = current_signature
+                # If signature changed again, extend the stabilization window
+                if current_signature != last_signature:
+                    last_signature = current_signature
+                    stabilization_deadline = min(
+                        asyncio.get_running_loop().time()
+                        + (stabilize_after_change_ms / 1000.0),
+                        deadline,
+                    )
 
         # Timeout check
         if asyncio.get_running_loop().time() >= deadline:
-            return {
-                "signature": latest_signature,
-                "highlighted_elements": latest_highlighted,
-            }
+            return _make_result(latest_signature, latest_highlighted)
 
         await asyncio.sleep(poll_interval_ms / 1000.0)
 
