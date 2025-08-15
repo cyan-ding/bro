@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from prompts.tools.gpt.gpt_actions import gpt_actions
 
 # Import utility functions
-from .action_utils import get_previous_action_description
+from .action_utils import format_elements_text, get_previous_action_description
 from .actions import (
     click,
     done,
@@ -33,10 +33,7 @@ from .actions import (
 )
 from .ai import gpt
 from .credentials import get_credentials
-from .dom_utils import (
-    format_elements_text,
-    take_screenshot_with_bounding_boxes,
-)
+from .dom_utils import take_screenshot_with_bounding_boxes
 
 
 @dataclass
@@ -326,6 +323,16 @@ class Agent:
         """
         results = []
 
+        def _find_element_by_index(target_idx: int) -> Optional[Dict[str, Any]]:
+            """Return element dict matching the stable 'index' field, or None if not found."""
+            for el in highlighted_elements:
+                if isinstance(el, dict) and el.get("index") == target_idx:
+                    return el
+            # Fallback: if list position matches, try direct index access
+            if 0 <= target_idx < len(highlighted_elements):
+                return highlighted_elements[target_idx]
+            return None
+
         for tool_call in tool_calls:
             tool_name = tool_call.get("name")
             arguments = tool_call.get("arguments")
@@ -343,13 +350,14 @@ class Agent:
                             results.append(error_msg)
                             continue
 
-                        if target_index >= len(highlighted_elements):
-                            error_msg = f"Error: Invalid target index {target_index} (max: {len(highlighted_elements) - 1})"
+                        element = _find_element_by_index(target_index)
+                        if element is None:
+                            error_msg = f"Error: Invalid target index {target_index} (no matching element)"
                             print(f"❌ {error_msg}")
                             results.append(error_msg)
                             continue
 
-                        target_xpath = highlighted_elements[target_index]["xpath"]
+                        target_xpath = element["xpath"]
                         print(
                             f"🎯 Clicking element at index {target_index} with xpath: {target_xpath}"
                         )
@@ -373,8 +381,9 @@ class Agent:
                             results.append(error_msg)
                             continue
 
-                        if target_index >= len(highlighted_elements):
-                            error_msg = f"Error: Invalid target index {target_index} (max: {len(highlighted_elements) - 1})"
+                        element = _find_element_by_index(target_index)
+                        if element is None:
+                            error_msg = f"Error: Invalid target index {target_index} (no matching element)"
                             print(f"❌ {error_msg}")
                             results.append(error_msg)
                             continue
@@ -404,7 +413,7 @@ class Agent:
                             results.append(error_msg)
                             continue
 
-                        target_xpath = highlighted_elements[target_index]["xpath"]
+                        target_xpath = element["xpath"]
                         print(
                             f"📝 Entering text '{input_text_value}' into element at index {target_index} with xpath: {target_xpath}"
                         )
@@ -666,7 +675,7 @@ class Agent:
                             action=tool_call["name"],
                             arguments=tool_call["arguments"],
                             result=result_message,
-                            reasoning=reasoning,
+                            reasoning=reasoning if iteration == 0 else None,
                         )
                         print(f"📊 {action_result}")
                         results.append(action_result)
@@ -682,8 +691,6 @@ class Agent:
                         print("🛑 Agent signaled task completion, stopping execution.")
                         break
 
-                    # For testing, skip waiting on DOM change; observer prints when changes occur
-                    await asyncio.sleep(2)
                 return results
 
             finally:
@@ -699,7 +706,7 @@ async def main():
     agent = Agent(system_prompt)
     results = await agent.run(
         "Log into my google account",
-        "https://accounts.google.com/v3/signin/identifier?checkedDomains=youtube&continue=https%3A%2F%2Faccounts.google.com%2F&flowEntry=ServiceLogin&flowName=GlifWebSignIn&followup=https%3A%2F%2Faccounts.google.com%2F&ifkv=AdBytiOYvUAqRJUi6-iHJ04pgCOhk2j6OcoLbvaXOx0XwJgfuW3iXQLuT72oPUhYKHIGRfbxqqxE&pstMsg=1&dsh=S757206094%3A1754856863191091",
+        # "https://accounts.google.com/v3/signin/identifier?checkedDomains=youtube&continue=https%3A%2F%2Faccounts.google.com%2F&flowEntry=ServiceLogin&flowName=GlifWebSignIn&followup=https%3A%2F%2Faccounts.google.com%2F&ifkv=AdBytiOYvUAqRJUi6-iHJ04pgCOhk2j6OcoLbvaXOx0XwJgfuW3iXQLuT72oPUhYKHIGRfbxqqxE&pstMsg=1&dsh=S757206094%3A1754856863191091",
     )
 
     # Print results

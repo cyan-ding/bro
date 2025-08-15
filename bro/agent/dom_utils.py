@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from patchright.async_api import Page
+from patchright.async_api import Page, async_playwright
 
 
 async def load_js_bundle() -> str:
@@ -29,14 +29,14 @@ async def load_js_bundle() -> str:
         "buildDomTree.js",
     ]
 
-    # Check if cache exists and use it
+    # Always rebuild the bundle to ensure latest JS changes are injected
+    # If you need caching for performance, implement a content hash/versioned cache.
     if cache_file.exists():
         try:
-            cached_bundle = cache_file.read_text(encoding="utf-8")
-            return cached_bundle
+            _ = cache_file.read_text(encoding="utf-8")
         except (OSError, IOError) as e:
             print(f"Error reading cache file: {e}")
-            # Continue to rebuild if cache read fails
+        # Proceed to rebuild regardless
 
     # Rebuild the bundle
     full_code = []
@@ -102,6 +102,152 @@ def _compute_highlight_signature(highlighted_elements: List[Dict[str, Any]]) -> 
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+async def wait_for_navigation(page: Page, timeout_ms: int) -> Dict[str, Any]:
+    """Wait for navigation using expect_navigation pattern.
+
+    Args:
+        page: The Playwright page object
+        timeout_ms: Maximum time to wait in milliseconds
+
+    Returns:
+        Dict with navigation result info
+    """
+
+    # After navigation completes, ensure DOM is ready and compute fresh values
+    try:
+        async with page.expect_navigation(timeout=timeout_ms):
+            await asyncio.sleep(timeout_ms / 1000)  # prevent immediate exit
+
+        await page.wait_for_load_state("domcontentloaded")
+    except Exception as e:
+        print("error: ", e)
+        pass
+
+    # Ensure JS bundle is available
+    domTreeInjected = await page.evaluate("window.domTreeInjected")
+    if not domTreeInjected:
+        js_bundle = await load_js_bundle()
+        await page.evaluate(js_bundle)
+
+    # Get fresh DOM state after navigation
+    build_args = {
+        "doHighlightElements": True,
+        "debugMode": False,
+        "overlapThreshold": 0.7,
+        "indexByPosition": True,
+    }
+
+    result = await page.evaluate(
+        "(args) => window.buildDomTree(args)",
+        build_args,
+    )
+    highlighted_elements = result.get("highlightedElements", [])
+    signature = _compute_highlight_signature(highlighted_elements)
+    return {
+        "type": "navigation",
+        "signature": signature,
+        "highlighted_elements": highlighted_elements,
+    }
+
+
+async def poll_dom(
+    page: Page,
+    previous_signature: str,
+    timeout_ms: int,
+    poll_interval_ms: int = 100,
+    stabilize_after_change_ms: int = 400,
+) -> Dict[str, Any]:
+    """Poll DOM for changes until a change is detected or timeout.
+
+    Args:
+        page: The Playwright page object
+        previous_signature: The signature to compare against
+        timeout_ms: Maximum time to wait in milliseconds
+        poll_interval_ms: Polling interval in milliseconds
+        stabilize_after_change_ms: Time to wait after change for stabilization
+
+    Returns:
+        Dict with DOM change result info
+    """
+    deadline = asyncio.get_running_loop().time() + (timeout_ms / 1000.0)
+
+    # Ensure JS bundle is available for polling
+    domTreeInjected = await page.evaluate("window.domTreeInjected")
+    if not domTreeInjected:
+        js_bundle = await load_js_bundle()
+        await page.evaluate(js_bundle)
+
+    build_args = {
+        "doHighlightElements": True,
+        "debugMode": False,
+        "overlapThreshold": 0.7,
+        "indexByPosition": True,
+    }
+
+    async def _get_highlight_and_signature() -> Tuple[List[Dict[str, Any]], str]:
+        """Rebuild DOM tree and compute highlighted elements and signature."""
+        result_local = await page.evaluate(
+            "(args) => window.buildDomTree(args)",
+            build_args,
+        )
+        highlighted_local = result_local.get("highlightedElements", [])
+        signature_local = _compute_highlight_signature(highlighted_local)
+        return highlighted_local, signature_local
+
+    latest_signature: Optional[str] = None
+    latest_highlighted: List[Dict[str, Any]] = []
+
+    while True:
+        # Poll DOM by rebuilding
+        latest_highlighted, latest_signature = await _get_highlight_and_signature()
+
+        if latest_signature != previous_signature:
+            # Detected a real change; linger briefly to allow UI to stabilize
+            stabilization_deadline = min(
+                asyncio.get_running_loop().time()
+                + (stabilize_after_change_ms / 1000.0),
+                deadline,
+            )
+            last_signature = latest_signature
+
+            # Continue polling until we observe a quiet period or hit deadlines
+            while True:
+                now = asyncio.get_running_loop().time()
+                if now >= stabilization_deadline or now >= deadline:
+                    return {
+                        "type": "dom_change",
+                        "signature": latest_signature,
+                        "highlighted_elements": latest_highlighted,
+                    }
+
+                await asyncio.sleep(poll_interval_ms / 1000.0)
+                # Track most recent observation to return
+                (
+                    latest_highlighted,
+                    current_signature,
+                ) = await _get_highlight_and_signature()
+                latest_signature = current_signature
+
+                # If signature changed again, extend the stabilization window
+                if current_signature != last_signature:
+                    last_signature = current_signature
+                    stabilization_deadline = min(
+                        asyncio.get_running_loop().time()
+                        + (stabilize_after_change_ms / 1000.0),
+                        deadline,
+                    )
+
+        # Timeout check
+        if asyncio.get_running_loop().time() >= deadline:
+            return {
+                "type": "timeout",
+                "signature": latest_signature,
+                "highlighted_elements": latest_highlighted,
+            }
+
+        await asyncio.sleep(poll_interval_ms / 1000.0)
+
+
 async def _wait_for_dom_change_or_navigation(
     page: Page,
     previous_signature: Optional[str],
@@ -129,106 +275,49 @@ async def _wait_for_dom_change_or_navigation(
     if not previous_signature:
         return {"signature": None, "highlighted_elements": []}
 
-    # Start a short navigation wait in parallel. It will resolve only if a real navigation occurs.
-    nav_task = asyncio.create_task(page.wait_for_navigation(timeout=timeout_ms))
-
-    deadline = asyncio.get_running_loop().time() + (timeout_ms / 1000.0)
-    latest_signature: Optional[str] = None
-    latest_highlighted: List[Dict[str, Any]] = []
-
-    # Ensure JS bundle is available for polling
-    domTreeInjected = await page.evaluate("window.domTreeInjected")
-    if not domTreeInjected:
-        js_bundle = await load_js_bundle()
-        await page.evaluate(js_bundle)
-
-    build_args = {
-        "doHighlightElements": True,
-        "debugMode": False,
-        "overlapThreshold": 0.7,
-        "indexByPosition": True,
-    }
-
-    async def _get_highlight_and_signature() -> Tuple[List[Dict[str, Any]], str]:
-        """Rebuild DOM tree and compute highlighted elements and signature."""
-        result_local = await page.evaluate(
-            "(args) => window.buildDomTree(args)",
-            build_args,
+    # Create tasks for navigation and DOM polling
+    nav_task = asyncio.create_task(wait_for_navigation(page, timeout_ms))
+    dom_task = asyncio.create_task(
+        poll_dom(
+            page,
+            previous_signature,
+            timeout_ms,
+            poll_interval_ms,
+            stabilize_after_change_ms,
         )
-        highlighted_local = result_local.get("highlightedElements", [])
-        signature_local = _compute_highlight_signature(highlighted_local)
-        return highlighted_local, signature_local
+    )
 
-    async def _compute_after_navigation() -> Tuple[List[Dict[str, Any]], str]:
-        """After navigation completes, ensure DOM is ready and compute fresh values."""
-        try:
-            await page.wait_for_load_state("domcontentloaded")
-        except Exception:
-            pass
-        return await _get_highlight_and_signature()
+    try:
+        # Race condition: wait for first to complete
+        done, pending = await asyncio.wait(
+            {nav_task, dom_task}, return_when=asyncio.FIRST_COMPLETED
+        )
 
-    def _make_result(
-        signature: Optional[str], highlighted: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Convert signature and highlights into dict for return"""
-        return {
-            "signature": signature,
-            "highlighted_elements": highlighted,
-        }
+        # Cancel pending tasks (fix: remove await)
+        for task in pending:
+            task.cancel()
 
-    while True:
-        # If navigation completed, compute fresh values and return
-        if nav_task.done():
-            latest_highlighted, latest_signature = await _compute_after_navigation()
-            return _make_result(latest_signature, latest_highlighted)
-
-        # Poll DOM by rebuilding
-        latest_highlighted, latest_signature = await _get_highlight_and_signature()
-
-        if latest_signature != previous_signature:
-            # Detected a real change; linger briefly to allow UI to stabilize.
-            # Keep the navigation wait alive in case a real navigation follows.
-            stabilization_deadline = min(
-                asyncio.get_running_loop().time()
-                + (stabilize_after_change_ms / 1000.0),
-                deadline,
+        # Get result from completed task
+        for task in done:
+            result = await task
+            print(
+                "wait_for_dom_change_or_navigation: ",
+                result.get("highlighted_elements", []),
             )
-            last_signature = latest_signature
-            # Continue polling until we observe a quiet period or hit deadlines
-            while True:
-                # If navigation happens during stabilization, treat as navigation path
-                if nav_task.done():
-                    (
-                        latest_highlighted,
-                        latest_signature,
-                    ) = await _compute_after_navigation()
-                    return _make_result(latest_signature, latest_highlighted)
 
-                now = asyncio.get_running_loop().time()
-                if now >= stabilization_deadline or now >= deadline:
-                    return _make_result(latest_signature, latest_highlighted)
+            return {
+                "type": result.get("type"),
+                "signature": result.get("signature"),
+                "highlighted_elements": result.get("highlighted_elements", []),
+            }
 
-                await asyncio.sleep(poll_interval_ms / 1000.0)
-                # Track most recent observation to return
-                (
-                    latest_highlighted,
-                    current_signature,
-                ) = await _get_highlight_and_signature()
-                latest_signature = current_signature
-                # If signature changed again, extend the stabilization window
-                if current_signature != last_signature:
-                    last_signature = current_signature
-                    stabilization_deadline = min(
-                        asyncio.get_running_loop().time()
-                        + (stabilize_after_change_ms / 1000.0),
-                        deadline,
-                    )
-
-        # Timeout check
-        if asyncio.get_running_loop().time() >= deadline:
-            return _make_result(latest_signature, latest_highlighted)
-
-        await asyncio.sleep(poll_interval_ms / 1000.0)
+    except Exception as e:
+        # Clean up tasks on exception (fix: remove await)
+        nav_task.cancel()
+        dom_task.cancel()
+        # Return empty result on error
+        print("error: ", e)
+        return {"signature": None, "highlighted_elements": []}
 
 
 async def take_screenshot_with_bounding_boxes(
@@ -269,12 +358,10 @@ async def take_screenshot_with_bounding_boxes(
                 timeout_ms=timeout_ms,
                 poll_interval_ms=poll_interval_ms,
             )
-            # If we detected a change (different signature), we can use these highlighted elements
-            cached_highlighted_elements = change_result.get("highlighted_elements", [])
+            # If we detected a change (different signature)
             cached_signature = change_result.get("signature")
         except Exception:
             # Best-effort wait; proceed even if waiting throws
-            cached_highlighted_elements = []
             cached_signature = None
 
     print("Walking DOM Tree...")
@@ -284,20 +371,16 @@ async def take_screenshot_with_bounding_boxes(
         js_bundle = await load_js_bundle()
         await page.evaluate(js_bundle)
 
-    # If we have cached highlighted elements from a detected change, reuse them to avoid another call
-    if wait_for_change and cached_highlighted_elements:
-        result = {"highlightedElements": cached_highlighted_elements}
-    else:
-        # Call buildDomTree to get element information and highlighting
-        result = await page.evaluate(
-            "(args) => window.buildDomTree(args)",
-            {
-                "doHighlightElements": True,
-                "debugMode": False,
-                "overlapThreshold": 0.7,
-                "indexByPosition": True,
-            },
-        )
+    # Always call buildDomTree to obtain current raw and serialized highlights
+    result = await page.evaluate(
+        "(args) => window.buildDomTree(args)",
+        {
+            "doHighlightElements": True,
+            "debugMode": False,
+            "overlapThreshold": 0.7,
+            "indexByPosition": True,
+        },
+    )
 
     print("Highlighted Elements: ", result.get("highlightedElements"))
 
@@ -319,7 +402,7 @@ async def take_screenshot_with_bounding_boxes(
     screenshot_bytes = await page.screenshot()
     screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
-    # Compute and return a stable signature for next-iteration comparisons
+    # Compute and return a stable signature for next-iteration comparisons (based on raw highlights)
     signature = (
         cached_signature
         if wait_for_change and cached_signature
@@ -328,64 +411,171 @@ async def take_screenshot_with_bounding_boxes(
 
     return {
         "screenshot": screenshot_base64,
-        "highlighted_elements": result.get("highlightedElements", []),
+        # Use serialized highlights for downstream formatting and actions
+        "highlighted_elements": result.get("highlightedElementsSerialized", []),
+        # Keep raw highlights for diagnostics/signature if needed
+        "highlighted_elements_raw": result.get("highlightedElements", []),
         "viewport_info": viewport_info,
         "signature": signature,
     }
 
 
-async def format_elements_text(highlighted_elements: List[Dict]) -> str:
+async def test_dom_polling_vs_direct_injection(
+    page: Page,
+    timeout_ms: int = 1500,
+    poll_interval_ms: int = 100,
+) -> Dict[str, Any]:
     """
-    Format the highlighted elements into readable text for the LLM.
+    Test function to compare DOM polling behavior vs direct buildDomTree injection.
+
+    This function captures both approaches and returns their results for comparison,
+    helping determine if the continuous polling provides different results than
+    direct injection.
 
     Args:
-        highlighted_elements: List of highlighted element data
+        page: The Playwright page object
+        timeout_ms: Maximum wait time for polling approach
+        poll_interval_ms: Polling interval for DOM change detection
 
     Returns:
-        Formatted text describing all interactive elements
+        Dictionary containing results from both approaches and comparison metrics
     """
-    if not highlighted_elements:
-        return "No interactive elements found on the page."
-    print("Formatting elements...")
-    elements_text = "Interactive elements on the page:\n\n"
-    for i, element in enumerate(highlighted_elements):
-        elements_text += f"Index {i}: {element.get('tag', 'unknown')}"
-        if element.get("info", {}).get("textContent"):
-            elements_text += f" - '{element['info']['textContent']}'"
-        if element.get("info", {}).get("href"):
-            elements_text += f" (href: {element['info']['href']})"
-        if element.get("info", {}).get("placeholder"):
-            elements_text += f" (placeholder: {element['info']['placeholder']})"
-        elements_text += "\n"
+    if page.url == "about:blank":
+        return {"error": "Cannot test on blank page"}
 
-    return elements_text
+    build_args = {
+        "doHighlightElements": True,
+        "debugMode": False,
+        "overlapThreshold": 0.7,
+        "indexByPosition": True,
+    }
+
+    # Approach 1: Direct injection (current final step in take_screenshot_with_bounding_boxes)
+    print("Testing direct injection approach...")
+    domTreeInjected = await page.evaluate("window.domTreeInjected")
+    if not domTreeInjected:
+        js_bundle = await load_js_bundle()
+        await page.evaluate(js_bundle)
+
+    direct_result = await page.evaluate(
+        "(args) => window.buildDomTree(args)",
+        build_args,
+    )
+    direct_signature = _compute_highlight_signature(
+        direct_result.get("highlightedElements", [])
+    )
+    print("direct_result: ", direct_result.get("highlightedElements", []))
+    await page.screenshot(path="direct_injection.png")
+    # Approach 2: DOM polling approach (what _wait_for_dom_change_or_navigation does)
+    print("Testing DOM polling approach...")
+    polling_result = None
+    polling_signature = None
+
+    try:
+        # Use a fake previous signature to force polling to timeout and return current state
+        fake_previous_signature = "fake_signature_for_testing"
+        change_result = await _wait_for_dom_change_or_navigation(
+            page,
+            previous_signature=fake_previous_signature,
+            timeout_ms=timeout_ms,
+            poll_interval_ms=poll_interval_ms,
+        )
+        polling_signature = change_result.get("signature")
+        polling_result = change_result.get("highlighted_elements", [])
+        await page.screenshot(path="polling.png")
+    except Exception as e:
+        polling_result = [{"error": str(e)}]
+        polling_signature = None
+
+    # Compare results
+    signatures_match = direct_signature == polling_signature
+    element_counts_match = (
+        len(direct_result.get("highlightedElements", [])) == len(polling_result)
+        if polling_result
+        else False
+    )
+
+    return {
+        "direct_injection": {
+            "signature": direct_signature,
+            "element_count": len(direct_result.get("highlightedElements", [])),
+        },
+        "dom_polling": {
+            "signature": polling_signature,
+            "element_count": len(polling_result) if polling_result else 0,
+        },
+        "comparison": {
+            "signatures_match": signatures_match,
+            "element_counts_match": element_counts_match,
+            "approaches_differ": not (signatures_match and element_counts_match),
+        },
+        "test_config": {
+            "timeout_ms": timeout_ms,
+            "poll_interval_ms": poll_interval_ms,
+            "page_url": page.url,
+        },
+    }
 
 
-def get_element_description(index: int, highlighted_elements: List[Dict]) -> str:
-    """
-    Get a descriptive string for an element at the given index.
+async def main() -> None:
+    # Launch Chrome with CDP port
+    import subprocess
+    import urllib.error
+    import urllib.request
 
-    Args:
-        index: The index of the element
-        highlighted_elements: List of highlighted element data
+    def is_chrome_running():
+        try:
+            with urllib.request.urlopen(
+                "http://localhost:9222/json", timeout=2
+            ) as response:
+                return response.getcode() == 200
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            return False
 
-    Returns:
-        Descriptive string for the element
-    """
-    if not highlighted_elements or index >= len(highlighted_elements):
-        return f"element at index {index}"
+    if not is_chrome_running():
+        subprocess.Popen(
+            [
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                "--remote-debugging-port=9222",
+                "--user-data-dir=C:/tmp/chrome-profile",
+            ]
+        )
 
-    element = highlighted_elements[index]
-    tag = element.get("tag", "unknown")
-    info = element.get("info", {})
+    async with async_playwright() as p:
+        browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+        # List contexts (Chrome profiles)
+        contexts = browser.contexts
+        if contexts:
+            context = contexts[0]  # Use existing profile
+        else:
+            context = await browser.new_context()  # Or create new
+        print(context.pages[0].url)
+        # Open a new tab
+        page = context.pages[0] if context.pages else await context.new_page()
+        await page.goto(
+            # google form test
+            # "https://docs.google.com/forms/d/e/1FAIpQLScNUBVunFJk9x-ScKqcg9Vh_36LGzHP2xImQxpA9f0Mcklzwg/viewform",
+            # google doc test
+            # "https://docs.google.com/document/d/1DBPuFb-byQ9rZcxZo2ky0y5Sn1TjeF-2q6rfwOhI1sg/edit?usp=sharing",
+            # google sheets test
+            # "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing",
+            # iframe test
+            # "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
+            # sticky element test
+            "https://en.wikipedia.org/wiki/English_Wikipedia",
+            wait_until="domcontentloaded",
+        )
 
-    description_parts = [tag]
+        result = await test_dom_polling_vs_direct_injection(
+            page,
+            timeout_ms=1500,
+            poll_interval_ms=100,
+        )
+        print(result)
 
-    if info.get("textContent"):
-        description_parts.append(f"'{info['textContent']}'")
-    if info.get("placeholder"):
-        description_parts.append(f"placeholder '{info['placeholder']}'")
-    if info.get("href"):
-        description_parts.append(f"link to {info['href']}")
+        await page.wait_for_timeout(5000)
+        await browser.close()  # Closes connection, not Chrome itself
 
-    return " ".join(description_parts)
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -129,7 +129,7 @@ export default function buildDomTree(args = {
      * - Handles text nodes, shadow DOM, and content-editable regions.
      * - Applies highlighting logic if enabled.
      */
-    function buildTreeRecursive(node, parentIframe = null, highlightedAncestor = null, isInViewport = false) {
+    function buildTreeRecursive(node, parentIframe = null, highlightedAncestor = null, isInViewport = false, highlightDepth = 0) {
         if (debugMode) {
             PERF_METRICS.nodeMetrics.totalNodes++;
             PERF_METRICS.calls.buildDomTree++;
@@ -146,7 +146,7 @@ export default function buildDomTree(args = {
         if (node === document.body) {
             const nodeData = { tagName: 'body', attributes: {}, xpath: '/body', children: [] };
             for (const child of node.childNodes) {
-                const domElement = buildTreeRecursive(child, parentIframe, highlightedAncestor, isInViewport);
+                const domElement = buildTreeRecursive(child, parentIframe, highlightedAncestor, isInViewport, highlightDepth);
                 if (domElement) nodeData.children.push(domElement);
             }
             const id = `${ID.current++}`;
@@ -199,10 +199,13 @@ export default function buildDomTree(args = {
         // Compute isInteractive only once if needed, and avoid redundant domUtils.isInteractiveElement calls
         
         if (nodeData.isVisible) {
-            nodeData.isInteractive = domUtils.isInteractiveElement(node);;
+            nodeData.isInteractive = domUtils.isInteractiveElement(node);
             // mark element to be highlighted (so that children are not highlighted)
             if (domUtils.isSufficientlyVisibleInViewport(node)) {
                 newHighlightedAncestor = handleHighlighting(nodeData, node, parentIframe, highlightedAncestor);
+                if (nodeData.highlightIndex !== undefined) {
+                    nodeData.highlightDepth = highlightDepth;
+                }
             }
             if (indexByPosition) {
                 domUtils.indexElementByPosition(node, nodeData, INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
@@ -216,7 +219,8 @@ export default function buildDomTree(args = {
                 const iframeDoc = node.contentDocument || node.contentWindow?.document;
                 if (iframeDoc) {
                     for (const child of iframeDoc.childNodes) {
-                        const domElement = buildTreeRecursive(child, node, newHighlightedAncestor);
+                        const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                        const domElement = buildTreeRecursive(child, node, newHighlightedAncestor, false, nextDepth);
                         if (domElement) nodeData.children.push(domElement);
                     }
                 }
@@ -225,17 +229,20 @@ export default function buildDomTree(args = {
             // for shadow DOM elements that have internal structure
             nodeData.shadowRoot = true;
             for (const child of node.shadowRoot.childNodes) {
-                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
+                const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor, false, nextDepth);
                 if (domElement) nodeData.children.push(domElement);
             }
-            for (const child of node.children) {
-                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
+            for (const child of node.childNodes) {
+                const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor, false, nextDepth);
                 if (domElement) nodeData.children.push(domElement);
             }
         } else {
             // for all other nodes, recurse through children
-            for (const child of node.children) {
-                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor);
+            for (const child of node.childNodes) {
+                const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor, false, nextDepth);
                 if (domElement) nodeData.children.push(domElement);
             }
         }
@@ -273,6 +280,136 @@ export default function buildDomTree(args = {
 
     postProcessMetrics();
     
+    // --- Post-processing: conservative attributes, text, newness, and serialization ---
+    function capText(value, maxLen = 15) {
+        if (value == null) return '';
+        const s = String(value);
+        return s.length <= maxLen ? s : s.slice(0, maxLen);
+    }
+
+    function normalizeWhitespace(str) {
+        if (!str) return '';
+        return String(str).replace(/\s+/g, ' ').trim();
+    }
+
+    function collectTextFor(nodeId, highlightedIdSet, selfId) {
+        const node = DOM_HASH_MAP[nodeId];
+        if (!node) return '';
+        if (node.highlightIndex != null && nodeId !== selfId) return '';
+        if (node.type === 'TEXT_NODE') {
+            return node.isVisible ? node.text : '';
+        }
+        let out = '';
+        const kids = node.children || [];
+        for (const childId of kids) {
+            if (highlightedIdSet.has(childId) && childId !== selfId) continue;
+            const part = collectTextFor(childId, highlightedIdSet, selfId);
+            if (part) out += (out ? ' ' : '') + part;
+        }
+        return normalizeWhitespace(out);
+    }
+
+    function pruneAttributes(tagName, attrs, elementText) {
+        const allowed = [
+            'title', 'type', 'checked', 'name', 'role', 'value', 'placeholder',
+            'data-date-format', 'alt', 'aria-label', 'aria-expanded', 'data-state',
+            'aria-checked', 'href', 'src'
+        ];
+        const out = {};
+        const seenByValue = new Map();
+        const textLower = (elementText || '').trim().toLowerCase();
+        for (const key of allowed) {
+            if (!attrs || !Object.prototype.hasOwnProperty.call(attrs, key)) continue;
+            let val = attrs[key];
+            if (val == null || val === '') continue;
+
+            if (key === 'value' && (attrs['type'] || '').toLowerCase() === 'password') {
+                continue;
+            }
+            if (key === 'role' && String(val).toLowerCase() === String(tagName).toLowerCase()) {
+                continue;
+            }
+            if ((key === 'aria-label' || key === 'placeholder' || key === 'title') && textLower) {
+                if (String(val).trim().toLowerCase() === textLower) continue;
+            }
+            const valStr = String(val);
+            if (valStr.length > 5) {
+                if (seenByValue.has(valStr)) continue;
+                seenByValue.set(valStr, key);
+            }
+            out[key] = capText(valStr, 15);
+        }
+        return out;
+    }
+
+    function buildIdentityKey(tagName, xpath, attrs) {
+        const stableKeys = ['name', 'type', 'aria-label', 'title', 'placeholder'];
+        const parts = [String(tagName || ''), String(xpath || '')];
+        for (const k of stableKeys) {
+            if (attrs && Object.prototype.hasOwnProperty.call(attrs, k)) {
+                parts.push(`${k}=${attrs[k]}`);
+            }
+        }
+        return parts.join('|');
+    }
+
+    function serializeHighlightedElements() {
+        const items = [];
+        const highlightedIds = Object.keys(DOM_HASH_MAP).filter(id => {
+            const n = DOM_HASH_MAP[id];
+            return n && n.highlightIndex != null;
+        });
+        const highlightedIdSet = new Set(highlightedIds);
+        const seen = (window._highlightSeen = window._highlightSeen || new Set());
+
+        // Build a fallback map of raw textContent by highlight index from the visual highlighter
+        const rawHighlighted = getHighlightedElements();
+        const rawTextByIndex = new Map();
+        for (const el of rawHighlighted || []) {
+            try {
+                const idx = el && typeof el.index === 'number' ? el.index : undefined;
+                if (idx !== undefined) {
+                    const t = el.info && el.info.textContent ? normalizeWhitespace(el.info.textContent) : '';
+                    if (t) rawTextByIndex.set(idx, t);
+                }
+            } catch (_) { /* no-op */ }
+        }
+
+        const nodes = highlightedIds
+            .map(id => ({ id, node: DOM_HASH_MAP[id] }))
+            .sort((a, b) => (a.node.highlightIndex || 0) - (b.node.highlightIndex || 0));
+
+        for (const { id, node } of nodes) {
+            const tag = node.tagName || 'unknown';
+            const xpath = node.xpath || '';
+            const depth = node.highlightDepth || 0;
+            const index = node.highlightIndex;
+            const textRaw = collectTextFor(id, highlightedIdSet, id);
+            let text = capText(textRaw, 100);
+            // Fallback to raw highlight's element.textContent if tree-derived text is empty
+            if (!text) {
+                const fallback = rawTextByIndex.get(index) || '';
+                if (fallback) text = capText(fallback, 100);
+            }
+            const attrs = pruneAttributes(tag, node.attributes || {}, textRaw);
+            const identityKey = buildIdentityKey(tag, xpath, attrs);
+            const isNew = !seen.has(identityKey);
+            seen.add(identityKey);
+
+            const info = {
+                placeholder: attrs['placeholder'],
+                role: attrs['role'],
+                ariaLabel: attrs['aria-label'],
+                type: attrs['type'],
+                textContent: text
+            };
+            const hrefTop = attrs['href'] || undefined;
+
+            items.push({ index, tag, xpath, attrs, text, isNew, depth, href: hrefTop, info });
+        }
+        return items;
+    }
+    
     // Set up scroll handler if position indexing is enabled
     if (indexByPosition) {
         const scrollHandler = createScrollHandler(INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
@@ -284,7 +421,8 @@ export default function buildDomTree(args = {
     	rootId,
     	map: DOM_HASH_MAP,
     	...(debugMode ? { perfMetrics: PERF_METRICS } : {}),
-    	highlightedElements: getHighlightedElements(),
+	    highlightedElements: getHighlightedElements(),
+	    highlightedElementsSerialized: serializeHighlightedElements(),
     	interactiveElementsByPosition: indexByPosition ? INTERACTIVE_ELEMENTS_BY_POSITION : undefined
     };
 } 

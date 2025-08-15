@@ -38,10 +38,6 @@ When you create a **new file**:
 
   `Returns`: (output types and descriptions)
 
-  `Raises`: (possible exceptions)
-
-  `Examples`: (demonstrations of usage)
-
   Write for **people**, not for **computers**. Avoid over-explaining, and skip jargon that is unclear to most users. For trivial functions, a one-liner is often sufficient; for complex ones, provide additional context, arguments, return values, and exceptions. 
 
 * **Do not do any more than asked. Keep code minimal, simple, and readible.** 
