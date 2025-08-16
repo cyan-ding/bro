@@ -161,7 +161,7 @@ function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
      * @param {Element|null} parentIframe The iframe containing the element, if any.
      * @returns {number} The time taken to highlight the element.
      */
-    function highlightElement(element, index, parentIframe = null) {
+    function highlightElement(element, index, parentIframe = null, doHighlightElements = true) {
         pushTiming('highlighting');
         if (!element) return popTiming('highlighting');
         
@@ -188,9 +188,18 @@ function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
                 rect: element.getBoundingClientRect(),
                 element: element
             };
+            // Attach iframe xpath context if inside an iframe
+            if (parentIframe) {
+                try {
+                    elementInfo.iframe_xpath = getXPathTree(parentIframe);
+                } catch (_) { /* no-op */ }
+            }
             highlightedElements.push(elementInfo);
 
-            
+            if (!doHighlightElements) {
+                return popTiming('highlighting');
+            }
+
             // make a container for all highlights to easily delete them all at once
             let container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
             if (!container) {
@@ -1252,7 +1261,7 @@ function buildDomTree(args = {
                 if (seenByValue.has(valStr)) continue;
                 seenByValue.set(valStr, key);
             }
-            out[key] = capText(valStr, 15);
+            out[key] = capText(valStr, 30);
         }
         return out;
     }
@@ -1280,12 +1289,15 @@ function buildDomTree(args = {
         // Build a fallback map of raw textContent by highlight index from the visual highlighter
         const rawHighlighted = getHighlightedElements();
         const rawTextByIndex = new Map();
+        const iframeByIndex = new Map();
         for (const el of rawHighlighted || []) {
             try {
                 const idx = el && typeof el.index === 'number' ? el.index : undefined;
                 if (idx !== undefined) {
                     const t = el.info && el.info.textContent ? normalizeWhitespace(el.info.textContent) : '';
                     if (t) rawTextByIndex.set(idx, t);
+                    const iframeXPath = el.iframe_xpath || null;
+                    if (iframeXPath) iframeByIndex.set(idx, iframeXPath);
                 }
             } catch (_) { /* no-op */ }
         }
@@ -1320,7 +1332,8 @@ function buildDomTree(args = {
             };
             const hrefTop = attrs['href'] || undefined;
 
-            items.push({ index, tag, xpath, attrs, text, isNew, depth, href: hrefTop, info });
+            const iframe_xpath = iframeByIndex.get(index) || null;
+            items.push({ index, tag, xpath, attrs, text, isNew, depth, href: hrefTop, info, iframe_xpath });
         }
         return items;
     }

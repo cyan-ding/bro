@@ -16,11 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from browser.use_cdp import use_cdp
 from patchright.async_api import Page, async_playwright
 from pydantic import BaseModel, Field
 
 from prompts.tools.gpt.gpt_actions import gpt_actions
-from browser.use_cdp import use_cdp
 
 # Import utility functions
 from .action_utils import format_elements_text, get_previous_action_description
@@ -359,11 +359,12 @@ class Agent:
                             continue
 
                         target_xpath = element["xpath"]
+                        iframe_xpath = element.get("iframe_xpath")
                         print(
                             f"🎯 Clicking element at index {target_index} with xpath: {target_xpath}"
                         )
 
-                        await click(page, target_xpath)
+                        await click(page, target_xpath, iframe_xpath)
                         success_msg = (
                             f"Successfully clicked on element at index {target_index}"
                         )
@@ -415,10 +416,13 @@ class Agent:
                             continue
 
                         target_xpath = element["xpath"]
+                        iframe_xpath = element.get("iframe_xpath")
                         print(
                             f"📝 Entering text '{input_text_value}' into element at index {target_index} with xpath: {target_xpath}"
                         )
-                        await input_text(page, target_xpath, input_text_value)
+                        await input_text(
+                            page, target_xpath, input_text_value, iframe_xpath
+                        )
                         success_msg = f"Successfully entered text '{input_text_value}' into element at index {target_index}"
                         print(f"✅ {success_msg}")
                         results.append(success_msg)
@@ -724,7 +728,7 @@ async def main():
     # Create and run the agent
     agent = Agent(system_prompt)
     results = await agent.run(
-        user_prompt="Send an email using gmail to blueplus.d@gmail.com with the subject 'Hello' and the body 'Hello, how are you?'",
+        user_prompt="Open a new google doc and write an essay about cherries",
         # "https://accounts.google.com/v3/signin/identifier?checkedDomains=youtube&continue=https%3A%2F%2Faccounts.google.com%2F&flowEntry=ServiceLogin&flowName=GlifWebSignIn&followup=https%3A%2F%2Faccounts.google.com%2F&ifkv=AdBytiOYvUAqRJUi6-iHJ04pgCOhk2j6OcoLbvaXOx0XwJgfuW3iXQLuT72oPUhYKHIGRfbxqqxE&pstMsg=1&dsh=S757206094%3A1754856863191091",
         max_iterations=20,
     )

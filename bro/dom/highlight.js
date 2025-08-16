@@ -54,7 +54,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
      * @param {Element|null} parentIframe The iframe containing the element, if any.
      * @returns {number} The time taken to highlight the element.
      */
-    function highlightElement(element, index, parentIframe = null) {
+    function highlightElement(element, index, parentIframe = null, doHighlightElements = true) {
         pushTiming('highlighting');
         if (!element) return popTiming('highlighting');
         
@@ -81,9 +81,18 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
                 rect: element.getBoundingClientRect(),
                 element: element
             };
+            // Attach iframe xpath context if inside an iframe
+            if (parentIframe) {
+                try {
+                    elementInfo.iframe_xpath = getXPathTree(parentIframe);
+                } catch (_) { /* no-op */ }
+            }
             highlightedElements.push(elementInfo);
 
-            
+            if (!doHighlightElements) {
+                return popTiming('highlighting');
+            }
+
             // make a container for all highlights to easily delete them all at once
             let container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
             if (!container) {

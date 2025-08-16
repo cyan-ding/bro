@@ -337,7 +337,7 @@ export default function buildDomTree(args = {
                 if (seenByValue.has(valStr)) continue;
                 seenByValue.set(valStr, key);
             }
-            out[key] = capText(valStr, 15);
+            out[key] = capText(valStr, 30);
         }
         return out;
     }
@@ -365,12 +365,15 @@ export default function buildDomTree(args = {
         // Build a fallback map of raw textContent by highlight index from the visual highlighter
         const rawHighlighted = getHighlightedElements();
         const rawTextByIndex = new Map();
+        const iframeByIndex = new Map();
         for (const el of rawHighlighted || []) {
             try {
                 const idx = el && typeof el.index === 'number' ? el.index : undefined;
                 if (idx !== undefined) {
                     const t = el.info && el.info.textContent ? normalizeWhitespace(el.info.textContent) : '';
                     if (t) rawTextByIndex.set(idx, t);
+                    const iframeXPath = el.iframe_xpath || null;
+                    if (iframeXPath) iframeByIndex.set(idx, iframeXPath);
                 }
             } catch (_) { /* no-op */ }
         }
@@ -405,7 +408,8 @@ export default function buildDomTree(args = {
             };
             const hrefTop = attrs['href'] || undefined;
 
-            items.push({ index, tag, xpath, attrs, text, isNew, depth, href: hrefTop, info });
+            const iframe_xpath = iframeByIndex.get(index) || null;
+            items.push({ index, tag, xpath, attrs, text, isNew, depth, href: hrefTop, info, iframe_xpath });
         }
         return items;
     }

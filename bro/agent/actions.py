@@ -1,29 +1,49 @@
 """
 Actions are the functions given to the LLM that are used to interact with the page.
-All actions now use XPath selectors for precise element targeting.
+All actions now use XPath selectors for precise element targeting, with optional iframe context.
 """
+
+from typing import Any, Optional
 
 import trafilatura
 from patchright.async_api import Page
 
 
-async def input_text(page: Page, target: str, input_text: str):
-    """
-    Enter text into an input field using multiple strategies.
+def _resolve_locator(
+    page: Page, target: str, iframe_xpath: Optional[str] = None
+) -> Any:
+    """Return a Locator targeting the element XPath within an optional iframe.
 
     Args:
-            page: The browser page
-            target: XPath selector for the input element
-            input_text: Text to enter into the field
+        page: Playwright page object.
+        target: XPath selector for the target element.
+        iframe_xpath: Optional XPath selector for the containing iframe.
+
+    Returns:
+        A Playwright Locator scoped appropriately.
     """
-    # Find the element using XPath
-    element = page.locator(f"xpath={target}")
+    if iframe_xpath:
+        frame = page.frame_locator(f"xpath={iframe_xpath}")
+        return frame.locator(f"xpath={target}")
+    return page.locator(f"xpath={target}")
+
+
+async def input_text(
+    page: Page, target: str, input_text: str, iframe_xpath: Optional[str] = None
+) -> None:
+    """Enter text into an input field using multiple strategies.
+
+    Args:
+        page: The browser page.
+        target: XPath selector for the input element.
+        input_text: Text to enter into the field.
+        iframe_xpath: Optional XPath selector for the parent iframe containing the element.
+    """
+    # Find the element using XPath, optionally within an iframe
+    element = _resolve_locator(page, target, iframe_xpath)
 
     if not await element.count():
         raise ValueError(f"No element found with XPath: {target}")
-
-    # always click on the text field first
-    await element.click(timeout=5000)
 
     # Define input strategies
     async def strategy_fill() -> bool:
@@ -38,7 +58,7 @@ async def input_text(page: Page, target: str, input_text: str):
     async def strategy_type() -> bool:
         """Try type() method with delay"""
         try:
-            await element.type(input_text, delay=200)
+            await element.type(input_text)
             return True
         except Exception as e:
             print(f"Type strategy failed: {e}")
@@ -47,8 +67,7 @@ async def input_text(page: Page, target: str, input_text: str):
     async def strategy_keyboard() -> bool:
         """Try keyboard typing"""
         try:
-            await element.focus(timeout=5000)
-            await page.keyboard.type(input_text, delay=50)
+            await page.keyboard.type(input_text)
             return True
         except Exception as e:
             print(f"Keyboard strategy failed: {e}")
@@ -57,7 +76,7 @@ async def input_text(page: Page, target: str, input_text: str):
     async def strategy_force_fill() -> bool:
         """Try fill with force=True"""
         try:
-            await element.fill(input_text, force=True, timeout=5000)
+            await element.fill(input_text, force=True)
             return True
         except Exception as e:
             print(f"Force fill strategy failed: {e}")
@@ -74,15 +93,15 @@ async def input_text(page: Page, target: str, input_text: str):
     raise Exception("All text input strategies failed")
 
 
-async def click(page: Page, target: str):
-    """
-    Click on an element using XPath selector.
+async def click(page: Page, target: str, iframe_xpath: Optional[str] = None) -> None:
+    """Click on an element using an XPath selector, optionally within an iframe.
 
     Args:
-            page: The browser page
-            target: XPath selector for the element to click
+        page: The browser page.
+        target: XPath selector for the element to click.
+        iframe_xpath: Optional XPath selector for the parent iframe containing the element.
     """
-    element = page.locator(f"xpath={target}")
+    element = _resolve_locator(page, target, iframe_xpath)
 
     if not await element.count():
         raise ValueError(f"No element found with XPath: {target}")

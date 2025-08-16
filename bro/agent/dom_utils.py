@@ -132,7 +132,7 @@ async def wait_for_navigation(page: Page, timeout_ms: int) -> Dict[str, Any]:
 
     # Get fresh DOM state after navigation
     build_args = {
-        "doHighlightElements": True,
+        "doHighlightElements": False,
         "debugMode": False,
         "overlapThreshold": 0.7,
         "indexByPosition": True,
@@ -179,7 +179,7 @@ async def poll_dom(
         await page.evaluate(js_bundle)
 
     build_args = {
-        "doHighlightElements": True,
+        "doHighlightElements": False,
         "debugMode": False,
         "overlapThreshold": 0.7,
         "indexByPosition": True,
@@ -372,7 +372,7 @@ async def take_screenshot_with_bounding_boxes(
     result = await page.evaluate(
         "(args) => window.buildDomTree(args)",
         {
-            "doHighlightElements": True,
+            "doHighlightElements": False,
             "debugMode": False,
             "overlapThreshold": 0.7,
             "indexByPosition": True,
