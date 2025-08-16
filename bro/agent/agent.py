@@ -20,6 +20,7 @@ from patchright.async_api import Page, async_playwright
 from pydantic import BaseModel, Field
 
 from prompts.tools.gpt.gpt_actions import gpt_actions
+from browser.use_cdp import use_cdp
 
 # Import utility functions
 from .action_utils import format_elements_text, get_previous_action_description
@@ -232,7 +233,7 @@ class Agent:
         You are starting a new web automation task. Your job is to:
         1. Break down the user's task into specific subtasks
         2. Identify the first website to visit
-        3. NAVIGATE TO THE WEBSITE FIRST using the search tool
+        3. Navigate to the website using the search tool
 
         CRITICAL INSTRUCTIONS:
         - You MUST call the search tool to navigate to the first website
@@ -494,16 +495,30 @@ class Agent:
             List of ActionResult objects from the agent's execution
         """
         print("Starting browser context...")
+        await use_cdp()
         async with async_playwright() as p:
-            browser_context = await p.chromium.launch_persistent_context(
-                user_data_dir="./browser_data",
-                channel="chrome",
-                headless=False,
-                no_viewport=True,
+            # browser_context = await p.chromium.launch_persistent_context(
+            #     user_data_dir="./browser_data",
+            #     channel="chrome",
+            #     headless=False,
+            #     no_viewport=True,
+            # )
+            browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+            # List contexts (Chrome profiles)
+            contexts = browser.contexts
+            if contexts:
+                browser_context = contexts[0]  # Use existing profile
+            else:
+                browser_context = await browser.new_context()  # Or create new
+            print(browser_context.pages[0].url)
+            # Open a new tab
+            page = (
+                browser_context.pages[0]
+                if browser_context.pages
+                else await browser_context.new_page()
             )
-
             # Install DOM change detector early so it persists across navigations
-            page = await browser_context.new_page()
+            # page = await browser_context.new_page()
 
             # If no URL provided, use the start function to initialize the process
             if not url:
@@ -579,6 +594,7 @@ class Agent:
                         page,
                         wait_for_change=should_wait_for_change,
                         previous_signature=last_signature,
+                        take_screenshot=False,
                     )
 
                     if not page_data:
@@ -594,7 +610,7 @@ class Agent:
                     elements_text = await format_elements_text(
                         page_data["highlighted_elements"]
                     )
-
+                    print("Elements text: ", elements_text)
                     # Read current todo list
                     # todo_list = await self._read_todo_list()
 
@@ -619,7 +635,7 @@ class Agent:
 							There are {viewport_info["pixelsAbove"]} pixels above your current view and {viewport_info["pixelsBelow"]} pixels below.
 							The page is {viewport_info["documentHeight"]} pixels tall and your viewport is {viewport_info["innerHeight"]} pixels tall.
 
-							The screenshot shows the current page with bounding boxes around interactive elements. 
+							If a screenshot has been attached, it shows the current page with bounding boxes around interactive elements. 
 							Each box has an index number that corresponds to the elements listed above. 
 
 							{previous_action_text}
@@ -636,9 +652,12 @@ class Agent:
                     )
 
                     llm_response = await gpt(params)
+
                     reasoning = await self._extract_reasoning_from_llm_response(
                         llm_response
                     )
+                    if not reasoning:
+                        print("LLM response: ", llm_response)
                     print(f"Reasoning: {reasoning}")
                     # Parse for tool calls
                     tool_calls = await self._parse_tool_call(llm_response)
@@ -705,8 +724,9 @@ async def main():
     # Create and run the agent
     agent = Agent(system_prompt)
     results = await agent.run(
-        "Log into my google account",
+        user_prompt="Send an email using gmail to blueplus.d@gmail.com with the subject 'Hello' and the body 'Hello, how are you?'",
         # "https://accounts.google.com/v3/signin/identifier?checkedDomains=youtube&continue=https%3A%2F%2Faccounts.google.com%2F&flowEntry=ServiceLogin&flowName=GlifWebSignIn&followup=https%3A%2F%2Faccounts.google.com%2F&ifkv=AdBytiOYvUAqRJUi6-iHJ04pgCOhk2j6OcoLbvaXOx0XwJgfuW3iXQLuT72oPUhYKHIGRfbxqqxE&pstMsg=1&dsh=S757206094%3A1754856863191091",
+        max_iterations=20,
     )
 
     # Print results

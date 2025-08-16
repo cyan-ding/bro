@@ -22,6 +22,9 @@ async def input_text(page: Page, target: str, input_text: str):
     if not await element.count():
         raise ValueError(f"No element found with XPath: {target}")
 
+    # always click on the text field first
+    await element.click(timeout=5000)
+
     # Define input strategies
     async def strategy_fill() -> bool:
         """Try fill() method"""

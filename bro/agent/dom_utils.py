@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from patchright.async_api import Page, async_playwright
+from browser.use_cdp import use_cdp
 
 
 async def load_js_bundle() -> str:
@@ -251,9 +252,9 @@ async def poll_dom(
 async def _wait_for_dom_change_or_navigation(
     page: Page,
     previous_signature: Optional[str],
-    timeout_ms: int = 1500,
+    timeout_ms: int = 10000,
     poll_interval_ms: int = 100,
-    stabilize_after_change_ms: int = 400,
+    stabilize_after_change_ms: int = 1000,
 ) -> Dict[str, Any]:
     """Wait for either a navigation or a detectable DOM change via highlighted elements.
 
@@ -300,10 +301,6 @@ async def _wait_for_dom_change_or_navigation(
         # Get result from completed task
         for task in done:
             result = await task
-            print(
-                "wait_for_dom_change_or_navigation: ",
-                result.get("highlighted_elements", []),
-            )
 
             return {
                 "type": result.get("type"),
@@ -311,12 +308,11 @@ async def _wait_for_dom_change_or_navigation(
                 "highlighted_elements": result.get("highlighted_elements", []),
             }
 
-    except Exception as e:
+    except Exception:
         # Clean up tasks on exception (fix: remove await)
         nav_task.cancel()
         dom_task.cancel()
         # Return empty result on error
-        print("error: ", e)
         return {"signature": None, "highlighted_elements": []}
 
 
@@ -326,6 +322,7 @@ async def take_screenshot_with_bounding_boxes(
     previous_signature: Optional[str] = None,
     timeout_ms: int = 1500,
     poll_interval_ms: int = 100,
+    take_screenshot: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """
     Take a screenshot and analyze the DOM to get bounding boxes and element information.
@@ -382,8 +379,6 @@ async def take_screenshot_with_bounding_boxes(
         },
     )
 
-    print("Highlighted Elements: ", result.get("highlightedElements"))
-
     # Get viewport information for smart scrolling
     viewport_info = await page.evaluate("""
         () => {
@@ -399,8 +394,11 @@ async def take_screenshot_with_bounding_boxes(
         }
     """)
     # Take screenshot
-    screenshot_bytes = await page.screenshot()
-    screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+    if take_screenshot:
+        screenshot_bytes = await page.screenshot()
+        screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+    else:
+        screenshot_base64 = None
 
     # Compute and return a stable signature for next-iteration comparisons (based on raw highlights)
     signature = (
@@ -465,6 +463,7 @@ async def test_dom_polling_vs_direct_injection(
         direct_result.get("highlightedElements", [])
     )
     print("direct_result: ", direct_result.get("highlightedElements", []))
+
     await page.screenshot(path="direct_injection.png")
     # Approach 2: DOM polling approach (what _wait_for_dom_change_or_navigation does)
     print("Testing DOM polling approach...")
@@ -473,10 +472,10 @@ async def test_dom_polling_vs_direct_injection(
 
     try:
         # Use a fake previous signature to force polling to timeout and return current state
-        fake_previous_signature = "fake_signature_for_testing"
+        # fake_previous_signature = "fake_signature_for_testing"
         change_result = await _wait_for_dom_change_or_navigation(
             page,
-            previous_signature=fake_previous_signature,
+            previous_signature=direct_signature,
             timeout_ms=timeout_ms,
             poll_interval_ms=poll_interval_ms,
         )
@@ -518,29 +517,7 @@ async def test_dom_polling_vs_direct_injection(
 
 
 async def main() -> None:
-    # Launch Chrome with CDP port
-    import subprocess
-    import urllib.error
-    import urllib.request
-
-    def is_chrome_running():
-        try:
-            with urllib.request.urlopen(
-                "http://localhost:9222/json", timeout=2
-            ) as response:
-                return response.getcode() == 200
-        except (urllib.error.URLError, urllib.error.HTTPError):
-            return False
-
-    if not is_chrome_running():
-        subprocess.Popen(
-            [
-                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                "--remote-debugging-port=9222",
-                "--user-data-dir=C:/tmp/chrome-profile",
-            ]
-        )
-
+    await use_cdp()
     async with async_playwright() as p:
         browser = await p.chromium.connect_over_cdp("http://localhost:9222")
         # List contexts (Chrome profiles)
@@ -560,9 +537,9 @@ async def main() -> None:
             # google sheets test
             # "https://docs.google.com/spreadsheets/d/1seBguBzuDMYo6-7vZCOlb-Y6zFKTKKUYqJu81qxev6Q/edit?usp=sharing",
             # iframe test
-            # "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
+            "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe",
             # sticky element test
-            "https://en.wikipedia.org/wiki/English_Wikipedia",
+            # "https://en.wikipedia.org/wiki/English_Wikipedia",
             wait_until="domcontentloaded",
         )
 
