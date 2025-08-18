@@ -58,13 +58,11 @@ def _select_content_root(soup: BeautifulSoup) -> Tag:
 
 
 def _remove_comments_and_noncontent(root: Tag) -> None:
-    """Remove comments, scripts, styles, and non-content chrome elements.
+    """Remove comments, scripts, styles, and non-content chrome elements."""
 
-    Removes elements by tag name and ARIA roles associated with layout or UI.
-    """
     # Remove comments
     for c in root.find_all(string=lambda t: isinstance(t, Comment)):
-        c.extract()
+        c.extract()  # safer for strings
 
     # Remove obvious non-content tags
     blacklist_tags: Sequence[str] = (
@@ -86,10 +84,10 @@ def _remove_comments_and_noncontent(root: Tag) -> None:
         "template",
         "menu",
         "dialog",
+        # maybe reconsider: "sup"
     )
-    for tag_name in blacklist_tags:
-        for t in root.find_all(tag_name):
-            t.decompose()
+    for t in root.find_all(blacklist_tags):
+        t.decompose()
 
     # Remove by ARIA role when present
     roles_to_remove = {
@@ -112,13 +110,12 @@ def _remove_comments_and_noncontent(root: Tag) -> None:
     for t in root.find_all(attrs={"role": True}):
         try:
             role_val = t.attrs.get("role", "")
-            # role may be a space-separated list
             role_tokens = {
                 r.strip().lower() for r in str(role_val).split() if r.strip()
             }
             if role_tokens & roles_to_remove:
                 t.decompose()
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             continue
 
 
@@ -132,43 +129,47 @@ def _apply_wikipedia_rules(root: Tag, *, url: Optional[str]) -> None:
     if not url or not re.match(r"^https?://en\.wikipedia\.org/wiki/", url):
         return
 
-    # # Remove classes/ids known to be non-content
-    # class_based_removals = {
-    #     "hatnote",
-    #     "thumb",
-    #     "navbox",
-    #     "printfooter",
-    #     "mw-jump-link",
-    #     "mw-editsection",
-    #     "mw-ui-button",
-    #     "wb-langlinks-edit",
-    #     "mwe-math-fallback-image-display",
-    #     "mwe-math-fallback-image-inline",
-    # }
+    # Remove classes/ids known to be non-content
+    class_based_removals = {
+        "hatnote",  # Remove "meta" information about the Wikipedia article itself. See https://en.wikipedia.org/wiki/Wikipedia:Hatnote.
+        "thumb",  # Remove figures.
+        "navbox",  # Remove the navigation boxes at the bottom of the page.
+        "printfooter",  # Remove the message "Retrieved from $url".
+        "mw-jump-link",  # Remove "Jump to content" link.
+        "mw-editsection",  # Remove "[edit]" links.
+        "mw-ui-button",  # Remove UI buttons.
+        "wb-langlinks-edit",  # Remove "Edit links" link.
+        "mwe-math-fallback-image-display",  # Remove math fallback images.
+        "mwe-math-fallback-image-inline",  # Remove math fallback images.
+    }
 
     # for el in list(root.find_all(True)):
-    #     classes = set(el.get("class", []) or [])
+    #     classes = set(el.get("class", []))
     #     el_id = el.get("id", "")
     #     tag_name = el.name
 
-    #     if "hatnote" in classes:
-    #         el.decompose()
-    #         continue
-    #     if tag_name == "ol" and "references" in classes:
+    #     if tag_name == "ol" and set(["references", "citations"]) & classes:
+    #         # Remove section containing list of references/citations.
     #         el.decompose()
     #         continue
     #     if tag_name == "table" and "sidebar" in classes:
+    #         # Remove sidebar, which sometimes contains useful facts but often just contains "adjacent" information and links.
     #         el.decompose()
     #         continue
     #     if classes & class_based_removals:
+    #         # Remove elements with classes in class_based_removals (see above for details).
+    #         print("Removing element:", tag_name, "classes=", classes)
     #         el.decompose()
     #         continue
     #     if el_id == "siteSub":
+    #         # Remove the message "From Wikipedia, the free encyclopedia".
     #         el.decompose()
     #         continue
-    #     if tag_name == "sup" and "reference" in classes:
-    #         el.decompose()
-    #         continue
+
+    # if tag_name == "sup" and "reference" in classes:
+    #     # Remove numbered references around square brackets within body text.
+    #     el.decompose()
+    #     continue
 
     # Remove sections by heading (e.g., External links, See also)
     forbidden_sections = {
@@ -176,64 +177,53 @@ def _apply_wikipedia_rules(root: Tag, *, url: Optional[str]) -> None:
         "further reading",
         "external links",
         "see also",
-        "references",
     }
     for h2 in list(root.find_all("h2")):
         heading_text = (
             h2.get_text(" ", strip=True).replace("[edit]", "").strip().lower()
         )
-        if heading_text in forbidden_sections:
-            # Remove everything until the next h2
+        if any(fs in heading_text for fs in forbidden_sections):
             nxt = h2.find_next_sibling()
             h2.decompose()
-            while nxt is not None and getattr(nxt, "name", None) != "h2":
+            while nxt is not None:
+                if nxt.name == "h2":
+                    break
                 to_remove = nxt
                 nxt = nxt.find_next_sibling()
                 to_remove.decompose()
 
 
 def _remove_hidden_and_noise(root: Tag) -> None:
-    """Aggressively remove hidden elements and common boilerplate/noise.
-
-    Removes elements with hidden semantics (hidden attribute, aria-hidden, inline
-    styles hiding the element) and elements with common noise classes/ids like
-    ads, breadcrumbs, pagination, social, etc.
-    """
+    """Remove hidden elements and common boilerplate/noise."""
     for el in list(root.find_all(True)):
         try:
-            attrs = el.attrs or {}
-            if attrs.get("hidden") is not None:
+            attrs = el.attrs
+            # Hidden semantics
+            if "hidden" in attrs:
                 el.decompose()
                 continue
             if str(attrs.get("aria-hidden", "")).lower() == "true":
                 el.decompose()
                 continue
+            # Inline styles
             style = str(attrs.get("style", "")).lower()
-            if any(
-                s in style
-                for s in (
-                    "display:none",
-                    "display: none",
-                    "visibility:hidden",
-                    "visibility: hidden",
-                )
-            ):
+            if re.search(r"display\s*:\s*none|visibility\s*:\s*hidden", style):
                 el.decompose()
                 continue
+            # IDs and classes
             id_or_classes = " ".join(
                 [
                     str(attrs.get("id", "")),
-                    " ".join(list(attrs.get("class", []) or [])),
+                    " ".join(attrs.get("class", []) or []),
                 ]
             ).lower()
-            if re.search(
-                r"\b(ad|advert|promo|sponsored|breadcrumb|pagination|share|social|subscribe|newsletter|related|tags|comments)\b",
+            if id_or_classes and re.search(
+                r"(?:^|[-_\s])(ad|advert|promo|sponsored|breadcrumb|pagination|share|social|subscribe|newsletter|related|tags|comments)(?:$|[-_\s])",
                 id_or_classes,
             ):
                 el.decompose()
                 continue
-        except Exception:
-            # Be conservative on unexpected markup
+        except (AttributeError, TypeError, ValueError):
             continue
 
 
@@ -253,7 +243,7 @@ def _replace_anchor_with_text(
         replacement: str
         if include_links and href:
             # Skip non-content schemes and fragment-only links
-            if href.startswith(("javascript:", "mailto:")) or href.startswith("#"):
+            if href.startswith(("javascript:", "mailto:", "https://", "http://", "#")):
                 replacement = link_text
             else:
                 abs_href = urljoin(base_url, href) if base_url else href
@@ -261,6 +251,50 @@ def _replace_anchor_with_text(
         else:
             replacement = link_text
         a.replace_with(NavigableString(replacement))
+
+
+def _normalize_inline_elements(root: Tag) -> None:
+    """Normalize inline elements to preserve text flow.
+
+    Converts inline formatting elements like <strong>, <em>, <span>, etc.
+    to plain text while preserving their content, preventing line breaks.
+    """
+    # Common inline elements that should not break text flow
+    inline_tags = {
+        "strong",
+        "b",
+        "em",
+        "i",
+        "u",
+        "mark",
+        "small",
+        "del",
+        "ins",
+        "sub",
+        "sup",
+        "span",
+        "cite",
+        "dfn",
+        "abbr",
+        "acronym",
+        "kbd",
+        "samp",
+        "var",
+        "time",
+        "data",
+        "q",
+        "s",
+        "strike",
+    }
+
+    for tag in root.find_all(inline_tags):
+        # Get the text content and replace the tag with it
+        text_content = tag.get_text(" ", strip=True)
+        if text_content:
+            tag.replace_with(NavigableString(text_content))
+        else:
+            # If no text content, just remove the tag
+            tag.decompose()
 
 
 def _collect_semantic_blocks(root: Tag) -> List[Tag]:
@@ -285,6 +319,7 @@ def _collect_semantic_blocks(root: Tag) -> List[Tag]:
         "dl",
         "figure",
         "hr",
+        "code",
     }
     blocks: List[Tag] = []
     for element in root.find_all(list(allowed)):
@@ -296,8 +331,9 @@ def _collect_semantic_blocks(root: Tag) -> List[Tag]:
 def _text_from_block(el: Tag, *, include_links: bool, base_url: Optional[str]) -> str:
     """Render a semantic block to normalized text.
 
-    - p: collapsed text
+    - p: inline text with preserved flow (no line breaks)
     - pre: preserve text
+    - code: preserve text with whitespace normalization
     - blockquote: "> " prefix per line
     - ul/ol: list items, one per line ("- " or "1. ")
     - dl: term: definition
@@ -311,8 +347,25 @@ def _text_from_block(el: Tag, *, include_links: bool, base_url: Optional[str]) -
         level = int(name[1])
         text = " ".join(list(el.stripped_strings))
         return f"{'#' * level} {text}".strip()
-    if name == "pre":
-        return el.get_text("\n", strip=False).rstrip()
+    if name in {"pre", "code"}:
+        # output_lines = []
+        # current_line = ""
+        # text = el.get_text("\n", strip=False)
+        # lines = text.splitlines()
+        # for line in lines:
+        #     if line.isspace() and len(line) > 2:
+        #         # if line is multiple spaces (indent), append previous buffer and start new line with indent
+        #         output_lines.append(current_line.rstrip())
+        #         current_line = line
+
+        #     else:
+        #         # if the line is regular text or a space, append to current line
+        #         current_line += line
+        # output_lines.append(current_line)
+        # return "\n".join(output_lines)
+
+        text = el.get_text(separator="", strip=False)
+        return text.strip("\n")
     if name == "blockquote":
         text = " ".join(list(el.stripped_strings))
         lines = [ln for ln in text.splitlines() if ln.strip()]
@@ -401,9 +454,10 @@ def _text_from_block(el: Tag, *, include_links: bool, base_url: Optional[str]) -
         return "---"
 
     # Default: paragraph-like
-    text = el.get_text("\n", strip=True)
-    # Collapse multiple newlines to a single newline
-    text = re.sub(r"\n{2,}", "\n", text).strip()
+    # For paragraphs and other text blocks, preserve inline flow
+    text = el.get_text(" ", strip=True)  # Use space separator instead of newline
+    # Clean up excessive whitespace while preserving word boundaries
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
@@ -456,6 +510,7 @@ def extract_text(
     _apply_wikipedia_rules(root, url=url)
     _promote_paragraph_like_divs(root)
     _replace_anchor_with_text(root, include_links=include_links, base_url=url)
+    _normalize_inline_elements(root)
 
     blocks = _collect_semantic_blocks(root)
     texts: List[str] = []
@@ -508,12 +563,12 @@ async def demo_fetch_random_wikipedia(include_links: bool = False) -> None:
 
         page = await context.new_page()
         await page.goto(
-            "https://en.wikipedia.org/wiki/Long_Pond_(Rochester,_Massachusetts)",
+            "https://blog.wilsonl.in/search-engine/#normalization",
             wait_until="domcontentloaded",
         )
         text = await fetch_and_extract(page, include_links=include_links)
-        print(f"URL: {page.url}\n")
-        print(text)
+        with open("extracted_wikipedia.txt", "w", encoding="utf-8") as f:
+            f.write(text)
         await browser.close()
 
 
