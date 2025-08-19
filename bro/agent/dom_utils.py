@@ -372,7 +372,7 @@ async def take_screenshot_with_bounding_boxes(
     result = await page.evaluate(
         "(args) => window.buildDomTree(args)",
         {
-            "doHighlightElements": False,
+            "doHighlightElements": take_screenshot,
             "debugMode": False,
             "overlapThreshold": 0.7,
             "indexByPosition": True,

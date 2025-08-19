@@ -485,7 +485,11 @@ class Agent:
         return results
 
     async def run(
-        self, user_prompt: str, url: str = "", max_iterations: int = 10
+        self,
+        user_prompt: str,
+        url: str = "",
+        max_iterations: int = 10,
+        screenshot: bool = False,
     ) -> List[ActionResult]:
         """
         Run the agent loop to complete the user's task.
@@ -598,7 +602,7 @@ class Agent:
                         page,
                         wait_for_change=should_wait_for_change,
                         previous_signature=last_signature,
-                        take_screenshot=False,
+                        take_screenshot=screenshot,
                     )
 
                     if not page_data:
@@ -627,7 +631,12 @@ class Agent:
                             )
                         else:
                             previous_action_text = f"\nPrevious action: You executed '{previous_action}' in the last iteration. Please follow up on this action to continue with the task."
-
+                    screenshot_text = (
+                        "A screenshot has been attached showing the current page with bounding boxes around interactive elements. "
+                        "Each box has an index number that corresponds to the elements listed above. "
+                        if page_data.get("screenshot")
+                        else ""
+                    )
                     enhanced_prompt = f"""
                             User prompt: 
 							{user_prompt}
@@ -639,8 +648,7 @@ class Agent:
 							There are {viewport_info["pixelsAbove"]} pixels above your current view and {viewport_info["pixelsBelow"]} pixels below.
 							The page is {viewport_info["documentHeight"]} pixels tall and your viewport is {viewport_info["innerHeight"]} pixels tall.
 
-							If a screenshot has been attached, it shows the current page with bounding boxes around interactive elements. 
-							Each box has an index number that corresponds to the elements listed above. 
+							{screenshot_text}
 
 							{previous_action_text}
 
@@ -724,13 +732,17 @@ class Agent:
 async def main():
     # Load the Bro system prompt
     system_prompt = Path("prompts/bro.txt").read_text(encoding="utf-8")
-
+    prompts = [
+        "Open a new google doc and write an essay about cherries",
+        "Open gmail and send an email to blueplus.d@gmail.com with the subject 'Hello' and the body 'This is a test email'",
+    ]
     # Create and run the agent
     agent = Agent(system_prompt)
     results = await agent.run(
-        user_prompt="Open a new google doc and write an essay about cherries",
+        user_prompt=prompts[1],
         # "https://accounts.google.com/v3/signin/identifier?checkedDomains=youtube&continue=https%3A%2F%2Faccounts.google.com%2F&flowEntry=ServiceLogin&flowName=GlifWebSignIn&followup=https%3A%2F%2Faccounts.google.com%2F&ifkv=AdBytiOYvUAqRJUi6-iHJ04pgCOhk2j6OcoLbvaXOx0XwJgfuW3iXQLuT72oPUhYKHIGRfbxqqxE&pstMsg=1&dsh=S757206094%3A1754856863191091",
         max_iterations=20,
+        screenshot=True,
     )
 
     # Print results

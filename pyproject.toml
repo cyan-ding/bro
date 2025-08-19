@@ -26,9 +26,10 @@ dependencies = [
     "openai",
     "chardet",
     "deptry==0.23.1",
-    "beautifulsoup4",
     "faiss-cpu",
     "numpy",
+    "markdownify>=1.2.0",
+    "beautifulsoup4>=4.13.4",
 ]
 
 [tool.setuptools.packages.find]

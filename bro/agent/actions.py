@@ -5,7 +5,6 @@ All actions now use XPath selectors for precise element targeting, with optional
 
 from typing import Any, Optional
 
-import trafilatura
 from patchright.async_api import Page
 
 
@@ -130,24 +129,26 @@ async def extract(page: Page):
     Returns:
             Extracted text content
     """
-    # Get the page HTML
-    html_content = await page.content()
+    # # Get the page HTML
+    # html_content = await page.content()
 
-    # Extract text using Trafilatura
-    extracted_text = trafilatura.extract(
-        html_content, include_links=True, include_images=True
-    )
+    # # Extract text using Trafilatura
+    # extracted_text = trafilatura.extract(
+    #     html_content, include_links=True, include_images=True
+    # )
 
-    if not extracted_text:
-        # Fallback to basic text extraction
-        extracted_text = await page.evaluate("""
-			() => {
-				const body = document.body;
-				return body ? body.innerText : '';
-			}
-		""")
+    # if not extracted_text:
+    #     # Fallback to basic text extraction
+    #     extracted_text = await page.evaluate("""
 
-    return extracted_text
+
+# 		() => {
+# 			const body = document.body;
+# 			return body ? body.innerText : '';
+# 		}
+# 	""")
+
+# return extracted_text
 
 
 async def search(page: Page, query: str):
