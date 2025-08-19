@@ -1,14 +1,13 @@
 import asyncio
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 from browser.use_cdp import use_cdp
-from markdownify import markdownify as md
-from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from bs4.element import Comment
-from typing import Sequence
+from markdownify import markdownify as md
+from playwright.async_api import async_playwright
 
 
 @dataclass
@@ -112,7 +111,22 @@ class MarkdownifyRAGPipeline:
 
     def remove_unwanted_sections(self, text: str) -> str:
         """Remove unwanted sections like references, citations, sources, etc."""
+        # Remove Wikipedia-style citation links like [[184]](#cite_note-187) - good
+        text = re.sub(r"\[\[\d+\]\]\(#cite_note[^)]*\)", "", text)
 
+        # # Remove Wikipedia edit links like [edit](/w/index.php?title=...&action=edit&section=25 "Edit section: ...")
+        text = re.sub(r"\[edit\]\([^)]*\)", "", text)
+
+        # Remove additional edit section links like [&action=edit&section=1 "Edit section: History")]
+        text = re.sub(r"\[&action=edit&section=[^\]]*\]", "", text)
+
+        # Remove markdown images like ![Wikipedia](/static/images/mobile/copyright/wikipedia-wordmark-en.svg) - good
+        text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+
+        # Convert markdown links to plain text like [Apache web server](/wiki/Apache_webserver "Apache webserver") -> Apache web server
+        text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+
+        text = re.sub(r"\n{3,}", "\n", text)
         # Define section patterns that should be removed (case-insensitive)
         unwanted_sections = [
             r"references?",
@@ -346,7 +360,7 @@ async def main():
             if browser_context.pages
             else await browser_context.new_page()
         )
-        await page.goto("https://en.wikipedia.org/wiki/Python_(programming_language)")
+        await page.goto("https://blog.wilsonl.in/search-engine/#normalization")
         html = await page.content()
         md = pipeline.html_to_markdown(html)
         print(md)
