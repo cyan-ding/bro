@@ -1,4 +1,6 @@
 import asyncio
+import os
+import sys
 import subprocess
 import urllib.error
 import urllib.request
@@ -14,12 +16,22 @@ async def use_cdp() -> None:
         except (urllib.error.URLError, urllib.error.HTTPError):
             return False
 
+
     if not is_chrome_running():
+        if sys.platform == "darwin":
+            # macOS default Chrome path
+            chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            user_data_dir = os.path.expanduser("~/tmp/chrome-profile")
+        else:
+            # Windows default Chrome path
+            chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+            user_data_dir = "C:/tmp/chrome-profile"
+
         subprocess.Popen(
             [
-                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                chrome_path,
                 "--remote-debugging-port=9222",
-                "--user-data-dir=C:/tmp/chrome-profile",
+                f"--user-data-dir={user_data_dir}",
             ]
         )
 

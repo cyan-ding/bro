@@ -30,6 +30,8 @@ dependencies = [
     "numpy",
     "markdownify>=1.2.0",
     "beautifulsoup4>=4.13.4",
+    "pymilvus>=2.3.0",
+    "voyageai>=0.2.0",
 ]
 
 [tool.setuptools.packages.find]

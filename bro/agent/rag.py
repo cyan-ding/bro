@@ -1,13 +1,17 @@
 import asyncio
+import os
 import re
+import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
+import voyageai
 from browser.use_cdp import use_cdp
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 from markdownify import markdownify as md
 from playwright.async_api import async_playwright
+from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, utility
 
 
 @dataclass
@@ -16,18 +20,268 @@ class Chunk:
     metadata: Dict[str, Any]
     start_idx: int
     end_idx: int
+    id: Optional[str] = None
+    embedding: Optional[List[float]] = None
 
 
-class MarkdownifyRAGPipeline:
+class VoyageEmbeddingService:
+    """
+    @file purpose: Provides text embedding generation using Voyage AI's embedding models.
+    
+    This service handles the conversion of text chunks into vector embeddings for similarity search
+    and retrieval operations in the RAG pipeline.
+    """
+    
+    def __init__(self, api_key: Optional[str] = None, model: str = "voyage-2"):
+        """
+        Initialize the Voyage AI embedding service.
+        
+        Args:
+            api_key: Voyage AI API key. If None, will use VOYAGE_API_KEY environment variable.
+            model: Voyage AI model to use for embeddings. Defaults to "voyage-2".
+        """
+        self.api_key = api_key or os.getenv("VOYAGE_API_KEY")
+        if not self.api_key:
+            raise ValueError("VOYAGE_API_KEY environment variable or api_key parameter required")
+        
+        self.model = model
+        self.client = voyageai.Client(api_key=self.api_key)
+        
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings for a list of texts.
+        
+        Args:
+            texts: List of text strings to embed.
+            
+        Returns:
+            List of embedding vectors, one for each input text.
+        """
+        try:
+            # Voyage AI client is synchronous, but we'll wrap it for async compatibility
+            result = self.client.embed(texts, model=self.model, input_type="document")
+            return result.embeddings
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate embeddings: {str(e)}")
+            
+    async def embed_query(self, query: str) -> List[float]:
+        """
+        Generate embedding for a single query text.
+        
+        Args:
+            query: Query text to embed.
+            
+        Returns:
+            Embedding vector for the query.
+        """
+        try:
+            result = self.client.embed([query], model=self.model, input_type="query")
+            return result.embeddings[0]
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate query embedding: {str(e)}")
+            
+    def get_embedding_dimension(self) -> int:
+        """
+        Get the dimension of embeddings produced by the current model.
+        
+        Returns:
+            Embedding dimension size.
+        """
+        # Voyage-2 produces 1024-dimensional embeddings
+        model_dimensions = {
+            "voyage-2": 1024,
+            "voyage-large-2": 1536,
+            "voyage-code-2": 1536,
+            "voyage-lite-02-instruct": 1024
+        }
+        return model_dimensions.get(self.model, 1024)
+
+
+class MilvusVectorStore:
+    """
+    @file purpose: Manages vector storage and retrieval operations using Milvus database.
+    
+    This class handles the storage of text chunks as vector embeddings and provides
+    similarity search functionality for the RAG pipeline.
+    """
+    
+    def __init__(
+        self, 
+        collection_name: str = "rag_chunks",
+        host: str = "localhost",
+        port: str = "19530",
+        embedding_dim: int = 1024
+    ):
+        """
+        Initialize the Milvus vector store.
+        
+        Args:
+            collection_name: Name of the Milvus collection to use.
+            host: Milvus server host. Defaults to localhost.
+            port: Milvus server port. Defaults to 19530.
+            embedding_dim: Dimension of the embedding vectors.
+        """
+        self.collection_name = collection_name
+        self.host = host
+        self.port = port
+        self.embedding_dim = embedding_dim
+        self.collection: Optional[Collection] = None
+        
+    async def connect(self) -> None:
+        """Connect to Milvus and initialize the collection."""
+        try:
+            # Connect to Milvus
+            connections.connect("default", host=self.host, port=self.port)
+            
+            # Create collection if it doesn't exist
+            if not utility.has_collection(self.collection_name):
+                await self._create_collection()
+            
+            # Load the collection
+            self.collection = Collection(self.collection_name)
+            self.collection.load()
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to connect to Milvus: {str(e)}")
+            
+    async def _create_collection(self) -> None:
+        """Create a new collection with appropriate schema."""
+        # Define the schema
+        fields = [
+            FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=100),
+            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="metadata", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=self.embedding_dim),
+        ]
+        
+        schema = CollectionSchema(fields, description="RAG pipeline text chunks")
+        
+        # Create the collection
+        collection = Collection(self.collection_name, schema)
+        
+        # Create an index on the vector field
+        index_params = {
+            "metric_type": "COSINE",
+            "index_type": "IVF_FLAT",
+            "params": {"nlist": 128}
+        }
+        collection.create_index("embedding", index_params)
+        
+    async def add_chunks(self, chunks: List[Chunk]) -> None:
+        """
+        Add chunks to the vector store.
+        
+        Args:
+            chunks: List of Chunk objects with embeddings to store.
+        """
+        if not self.collection:
+            raise RuntimeError("Vector store not connected. Call connect() first.")
+            
+        if not chunks:
+            return
+            
+        # Prepare data for insertion
+        ids = []
+        contents = []
+        metadatas = []
+        embeddings = []
+        
+        for chunk in chunks:
+            if chunk.embedding is None:
+                raise ValueError("Chunk must have embedding before adding to vector store")
+                
+            chunk_id = chunk.id or f"chunk_{hash(chunk.content)}_{chunk.start_idx}"
+            ids.append(chunk_id)
+            contents.append(chunk.content)
+            metadatas.append(json.dumps(chunk.metadata) )  # Convert dict to string for storage
+            embeddings.append(chunk.embedding)
+            
+        # Insert data
+        data = [ids, contents, metadatas, embeddings]
+        try:
+            self.collection.insert(data)
+            self.collection.flush()
+        except Exception as e:
+            raise RuntimeError(f"Failed to insert chunks: {str(e)}")
+            
+    async def search(
+        self, 
+        query_embedding: List[float], 
+        top_k: int = 5,
+        score_threshold: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for similar chunks using vector similarity.
+        
+        Args:
+            query_embedding: Query vector to search for.
+            top_k: Number of results to return.
+            score_threshold: Minimum similarity score threshold.
+            
+        Returns:
+            List of search results with content, metadata, and scores.
+        """
+        if not self.collection:
+            raise RuntimeError("Vector store not connected. Call connect() first.")
+            
+        search_params = {"metric_type": "COSINE", "params": {"nprobe": 10}}
+        
+        try:
+            results = self.collection.search(
+                data=[query_embedding],
+                anns_field="embedding",
+                param=search_params,
+                limit=top_k,
+                output_fields=["content", "metadata"]
+            )
+            
+            # Format results
+            formatted_results = []
+            for hit in results[0]:
+                if hit.score >= score_threshold:
+                    formatted_results.append({
+                        "content": hit.entity.get("content"),
+                        "metadata": json.loads(hit.entity.get("metadata", "{}")),  # Convert string back to dict
+                        "score": hit.score,
+                        "id": hit.id
+                    })
+                    
+            return formatted_results
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to search: {str(e)}")
+            
+    async def delete_collection(self) -> None:
+        """Delete the entire collection."""
+        if utility.has_collection(self.collection_name):
+            utility.drop_collection(self.collection_name)
+            
+    async def disconnect(self) -> None:
+        """Disconnect from Milvus."""
+        connections.disconnect("default")
+
+
+class RAGPipeline:
+    """
+    @file purpose: Complete RAG pipeline that processes HTML content into searchable vector embeddings.
+    
+    This pipeline combines HTML-to-markdown conversion, semantic chunking, embedding generation,
+    and vector storage using Milvus for retrieval-augmented generation workflows.
+    """
+    
     def __init__(
         self,
-        chunk_size: int = 1000,
+        max_chunk_size: int = 1000,
         chunk_overlap: int = 200,
         min_chunk_size: int = 100,
+        embedding_service: Optional[VoyageEmbeddingService] = None,
+        vector_store: Optional[MilvusVectorStore] = None,
     ):
-        self.chunk_size = chunk_size
+        self.max_chunk_size = max_chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
+        self.embedding_service = embedding_service
+        self.vector_store = vector_store
 
     def _remove_comments_and_noncontent(self, root: BeautifulSoup) -> None:
         """Remove comments, scripts, styles, and non-content chrome elements."""
@@ -197,118 +451,115 @@ class MarkdownifyRAGPipeline:
 
         return self.remove_unwanted_sections(normalized_html)
 
-    async def extract_headers(self, text: str) -> List[Dict[str, Any]]:
-        """Extract header hierarchy for metadata"""
-        headers = []
-        lines = text.split("\n")
+    async def semantic_chunking(self, text: str) -> List[Chunk]:
+        """
+        Create semantically meaningful chunks by processing the text line-by-line.
+        This method identifies headers to create logical sections and then splits
+        those sections into chunks of a specified size.
+        """
+        chunks: List[Chunk] = []
+        lines = text.split('\n')
+        
+        current_chunk_lines: List[str] = []
+        current_chunk_start_pos = 0
         char_pos = 0
+        current_headers: List[Dict[str, Any]] = []
 
-        for i, line in enumerate(lines):
+        def _finalize_chunk(
+            chunk_lines: List[str], 
+            start_pos: int, 
+            end_pos: int,
+            headers: List[Dict[str, Any]]
+        ) -> Optional[Chunk]:
+            """Helper to create a chunk if it meets the minimum size."""
+            content = "\n".join(chunk_lines).strip()
+            if len(content) >= self.min_chunk_size:
+                return Chunk(
+                    content=content,
+                    metadata={"headers": [h.copy() for h in headers]},
+                    start_idx=start_pos,
+                    end_idx=end_pos,
+                )
+            return None
+
+        for line in lines:
+            line_char_len = len(line) + 1  # +1 for the newline character
+            
             header_match = re.match(r"^(#{1,6})\s+(.+)$", line.strip())
+
             if header_match:
+                # If there's content in the current chunk, finalize it before starting a new one
+                if current_chunk_lines:
+                    chunk = _finalize_chunk(
+                        current_chunk_lines, 
+                        current_chunk_start_pos, 
+                        char_pos,
+                        current_headers
+                    )
+                    if chunk:
+                        chunks.append(chunk)
+                
+                # Update header context
                 level = len(header_match.group(1))
                 title = header_match.group(2).strip()
-                headers.append(
-                    {"level": level, "title": title, "line": i, "char_pos": char_pos}
-                )
-            char_pos += len(line) + 1
+                
+                # Remove any headers of the same or lower level
+                current_headers = [h for h in current_headers if h['level'] < level]
+                current_headers.append({"level": level, "title": title})
 
-        return headers
-
-    async def semantic_chunking(self, text: str) -> List[Chunk]:
-        """Create semantically meaningful chunks"""
-        chunks = []
-        headers = await self.extract_headers(text)
-        paragraphs = re.split(r"\n\s*\n", text)
-
-        current_chunk = ""
-        current_start = 0
-        current_metadata = {"headers": []}
-
-        char_pos = 0
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
-                continue
-
-            # Check if this paragraph is a header
-            header_match = re.match(r"^#{1,6}\s+", para)
-            if header_match:
-                # If we have content, save current chunk
-                if current_chunk and len(current_chunk.strip()) >= self.min_chunk_size:
-                    chunks.append(
-                        Chunk(
-                            content=current_chunk.strip(),
-                            metadata=current_metadata.copy(),
-                            start_idx=current_start,
-                            end_idx=char_pos,
-                        )
-                    )
-
-                # Start new chunk with this header
-                current_chunk = para
-                current_start = char_pos
-
-                # Update metadata with current header context
-                level = len(header_match.group(0).strip())
-                title = para[level + 1 :].strip()
-                current_metadata = {
-                    "headers": await self._get_header_context(headers, char_pos, level)
-                }
-                current_metadata["headers"].append({"level": level, "title": title})
-
+                # Start a new chunk with the header
+                current_chunk_lines = [line]
+                current_chunk_start_pos = char_pos
+            
             else:
-                # Regular paragraph - add to current chunk
-                if current_chunk:
-                    test_chunk = current_chunk + "\n\n" + para
-                else:
-                    test_chunk = para
+                # Add the line to the current chunk
+                current_chunk_lines.append(line)
+                current_content = "\n".join(current_chunk_lines)
 
-                # If adding this paragraph exceeds chunk size, finalize current chunk
-                if len(test_chunk) > self.chunk_size and current_chunk:
-                    chunks.append(
-                        Chunk(
-                            content=current_chunk.strip(),
-                            metadata=current_metadata.copy(),
-                            start_idx=current_start,
-                            end_idx=char_pos,
-                        )
+                # If the chunk exceeds the max size, split it
+                if len(current_content) > self.max_chunk_size:
+                    chunk = _finalize_chunk(
+                        current_chunk_lines, 
+                        current_chunk_start_pos, 
+                        char_pos + line_char_len,
+                        current_headers
                     )
+                    if chunk:
+                        chunks.append(chunk)
 
-                    # Start new chunk with overlap
-                    overlap_text = await self._get_overlap(current_chunk)
-                    current_chunk = overlap_text + para if overlap_text else para
-                    current_start = (
-                        char_pos - len(overlap_text) if overlap_text else char_pos
-                    )
-                else:
-                    current_chunk = test_chunk
+                    # Create overlap for the next chunk
+                    overlap_text = await self._get_overlap(current_content)
+                    current_chunk_lines = overlap_text.split('\n')
+                    current_chunk_start_pos = (char_pos + line_char_len) - len(overlap_text) -1
+            
+            char_pos += line_char_len
 
-            char_pos += len(para) + 2  # +2 for \n\n
-
-        # Add final chunk
-        if current_chunk and len(current_chunk.strip()) >= self.min_chunk_size:
-            chunks.append(
-                Chunk(
-                    content=current_chunk.strip(),
-                    metadata=current_metadata,
-                    start_idx=current_start,
-                    end_idx=char_pos,
-                )
+        # Add the final chunk
+        if current_chunk_lines:
+            final_content = "\n".join(current_chunk_lines).strip()
+            chunk = _finalize_chunk(
+                current_chunk_lines,
+                current_chunk_start_pos,
+                char_pos,
+                current_headers
             )
+            if chunk:
+                # If the last chunk is too small, merge it with the previous one
+                if len(final_content) < self.min_chunk_size and chunks:
+                    last_chunk = chunks[-1]
+                    merged_content = last_chunk.content + "\n\n" + final_content
+                    chunks[-1] = Chunk(
+                        content=merged_content,
+                        metadata=last_chunk.metadata, # Keep metadata of the larger, previous chunk
+                        start_idx=last_chunk.start_idx,
+                        end_idx=char_pos,
+                        id=last_chunk.id,
+                        embedding=last_chunk.embedding
+                    )
+                else:
+                    chunks.append(chunk)
 
         return chunks
-
-    async def _get_header_context(
-        self, headers: List[Dict], char_pos: int, current_level: int
-    ) -> List[Dict]:
-        """Get relevant parent headers for context"""
-        context = []
-        for header in reversed(headers):
-            if header["char_pos"] < char_pos and header["level"] < current_level:
-                context.insert(0, header)
-                current_level = header["level"]
-        return context
 
     async def _get_overlap(self, text: str) -> str:
         """Extract overlap text from end of chunk"""
@@ -317,35 +568,117 @@ class MarkdownifyRAGPipeline:
 
         # Try to break at sentence boundary
         overlap_start = len(text) - self.chunk_overlap
-        sentences = re.split(r"[.!?]+\s+", text[overlap_start:])
+        # Find the first sentence start before the overlap window
+        sentence_break = text.rfind('.', 0, overlap_start) + 1
+        if sentence_break > 0:
+            return text[sentence_break:].lstrip()
 
-        if len(sentences) > 1:
-            return (
-                sentences[-2] + ". " + sentences[-1]
-                if len(sentences[-2]) > 20
-                else sentences[-1]
-            )
-
+        # otherwise, return the last self.chunk_overlap characters
         return text[-self.chunk_overlap :]
 
-    async def process(self, html_content: str) -> List[Chunk]:
-        """Full pipeline: HTML -> Markdown -> Normalize -> Chunk"""
-
+    async def process(self, html_content: str, generate_embeddings: bool = True) -> List[Chunk]:
+        """
+        Full pipeline: HTML -> Markdown -> Normalize -> Chunk -> Embed
+        
+        Args:
+            html_content: Raw HTML content to process.
+            generate_embeddings: Whether to generate embeddings for chunks.
+            
+        Returns:
+            List of processed chunks with optional embeddings.
+        """
         # Step 1: Convert HTML to Markdown
         markdown = self.html_to_markdown(html_content)
 
         # Step 2: Create semantic chunks
         chunks = await self.semantic_chunking(markdown)
+        
+        # Step 3: Generate embeddings if requested and service is available
+        if generate_embeddings and self.embedding_service:
+            await self._add_embeddings_to_chunks(chunks)
 
         return chunks
+        
+    async def _add_embeddings_to_chunks(self, chunks: List[Chunk]) -> None:
+        """Add embeddings to chunks using the embedding service."""
+        if not self.embedding_service:
+            raise ValueError("Embedding service not configured")
+            
+        # Extract text content from chunks
+        texts = [chunk.content for chunk in chunks]
+        
+        # Generate embeddings
+        embeddings = await self.embedding_service.embed_texts(texts)
+        
+        # Assign embeddings to chunks
+        for chunk, embedding in zip(chunks, embeddings):
+            chunk.embedding = embedding
+            
+    async def process_and_store(self, html_content: str) -> List[Chunk]:
+        """
+        Process HTML content and store chunks in vector database.
+        
+        Args:
+            html_content: Raw HTML content to process.
+            
+        Returns:
+            List of processed and stored chunks.
+        """
+        if not self.vector_store:
+            raise ValueError("Vector store not configured")
+            
+        # Process and generate embeddings
+        chunks = await self.process(html_content, generate_embeddings=True)
+        
+        # Store in vector database
+        await self.vector_store.add_chunks(chunks)
+        
+        return chunks
+        
+    async def search(
+        self, 
+        query: str, 
+        top_k: int = 5, 
+        score_threshold: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for relevant chunks using semantic similarity.
+        
+        Args:
+            query: Search query text.
+            top_k: Number of results to return.
+            score_threshold: Minimum similarity score threshold.
+            
+        Returns:
+            List of relevant chunks with similarity scores.
+        """
+        if not self.embedding_service:
+            raise ValueError("Embedding service not configured")
+        if not self.vector_store:
+            raise ValueError("Vector store not configured")
+            
+        # Generate query embedding
+        query_embedding = await self.embedding_service.embed_query(query)
+        
+        # Search vector store
+        results = await self.vector_store.search(
+            query_embedding, 
+            top_k=top_k, 
+            score_threshold=score_threshold
+        )
+        
+        return results
 
 
-async def main():
-    pipeline = MarkdownifyRAGPipeline(
-        chunk_size=800, chunk_overlap=150, min_chunk_size=50
+async def test_chunking():
+    """Test the chunking functionality without requiring external services."""
+    # Create a simple pipeline without embedding service or vector store
+    pipeline = RAGPipeline(
+        max_chunk_size=300,  # Smaller chunks for testing
+        chunk_overlap=50,
+        min_chunk_size=30
     )
-
-    await use_cdp()
+    
     async with async_playwright() as p:
         browser = await p.chromium.connect_over_cdp("http://localhost:9222")
         # List contexts (Chrome profiles)
@@ -362,40 +695,103 @@ async def main():
         )
         await page.goto("https://blog.wilsonl.in/search-engine/#normalization")
         html = await page.content()
-        md = pipeline.html_to_markdown(html)
-        print(md)
+    
+    try:
+        # Process the HTML content
+        chunks = await pipeline.process(html, generate_embeddings=False)
+        
+        print(f"Generated {len(chunks)} chunks:")
+        for i, chunk in enumerate(chunks):
+            print(f"\n--- Chunk {i + 1} ---")
+            print(f"Content: {chunk.content[:100]}...")
+            print(f"Size: {len(chunk.content)} characters")
+            print(f"Start: {chunk.start_idx}, End: {chunk.end_idx}")
+            
+            # Show header context
+            if chunk.metadata.get('headers'):
+                headers = [h['title'] for h in chunk.metadata['headers']]
+                print(f"Headers: {headers}")
+                
+    except Exception as e:
+        print(f"Chunking test failed: {e}")
+
+
+async def test_full_rag_pipeline():
+    """Test the complete RAG pipeline with external services."""
+    try:
+        # Initialize services
+        embedding_service = VoyageEmbeddingService()  # Requires VOYAGE_API_KEY env var
+        vector_store = MilvusVectorStore(
+            collection_name="rag_demo",
+            embedding_dim=embedding_service.get_embedding_dimension()
+        )
+        
+        # Initialize pipeline with services
+        pipeline = RAGPipeline(
+            max_chunk_size=800, 
+            chunk_overlap=150, 
+            min_chunk_size=50,
+            embedding_service=embedding_service,
+            vector_store=vector_store
+        )
+
+        # Connect to vector store
+        await vector_store.connect()
+        print("Connected to Milvus vector store")
+        
+        # Process web content
+        await use_cdp()
+        async with async_playwright() as p:
+            browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+            # List contexts (Chrome profiles)
+            contexts = browser.contexts
+            if contexts:
+                browser_context = contexts[0]  # Use existing profile
+            else:
+                browser_context = await browser.new_context()  # Or create new
+            # Open a new tab
+            page = (
+                browser_context.pages[0]
+                if browser_context.pages
+                else await browser_context.new_page()
+            )
+            await page.goto("https://blog.wilsonl.in/search-engine/#normalization")
+            html = await page.content()
+            
+            # Process and store content
+            print("Processing HTML content and generating embeddings...")
+            chunks = await pipeline.process_and_store(html)
+            print(f"Processed and stored {len(chunks)} chunks")
+            
+            # Demonstrate search functionality
+            search_queries = [
+                "search engine normalization",
+                "text processing algorithms",
+                "database indexing methods"
+            ]
+            
+            for query in search_queries:
+                print(f"\nSearching for: '{query}'")
+                results = await pipeline.search(query, top_k=3, score_threshold=0.5)
+                
+                for i, result in enumerate(results):
+                    print(f"  Result {i+1} (score: {result['score']:.3f}):")
+                    print(f"    {result['content'][:150]}...")
+                    if result['metadata'].get('headers'):
+                        headers = [h['title'] for h in result['metadata']['headers']]
+                        print(f"    Headers: {headers}")
+                        
+    except Exception as e:
+        print(f"Full RAG pipeline test failed: {e}")
+        
+    finally:
+        # Cleanup
+        if 'vector_store' in locals() and vector_store:
+            await vector_store.disconnect()
+            print("Disconnected from Milvus")
+
 
 
 # Usage example
 if __name__ == "__main__":
-    asyncio.run(main())
-
-    # # Example HTML content
-    # html = """
-    # <html>
-    #     <body>
-    #         <h1>Introduction to RAG</h1>
-    #         <p>Retrieval-Augmented Generation (RAG) is a powerful technique...</p>
-
-    #         <h2>Key Components</h2>
-    #         <p>RAG systems typically consist of:</p>
-    #         <ul>
-    #             <li>A retrieval system</li>
-    #             <li>A generative model</li>
-    #             <li>A vector database</li>
-    #         </ul>
-
-    #         <h3>Vector Databases</h3>
-    #         <p>Vector databases store embeddings of your documents...</p>
-    #     </body>
-    # </html>
-    # """
-
-    # chunks = pipeline.process(html)
-
-    # for i, chunk in enumerate(chunks):
-    #     print(f"--- Chunk {i + 1} ---")
-    #     print(f"Content: {chunk.content[:100]}...")
-    #     print(f"Headers: {[h['title'] for h in chunk.metadata.get('headers', [])]}")
-    #     print(f"Size: {len(chunk.content)} chars")
-    #     print()
+    asyncio.run(test_full_rag_pipeline())
