@@ -1,7 +1,7 @@
 import asyncio
 import os
+import time
 import re
-import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -9,9 +9,10 @@ import voyageai
 from browser.use_cdp import use_cdp
 from bs4 import BeautifulSoup
 from bs4.element import Comment
+from dotenv import load_dotenv
 from markdownify import markdownify as md
 from playwright.async_api import async_playwright
-from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, utility
+from pinecone import Pinecone, ServerlessSpec
 
 
 @dataclass
@@ -24,6 +25,69 @@ class Chunk:
     embedding: Optional[List[float]] = None
 
 
+class VoyageRerankerService:
+    """
+    @file purpose: Provides document reranking using Voyage AI's reranking models.
+    
+    This service reorders search results based on relevance to the query using advanced
+    reranking models for improved retrieval quality in the RAG pipeline.
+    """
+    
+    def __init__(self, model: str = "rerank-2.5"):
+        """
+        Initialize the Voyage AI reranker service.
+        
+        Args:
+            model: Voyage AI reranking model to use. Defaults to "rerank-2.5".
+        """
+        self.api_key = os.environ.get("VOYAGE_API_KEY")
+        if not self.api_key:
+            raise ValueError("VOYAGE_API_KEY environment variable required")
+        
+        self.model = model
+        self.client = voyageai.Client(api_key=self.api_key)
+        
+    async def rerank(
+        self, 
+        query: str, 
+        documents: List[str], 
+        top_k: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Rerank documents based on relevance to the query.
+        
+        Args:
+            query: The search query to rank documents against.
+            documents: List of document texts to rerank.
+            top_k: Number of top documents to return. If None, returns all.
+            
+        Returns:
+            List of reranked results with relevance scores.
+        """
+        try:
+            # Voyage AI reranker expects documents as list of strings
+            result = self.client.rerank(
+                query=query,
+                documents=documents,
+                model=self.model,
+                top_k=top_k,
+            )
+            
+            # Convert results to our standard format
+            reranked_results = []
+            for item in result.results:
+                reranked_results.append({
+                    "index": item.index,  # Original index in the documents list
+                    "relevance_score": item.relevance_score,
+                    "document": item.document
+                })
+            
+            return reranked_results
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to rerank documents: {str(e)}")
+
+
 class VoyageEmbeddingService:
     """
     @file purpose: Provides text embedding generation using Voyage AI's embedding models.
@@ -32,15 +96,14 @@ class VoyageEmbeddingService:
     and retrieval operations in the RAG pipeline.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "voyage-2"):
+    def __init__(self, model: str = "voyage-3.5-lite"):
         """
         Initialize the Voyage AI embedding service.
         
         Args:
-            api_key: Voyage AI API key. If None, will use VOYAGE_API_KEY environment variable.
-            model: Voyage AI model to use for embeddings. Defaults to "voyage-2".
+            model: Voyage AI model to use for embeddings. Defaults to "voyage-3.5-lite".
         """
-        self.api_key = api_key or os.getenv("VOYAGE_API_KEY")
+        self.api_key = os.environ.get("VOYAGE_API_KEY")
         if not self.api_key:
             raise ValueError("VOYAGE_API_KEY environment variable or api_key parameter required")
         
@@ -87,85 +150,81 @@ class VoyageEmbeddingService:
         Returns:
             Embedding dimension size.
         """
-        # Voyage-2 produces 1024-dimensional embeddings
         model_dimensions = {
-            "voyage-2": 1024,
-            "voyage-large-2": 1536,
-            "voyage-code-2": 1536,
-            "voyage-lite-02-instruct": 1024
+            "voyage-3-large": 1024,
+            "voyage-3.5": 1024,
+            "voyage-3.5-lite": 1024,
         }
         return model_dimensions.get(self.model, 1024)
 
 
-class MilvusVectorStore:
+class PineconeVectorStore:
     """
-    @file purpose: Manages vector storage and retrieval operations using Milvus database.
+    @file purpose: Manages vector storage and retrieval operations using Pinecone cloud database.
     
     This class handles the storage of text chunks as vector embeddings and provides
-    similarity search functionality for the RAG pipeline.
+    similarity search functionality for the RAG pipeline using Pinecone's managed service.
     """
     
     def __init__(
         self, 
-        collection_name: str = "rag_chunks",
-        host: str = "localhost",
-        port: str = "19530",
-        embedding_dim: int = 1024
+        index_name: str = "rag-chunks",
+        namespace: Optional[str] = None,
+        embedding_dim: int = 1024,
+        metric: str = "cosine"
     ):
         """
-        Initialize the Milvus vector store.
+        Initialize the Pinecone vector store.
         
         Args:
-            collection_name: Name of the Milvus collection to use.
-            host: Milvus server host. Defaults to localhost.
-            port: Milvus server port. Defaults to 19530.
+            index_name: Name of the Pinecone index to use (typically user-based).
+            namespace: Namespace within the index for data isolation (typically session-based).
+            api_key: Pinecone API key. If None, will use PINECONE_API_KEY environment variable.
             embedding_dim: Dimension of the embedding vectors.
+            metric: Distance metric to use (cosine, euclidean, dotproduct).
         """
-        self.collection_name = collection_name
-        self.host = host
-        self.port = port
+        self.index_name = index_name
+        self.namespace = namespace
+        self.api_key = os.environ.get("PINECONE_API_KEY")
+        if not self.api_key:
+            raise ValueError("PINECONE_API_KEY environment variable or api_key parameter required")
+        
         self.embedding_dim = embedding_dim
-        self.collection: Optional[Collection] = None
+        self.metric = metric
+        self.pc: Optional[Pinecone] = None
+        self.index: Optional[Pinecone.Index] = None
         
     async def connect(self) -> None:
-        """Connect to Milvus and initialize the collection."""
+        """Connect to Pinecone and initialize the index."""
         try:
-            # Connect to Milvus
-            connections.connect("default", host=self.host, port=self.port)
+            # Initialize Pinecone client
+            self.pc = Pinecone(api_key=self.api_key)
             
-            # Create collection if it doesn't exist
-            if not utility.has_collection(self.collection_name):
-                await self._create_collection()
+            # Create index if it doesn't exist
+            if not self.pc.has_index(self.index_name):
+                await self._create_index()
             
-            # Load the collection
-            self.collection = Collection(self.collection_name)
-            self.collection.load()
+            # Get the index
+            self.index = self.pc.Index(self.index_name)
             
         except Exception as e:
-            raise RuntimeError(f"Failed to connect to Milvus: {str(e)}")
+            raise RuntimeError(f"Failed to connect to Pinecone: {str(e)}")
             
-    async def _create_collection(self) -> None:
-        """Create a new collection with appropriate schema."""
-        # Define the schema
-        fields = [
-            FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=100),
-            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
-            FieldSchema(name="metadata", dtype=DataType.VARCHAR, max_length=65535),
-            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=self.embedding_dim),
-        ]
-        
-        schema = CollectionSchema(fields, description="RAG pipeline text chunks")
-        
-        # Create the collection
-        collection = Collection(self.collection_name, schema)
-        
-        # Create an index on the vector field
-        index_params = {
-            "metric_type": "COSINE",
-            "index_type": "IVF_FLAT",
-            "params": {"nlist": 128}
-        }
-        collection.create_index("embedding", index_params)
+    async def _create_index(self) -> None:
+        """Create a new Pinecone index."""
+        try:
+            self.pc.create_index(
+                name=self.index_name,
+                dimension=self.embedding_dim,
+                metric=self.metric,
+                spec=ServerlessSpec(
+                    cloud="aws",
+                    region="us-east-1"  # TODO: make this configurable
+                )
+            )
+            print(f"Created Pinecone index: {self.index_name}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to create Pinecone index: {str(e)}")
         
     async def add_chunks(self, chunks: List[Chunk]) -> None:
         """
@@ -174,33 +233,69 @@ class MilvusVectorStore:
         Args:
             chunks: List of Chunk objects with embeddings to store.
         """
-        if not self.collection:
+        if not self.index:
             raise RuntimeError("Vector store not connected. Call connect() first.")
             
         if not chunks:
             return
             
-        # Prepare data for insertion
-        ids = []
-        contents = []
-        metadatas = []
-        embeddings = []
+        # Prepare vectors for upsert
+        vectors = []
         
         for chunk in chunks:
             if chunk.embedding is None:
                 raise ValueError("Chunk must have embedding before adding to vector store")
                 
             chunk_id = chunk.id or f"chunk_{hash(chunk.content)}_{chunk.start_idx}"
-            ids.append(chunk_id)
-            contents.append(chunk.content)
-            metadatas.append(json.dumps(chunk.metadata) )  # Convert dict to string for storage
-            embeddings.append(chunk.embedding)
             
-        # Insert data
-        data = [ids, contents, metadatas, embeddings]
+            # Prepare metadata (Pinecone supports string, number, boolean, list of strings)
+            metadata = {
+                "content": chunk.content[:40000],  # Pinecone has metadata size limits
+                "start_idx": chunk.start_idx,
+                "end_idx": chunk.end_idx,
+            }
+            
+            # Add headers information if available
+            if chunk.metadata and "headers" in chunk.metadata:
+                headers = chunk.metadata["headers"]
+                if headers:
+                    # Store header titles as a list of strings
+                    header_titles = [h.get("title", "") for h in headers if isinstance(h, dict)]
+                    if header_titles:
+                        metadata["header_titles"] = header_titles[:10]  # Limit to avoid size issues
+                        metadata["num_headers"] = len(headers)
+            
+            vectors.append({
+                "id": chunk_id,
+                "values": chunk.embedding,
+                "metadata": metadata
+            })
+            
+        # Upsert vectors in batches (Pinecone recommends batch sizes of 100-1000)
+        batch_size = 100
         try:
-            self.collection.insert(data)
-            self.collection.flush()
+            for i in range(0, len(vectors), batch_size):
+                batch = vectors[i:i + batch_size]
+                if self.namespace:
+                    self.index.upsert(vectors=batch, namespace=self.namespace)
+                else:
+                    self.index.upsert(vectors=batch)
+
+            # Get the initial vector count
+            stats = self.index.describe_index_stats()
+            initial_vector_count = stats['total_vector_count']
+            # Poll the index until the new vectors are indexed
+            print("Waiting for vectors to be indexed...")
+            target_count = initial_vector_count + len(vectors)
+            while True:
+                stats = self.index.describe_index_stats()
+                current_vector_count = stats.get('total_vector_count', 0)
+                if current_vector_count >= target_count:
+                    print(f"Index is ready with {current_vector_count} vectors.")
+                    break
+                print(f"Current vector count: {current_vector_count}... waiting...")
+                time.sleep(2) # Wait 2 seconds before checking again
+                
         except Exception as e:
             raise RuntimeError(f"Failed to insert chunks: {str(e)}")
             
@@ -221,29 +316,38 @@ class MilvusVectorStore:
         Returns:
             List of search results with content, metadata, and scores.
         """
-        if not self.collection:
+        if not self.index:
             raise RuntimeError("Vector store not connected. Call connect() first.")
             
-        search_params = {"metric_type": "COSINE", "params": {"nprobe": 10}}
-        
         try:
-            results = self.collection.search(
-                data=[query_embedding],
-                anns_field="embedding",
-                param=search_params,
-                limit=top_k,
-                output_fields=["content", "metadata"]
-            )
+            # Perform the search
+            query_params = {
+                "vector": query_embedding,
+                "top_k": top_k,
+                "include_metadata": True,
+                "include_values": False
+            }
+            if self.namespace:
+                query_params["namespace"] = self.namespace
+                
+            response = self.index.query(**query_params)
             
             # Format results
             formatted_results = []
-            for hit in results[0]:
-                if hit.score >= score_threshold:
+            for match in response.matches:
+                if match.score >= score_threshold:
+                    # Reconstruct metadata format to match original structure
+                    result_metadata = match.metadata
+
+                    if "header_titles" in result_metadata:
+                        headers = [{"title": title} for title in result_metadata["header_titles"]]
+                        result_metadata["headers"] = headers
+                    
                     formatted_results.append({
-                        "content": hit.entity.get("content"),
-                        "metadata": json.loads(hit.entity.get("metadata", "{}")),  # Convert string back to dict
-                        "score": hit.score,
-                        "id": hit.id
+                        "content": result_metadata.get("content", ""),
+                        "metadata": result_metadata,
+                        "score": match.score,
+                        "id": match.id
                     })
                     
             return formatted_results
@@ -251,14 +355,134 @@ class MilvusVectorStore:
         except Exception as e:
             raise RuntimeError(f"Failed to search: {str(e)}")
             
-    async def delete_collection(self) -> None:
-        """Delete the entire collection."""
-        if utility.has_collection(self.collection_name):
-            utility.drop_collection(self.collection_name)
+    async def delete_index(self) -> None:
+        """Delete the entire index."""
+        if self.pc and self.index_name:
+            try:
+                self.pc.delete_index(self.index_name)
+                print(f"Deleted Pinecone index: {self.index_name}")
+            except Exception as e:
+                print(f"Error deleting index: {e}")
             
     async def disconnect(self) -> None:
-        """Disconnect from Milvus."""
-        connections.disconnect("default")
+        """Disconnect from Pinecone (cleanup resources)."""
+        self.index = None
+        self.pc = None
+
+
+# Global RAG pipeline instance
+_global_pipeline: Optional['RAGPipeline'] = None
+_global_vector_store: Optional[PineconeVectorStore] = None
+_global_embedding_service: Optional[VoyageEmbeddingService] = None
+_global_reranker_service: Optional[VoyageRerankerService] = None
+
+
+async def initialize_rag_pipeline(
+    index_name: str = "bro-rag-chunks",
+    namespace: Optional[str] = None,
+    max_chunk_size: int = 1000,
+    chunk_overlap: int = 200,
+    min_chunk_size: int = 100,
+    embedding_model: str = "voyage-3.5-lite",
+    reranker_model: str = "rerank-2.5",
+    enable_reranker: bool = True,
+) -> 'RAGPipeline':
+    """
+    Initialize and return a global RAG pipeline instance with configured services.
+    
+    This function sets up the embedding service, vector store, reranker service, and RAG pipeline
+    for use throughout the Bro agent system. It maintains global instances to
+    avoid reinitialization.
+    
+    Args:
+        index_name: Name for the Pinecone index (typically user-based, e.g., 'bro-user-alice')
+        namespace: Namespace within the index (typically session-based, e.g., 'session-abc123')
+        max_chunk_size: Maximum size for text chunks
+        chunk_overlap: Overlap between chunks
+        min_chunk_size: Minimum size for text chunks
+        embedding_model: Voyage AI embedding model to use
+        reranker_model: Voyage AI reranking model to use
+        enable_reranker: Whether to enable the reranker service
+        
+    Returns:
+        Configured RAG pipeline instance
+        
+    Raises:
+        RuntimeError: If services cannot be initialized
+    """
+    global _global_pipeline, _global_vector_store, _global_embedding_service, _global_reranker_service
+    
+    if _global_pipeline is not None:
+        return _global_pipeline
+    
+    try:
+        # Initialize embedding service
+        _global_embedding_service = VoyageEmbeddingService(model=embedding_model)
+        print(f"✅ Initialized Voyage AI embedding service with model: {embedding_model}")
+        
+        # Initialize reranker service if enabled
+        if enable_reranker:
+            _global_reranker_service = VoyageRerankerService(model=reranker_model)
+            print(f"✅ Initialized Voyage AI reranker service with model: {reranker_model}")
+        
+        # Initialize vector store
+        _global_vector_store = PineconeVectorStore(
+            index_name=index_name,
+            namespace=namespace,
+            embedding_dim=_global_embedding_service.get_embedding_dimension()
+        )
+        
+        # Connect to vector store
+        await _global_vector_store.connect()
+        namespace_info = f" (namespace: {namespace})" if namespace else ""
+        print(f"✅ Connected to Pinecone vector store with index: {index_name}{namespace_info}")
+        
+        # Initialize RAG pipeline
+        _global_pipeline = RAGPipeline(
+            max_chunk_size=max_chunk_size,
+            chunk_overlap=chunk_overlap,
+            min_chunk_size=min_chunk_size,
+            embedding_service=_global_embedding_service,
+            vector_store=_global_vector_store,
+            reranker_service=_global_reranker_service
+        )
+        
+        print("✅ RAG pipeline initialized successfully")
+        return _global_pipeline
+        
+    except Exception as e:
+        print(f"❌ Failed to initialize RAG pipeline: {e}")
+        raise RuntimeError(f"RAG pipeline initialization failed: {e}")
+
+
+async def get_rag_pipeline() -> Optional['RAGPipeline']:
+    """
+    Get the global RAG pipeline instance.
+    
+    Returns:
+        RAG pipeline instance if initialized, None otherwise
+    """
+    return _global_pipeline
+
+
+async def cleanup_rag_pipeline() -> None:
+    """
+    Cleanup and disconnect RAG pipeline services.
+    """
+    global _global_pipeline, _global_vector_store, _global_embedding_service, _global_reranker_service
+    
+    if _global_vector_store:
+        try:
+            await _global_vector_store.disconnect()
+            print("✅ Disconnected from Pinecone vector store")
+        except Exception as e:
+            print(f"⚠️ Error disconnecting from Pinecone: {e}")
+    
+    _global_pipeline = None
+    _global_vector_store = None
+    _global_embedding_service = None
+    _global_reranker_service = None
+    print("✅ RAG pipeline cleanup completed")
 
 
 class RAGPipeline:
@@ -266,7 +490,7 @@ class RAGPipeline:
     @file purpose: Complete RAG pipeline that processes HTML content into searchable vector embeddings.
     
     This pipeline combines HTML-to-markdown conversion, semantic chunking, embedding generation,
-    and vector storage using Milvus for retrieval-augmented generation workflows.
+    and vector storage using Pinecone for retrieval-augmented generation workflows.
     """
     
     def __init__(
@@ -275,13 +499,15 @@ class RAGPipeline:
         chunk_overlap: int = 200,
         min_chunk_size: int = 100,
         embedding_service: Optional[VoyageEmbeddingService] = None,
-        vector_store: Optional[MilvusVectorStore] = None,
+        vector_store: Optional[PineconeVectorStore] = None,
+        reranker_service: Optional[VoyageRerankerService] = None,
     ):
         self.max_chunk_size = max_chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
         self.embedding_service = embedding_service
         self.vector_store = vector_store
+        self.reranker_service = reranker_service
 
     def _remove_comments_and_noncontent(self, root: BeautifulSoup) -> None:
         """Remove comments, scripts, styles, and non-content chrome elements."""
@@ -668,6 +894,82 @@ class RAGPipeline:
         )
         
         return results
+        
+    async def search_with_reranking(
+        self, 
+        query: str, 
+        initial_k: int = 50,
+        top_k: int = 5, 
+        score_threshold: float = 0.0,
+        rerank_threshold: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for relevant chunks using semantic similarity followed by reranking.
+        
+        This method performs a two-stage retrieval:
+        1. Initial retrieval using vector similarity (retrieves more candidates)
+        2. Reranking using Voyage AI's rerank model for better relevance
+        
+        Args:
+            query: Search query text.
+            initial_k: Number of initial candidates to retrieve before reranking.
+            top_k: Final number of results to return after reranking.
+            score_threshold: Minimum similarity score threshold for initial retrieval.
+            rerank_threshold: Minimum relevance score threshold for reranked results.
+            
+        Returns:
+            List of reranked chunks with relevance scores.
+        """
+        if not self.embedding_service:
+            raise ValueError("Embedding service not configured")
+        if not self.vector_store:
+            raise ValueError("Vector store not configured")
+        if not self.reranker_service:
+            raise ValueError("Reranker service not configured")
+            
+        # Step 1: Initial retrieval with vector similarity
+        query_embedding = await self.embedding_service.embed_query(query)
+        
+        initial_results = await self.vector_store.search(
+            query_embedding, 
+            top_k=initial_k, 
+            score_threshold=score_threshold
+        )
+        
+        if not initial_results:
+            return []
+            
+        # Step 2: Prepare documents for reranking
+        documents = [result["content"] for result in initial_results]
+        
+        # Step 3: Rerank documents
+        reranked_results = await self.reranker_service.rerank(
+            query=query,
+            documents=documents,
+            top_k=top_k
+        )
+        
+        # Step 4: Combine reranking results with original metadata
+        final_results = []
+        for rerank_result in reranked_results:
+            original_index = rerank_result["index"]
+            original_result = initial_results[original_index]
+            
+            # Apply rerank threshold if specified
+            if rerank_threshold and rerank_result["relevance_score"] < rerank_threshold:
+                continue
+                
+            # Combine data from both retrieval stages
+            combined_result = {
+                "content": original_result["content"],
+                "metadata": original_result["metadata"],
+                "vector_score": original_result["score"],  # Original vector similarity score
+                "relevance_score": rerank_result["relevance_score"],  # Reranker relevance score
+                "id": original_result["id"]
+            }
+            final_results.append(combined_result)
+            
+        return final_results
 
 
 async def test_chunking():
@@ -718,26 +1020,29 @@ async def test_chunking():
 
 async def test_full_rag_pipeline():
     """Test the complete RAG pipeline with external services."""
+    load_dotenv()
     try:
         # Initialize services
-        embedding_service = VoyageEmbeddingService()  # Requires VOYAGE_API_KEY env var
-        vector_store = MilvusVectorStore(
-            collection_name="rag_demo",
+        embedding_service = VoyageEmbeddingService() 
+        vector_store = PineconeVectorStore(
+            index_name="rag-demo",
+            namespace="rag-demo",
             embedding_dim=embedding_service.get_embedding_dimension()
         )
-        
+        reranker_service = VoyageRerankerService()
         # Initialize pipeline with services
         pipeline = RAGPipeline(
             max_chunk_size=800, 
             chunk_overlap=150, 
             min_chunk_size=50,
             embedding_service=embedding_service,
-            vector_store=vector_store
+            vector_store=vector_store,
+            reranker_service=reranker_service
         )
 
         # Connect to vector store
         await vector_store.connect()
-        print("Connected to Milvus vector store")
+        print("Connected to Pinecone vector store")
         
         # Process web content
         await use_cdp()
@@ -771,15 +1076,43 @@ async def test_full_rag_pipeline():
             ]
             
             for query in search_queries:
-                print(f"\nSearching for: '{query}'")
-                results = await pipeline.search(query, top_k=3, score_threshold=0.5)
+                print(f"\n{'='*50}")
+                print(f"Searching for: '{query}'")
+                print(f"{'='*50}")
                 
-                for i, result in enumerate(results):
-                    print(f"  Result {i+1} (score: {result['score']:.3f}):")
+                # Test regular vector search
+                print("\n--- Vector Search Results ---")
+                vector_results = await pipeline.search(query, top_k=3, score_threshold=0.1)
+                
+                for i, result in enumerate(vector_results):
+                    print(f"  Result {i+1} (vector score: {result['score']:.3f}):")
                     print(f"    {result['content'][:150]}...")
                     if result['metadata'].get('headers'):
                         headers = [h['title'] for h in result['metadata']['headers']]
                         print(f"    Headers: {headers}")
+                
+                # Test reranked search
+                if pipeline.reranker_service:
+                    print("\n--- Reranked Search Results ---")
+                    try:
+                        reranked_results = await pipeline.search_with_reranking(
+                            query, 
+                            initial_k=20, 
+                            top_k=3, 
+                            score_threshold=0.0
+                        )
+                        
+                        for i, result in enumerate(reranked_results):
+                            print(f"  Result {i+1} (relevance: {result['relevance_score']:.3f}, vector: {result['vector_score']:.3f}):")
+                            print(f"    {result['content'][:150]}...")
+                            if result['metadata'].get('headers'):
+                                headers = [h['title'] for h in result['metadata']['headers']]
+                                print(f"    Headers: {headers}")
+                                
+                    except Exception as e:
+                        print(f"    Reranking failed: {e}")
+                else:
+                    print("\n--- Reranking service not available ---")
                         
     except Exception as e:
         print(f"Full RAG pipeline test failed: {e}")
@@ -788,7 +1121,7 @@ async def test_full_rag_pipeline():
         # Cleanup
         if 'vector_store' in locals() and vector_store:
             await vector_store.disconnect()
-            print("Disconnected from Milvus")
+            print("Disconnected from Pinecone")
 
 
 

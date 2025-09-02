@@ -27,7 +27,6 @@ from openai import OpenAI
 
 
 async def gpt(params: Dict[str, Any]):
-    load_dotenv()
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     try:
         response = client.responses.create(**params)

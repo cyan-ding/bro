@@ -19,19 +19,23 @@ from typing import Any, Dict, List, Optional
 from browser.use_cdp import use_cdp
 from patchright.async_api import Page, async_playwright
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
-from prompts.tools.gpt.gpt_actions import gpt_actions
+from .gpt_actions import gpt_actions
 
 # Import utility functions
 from .action_utils import format_elements_text, get_previous_action_description
 from .actions import (
     click,
     done,
+    extract,
+    file_system,
     input_text,
-    # extract,  # Commented out - will implement later
     scroll,
     search,
+    search_rag,
 )
+from .agent_state import initialize_agent_state
 from .ai import gpt
 from .credentials import get_credentials
 from .dom_utils import take_screenshot_with_bounding_boxes
@@ -67,10 +71,9 @@ class ActionResult:
 
     def __str__(self) -> str:
         """Return a formatted string representation for real-time visibility."""
-        status = "✅ SUCCESS" if not self.result.startswith("Error") else "❌ ERROR"
         args_str = f" | Args: {self.arguments}" if self.arguments else ""
         reason_str = f" | Reasoning: {self.reasoning}" if self.reasoning else ""
-        return f"[Iteration {self.iteration}] {status} | {self.action}{args_str}{reason_str} | {self.result}"
+        return f"[Iteration {self.iteration}] | {self.action}{args_str}{reason_str} | {self.result}"
 
 
 class OutputTextBlock(BaseModel):
@@ -116,16 +119,32 @@ class Agent:
     lookup for login functionality.
     """
 
-    def __init__(self, system_prompt: str):
+    def __init__(
+        self,
+        system_prompt: str,
+        enable_rag: bool = False,
+        session_id: str = str(uuid.uuid4())[:8],
+        user_id: Optional[str] = None,
+    ):
         """
         Initialize the Bro agent.
 
         Args:
             system_prompt: The system prompt that defines Bro's behavior
+            enable_rag: Whether to enable RAG pipeline for content processing
+            session_id: Unique identifier for this session (used in Pinecone namespace and agent state/file system)
+            user_id: Unique identifier for the user (used for Pinecone index naming)
         """
         self.system_prompt = system_prompt
-        self.session_id = str(uuid.uuid4())[:8]  # Short session ID
-        self.todo_file = f"todo_{self.session_id}.md"
+        self.session_id = session_id
+        self.user_id = user_id or "default" 
+        self.enable_rag = enable_rag
+        self.rag_initialized = False
+
+        # Initialize agent state
+        self.agent_state = initialize_agent_state(session_id)
+        load_dotenv()
+        print(f"🔧 Initialized agent state for session: {session_id}")
 
     async def _extract_reasoning_from_llm_response(
         self, llm_response: Dict[str, Any]
@@ -155,65 +174,94 @@ class Agent:
                     return combined.strip()
         return None
 
-    async def _read_todo_list(self) -> str:
+    async def _initialize_rag_if_needed(self) -> bool:
         """
-        Read the current todo list from the session-specific markdown file.
+        Helper function to initialize RAG pipeline if enabled and not already initialized.
+        Uses Pinecone cloud vector database.
 
         Returns:
-            The content of the todo list file, or empty string if file doesn't exist
+            True if RAG is available (was already initialized or just initialized),
+            False if RAG is disabled or initialization failed.
         """
-        from pathlib import Path
+        if not self.enable_rag:
+            return False
 
-        todo_path = Path(self.todo_file)
+        if self.rag_initialized:
+            return True
+
         try:
-            if todo_path.exists():
-                return todo_path.read_text(encoding="utf-8")
-        except (FileNotFoundError, PermissionError) as e:
-            print(f"Error reading todo list: {e}")
-        return ""
+            from .rag import initialize_rag_pipeline
 
-    async def _write_todo_list(self, content: str) -> None:
+            print("🔄 Initializing Pinecone RAG pipeline...")
+            await initialize_rag_pipeline(
+                index_name=f"bro-user-{self.user_id}",
+                namespace=f"session-{self.session_id}",
+                max_chunk_size=800,
+                chunk_overlap=150,
+                min_chunk_size=50,
+            )
+            self.rag_initialized = True
+            print("✅ RAG pipeline initialized successfully")
+            return True
+
+        except Exception as e:
+            print(f"❌ Failed to initialize RAG pipeline: {e}")
+            print(
+                "💡 Make sure PINECONE_API_KEY and VOYAGE_API_KEY environment variables are set"
+            )
+            self.enable_rag = False
+            return False
+
+    async def _update_comprehensive_agent_state(
+        self, page: Page, iteration: int
+    ) -> None:
         """
-        Write content to the session-specific todo list markdown file.
+        Perform comprehensive agent state updates at the end of each iteration.
+
+        This ensures all state is properly tracked and maintained across iterations.
 
         Args:
-            content: The content to write to the todo list
+            page: Current browser page
+            iteration: Current iteration number
         """
-        from pathlib import Path
-
-        todo_path = Path(self.todo_file)
         try:
-            todo_path.write_text(content, encoding="utf-8")
-        except (PermissionError, OSError) as e:
-            print(f"Error writing todo list: {e}")
+            print(f"🔄 Updating comprehensive agent state for iteration {iteration}")
 
-    async def _initialize_todo_list(self, user_prompt: str) -> None:
-        """
-        Initialize the todo list with tasks based on the user prompt.
+            # 1. Update current page/tab state
+            await self.agent_state.update_from_page(page)
 
-        Args:
-            user_prompt: The user's task description
-        """
-        initial_todo = f"""# Todo List - Session {self.session_id}
+            # 2. Update tab states for all open pages in browser context
+            context = page.context
+            for browser_page in context.pages:
+                try:
+                    url = browser_page.url
+                    title = await browser_page.title()
+                    is_active = browser_page == page
+                    self.agent_state.add_tab_state(url, title, is_active)
+                except Exception as e:
+                    print(f"⚠️ Failed to update state for tab {browser_page.url}: {e}")
 
-        ## Task: {user_prompt}
+            # 3. Log state summary for debugging
+            files_summary = self.agent_state.get_files_summary()
+            tabs_summary = self.agent_state.get_tabs_summary()
 
-        ### Subtasks to Complete:
-        - [ ] Subtask 1
-        - [ ] Subtask 2
+            print(
+                f"📁 Files tracked: {files_summary['total_files']} (created: {files_summary['created_by_agent']})"
+            )
+            print(
+                f"🗂️ Tabs tracked: {tabs_summary['total_tabs']} (active: {tabs_summary['active_tab']})"
+            )
+            print(f"📊 RAG results: {len(self.agent_state.rag_results)}")
+            print(f"🔄 Action history: {len(self.agent_state.action_history)}")
 
-        ### Notes:
-        - Started at: {__import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-        - Status: In Progress
-
-        """
-        await self._write_todo_list(initial_todo)
+        except Exception as e:
+            print(f"⚠️ Error updating comprehensive agent state: {e}")
 
     async def _start(self, user_prompt: str) -> Dict[str, Any]:
         """
         Initialize the process when there are no webpages to take screenshots of yet.
-        This function focuses only on populating the todo list with a detailed breakdown
-        of the user's task, ensuring the first item is a search action.
+        This function focuses on starting the task by calling the LLM to plan
+        and execute the first action, typically a search.
 
         Args:
             user_prompt: The user's task description
@@ -222,9 +270,6 @@ class Agent:
             Dictionary containing the result of the initial setup
         """
         print("Starting initial setup...")
-
-        # Initialize the todo list
-        # await self._initialize_todo_list(user_prompt)
 
         # Create initial prompt for the LLM to plan the task
         initial_prompt = f"""
@@ -365,6 +410,10 @@ class Agent:
                         )
 
                         await click(page, target_xpath, iframe_xpath)
+
+                        # Update agent state with page after click (may trigger navigation)
+                        await self.agent_state.update_from_page(page)
+
                         success_msg = (
                             f"Successfully clicked on element at index {target_index}"
                         )
@@ -421,8 +470,16 @@ class Agent:
                             f"📝 Entering text '{input_text_value}' into element at index {target_index} with xpath: {target_xpath}"
                         )
                         await input_text(
-                            page, target_xpath, input_text_value, iframe_xpath
+                            page,
+                            target_xpath,
+                            input_text_value,
+                            iframe_xpath,
+                            self.agent_state,
                         )
+
+                        # Update agent state with page after text input (form might change page state)
+                        await self.agent_state.update_from_page(page)
+
                         success_msg = f"Successfully entered text '{input_text_value}' into element at index {target_index}"
                         print(f"✅ {success_msg}")
                         results.append(success_msg)
@@ -442,16 +499,99 @@ class Agent:
 
                     case "search":
                         query = arguments.get("query")
-                        if not query:
-                            error_msg = "Error: query is required for search"
+                        tab_index = arguments.get("tab_index")
+
+                        if not query and tab_index is None:
+                            error_msg = "Error: either query or tab_index is required for search"
                             print(f"❌ {error_msg}")
                             results.append(error_msg)
                             continue
-                        print(f"🔍 Searching for: {query}")
-                        await search(page, query)
-                        success_msg = f"Successfully searched for: {query}"
+
+                        if tab_index is not None:
+                            print(f"🔄 Switching to tab index: {tab_index}")
+                        else:
+                            print(f"🔍 Searching for: {query}")
+
+                        await search(page, query or "", tab_index, self.agent_state)
+
+                        # Update agent state with new page after search/tab switch
+                        await self.agent_state.update_from_page(page)
+
+                        if tab_index is not None:
+                            success_msg = (
+                                f"Successfully switched to tab index: {tab_index}"
+                            )
+                        else:
+                            success_msg = f"Successfully searched for: {query}"
                         print(f"✅ {success_msg}")
                         results.append(success_msg)
+
+                    case "extract":
+                        use_rag = arguments.get("use_rag", False)
+                        file_name = arguments.get(
+                            "file_name"
+                        )  # Optional file_name from LLM
+                        description = arguments.get(
+                            "description"
+                        )  # Optional description from LLM
+                        print(f"📄 Extracting content from page (RAG: {use_rag})")
+
+                        result = await extract(
+                            page,
+                            use_rag=use_rag,
+                            agent_state=self.agent_state,
+                            file_name=file_name,
+                            description=description,
+                        )
+                        success_msg = "Successfully extracted content from page"
+                        print(f"✅ {success_msg}")
+                        results.append(result)
+
+                    case "file_system":
+                        # Import the Pydantic model
+                        from .actions import FileSystemArgs
+
+                        try:
+                            # Validate arguments using Pydantic model
+                            fs_args = FileSystemArgs.model_validate(arguments)
+                            print(f"📁 File system operation: {fs_args.action}")
+
+                            result = await file_system(
+                                args=fs_args, agent_state=self.agent_state
+                            )
+                            print("✅ File system operation completed")
+                            results.append(result)
+
+                        except Exception as e:
+                            error_msg = (
+                                f"Error: Invalid file_system arguments - {str(e)}"
+                            )
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
+                            continue
+
+                    case "search_rag":
+                        # Import the Pydantic model
+                        from .actions import RAGSearchArgs
+
+                        try:
+                            # Validate arguments using Pydantic model
+                            rag_args = RAGSearchArgs.model_validate(arguments)
+                            print(f"🔍 RAG search: {rag_args.query}")
+
+                            result = await search_rag(
+                                args=rag_args, agent_state=self.agent_state
+                            )
+                            print("✅ RAG search completed")
+                            results.append(result)
+
+                        except Exception as e:
+                            error_msg = (
+                                f"Error: Invalid search_rag arguments - {str(e)}"
+                            )
+                            print(f"❌ {error_msg}")
+                            results.append(error_msg)
+                            continue
 
                     case "done":
                         reason = arguments.get("reason")
@@ -489,7 +629,7 @@ class Agent:
         user_prompt: str,
         url: str = "",
         max_iterations: int = 10,
-        screenshot: bool = False,
+        take_screenshot: bool = False,
     ) -> List[ActionResult]:
         """
         Run the agent loop to complete the user's task.
@@ -503,6 +643,12 @@ class Agent:
             List of ActionResult objects from the agent's execution
         """
         print("Starting browser context...")
+
+        # Initialize RAG if enabled
+        rag_available = await self._initialize_rag_if_needed()
+        if self.enable_rag and not rag_available:
+            print("⚠️ RAG was requested but initialization failed")
+
         await use_cdp()
         async with async_playwright() as p:
             # browser_context = await p.chromium.launch_persistent_context(
@@ -518,7 +664,6 @@ class Agent:
                 browser_context = contexts[0]  # Use existing profile
             else:
                 browser_context = await browser.new_context()  # Or create new
-            print(browser_context.pages[0].url)
             # Open a new tab
             page = (
                 browser_context.pages[0]
@@ -577,10 +722,6 @@ class Agent:
                 start_iteration = 0
 
             try:
-                # if url:  # Only initialize todo list if we have a URL (start function handles it otherwise)
-                #     print("Initializing todo list... ")
-                #     await self._initialize_todo_list(user_prompt)
-
                 print("Starting agentic cycle...")
                 previous_action = None
                 previous_elements = None
@@ -602,8 +743,11 @@ class Agent:
                         page,
                         wait_for_change=should_wait_for_change,
                         previous_signature=last_signature,
-                        take_screenshot=screenshot,
+                        take_screenshot=take_screenshot,
                     )
+
+                    # Update agent state with current page information
+                    await self.agent_state.update_from_page(page)
 
                     if not page_data:
                         raise RuntimeError(
@@ -618,9 +762,7 @@ class Agent:
                     elements_text = await format_elements_text(
                         page_data["highlighted_elements"]
                     )
-                    print("Elements text: ", elements_text)
-                    # Read current todo list
-                    # todo_list = await self._read_todo_list()
+                    # print("Elements text: ", elements_text)
 
                     # Add previous action information to the prompt
                     previous_action_text = ""
@@ -631,15 +773,23 @@ class Agent:
                             )
                         else:
                             previous_action_text = f"\nPrevious action: You executed '{previous_action}' in the last iteration. Please follow up on this action to continue with the task."
+
                     screenshot_text = (
                         "A screenshot has been attached showing the current page with bounding boxes around interactive elements. "
                         "Each box has an index number that corresponds to the elements listed above. "
                         if page_data.get("screenshot")
                         else ""
                     )
+                    # Get agent state context for LLM
+                    agent_context = self.agent_state.get_context_for_llm(
+                        include_full_files=True
+                    )
+
                     enhanced_prompt = f"""
                             User prompt: 
 							{user_prompt}
+
+							{agent_context}
 
 							Current page information:
 							{elements_text}
@@ -710,12 +860,24 @@ class Agent:
                         )
                         print(f"📊 {action_result}")
                         results.append(action_result)
+
+                        # Add action to agent state context
+                        self.agent_state.add_action_context(
+                            action_name=tool_call["name"],
+                            arguments=tool_call["arguments"],
+                            result=result_message,
+                            iteration=iteration,
+                        )
+
                         # Update previous action for next iteration
                         previous_action = {
                             "name": tool_call["name"],
                             "arguments": tool_call["arguments"],
                         }
                         previous_elements = page_data["highlighted_elements"]
+
+                    # Comprehensive agent state update at end of iteration
+                    await self._update_comprehensive_agent_state(page, iteration)
 
                     # Check if the agent signaled task completion via done function
                     if "STOP_AGENT" in result_messages:
@@ -728,21 +890,34 @@ class Agent:
                 print("Exiting browser...")
                 await browser_context.close()
 
+                # Cleanup RAG pipeline if it was initialized
+                if self.rag_initialized:
+                    try:
+                        from .rag import cleanup_rag_pipeline
+
+                        await cleanup_rag_pipeline()
+                    except Exception as e:
+                        print(f"⚠️ Error during RAG cleanup: {e}")
+
 
 async def main():
     # Load the Bro system prompt
-    system_prompt = Path("prompts/bro.txt").read_text(encoding="utf-8")
+    system_prompt = Path("bro.txt").read_text(encoding="utf-8")
     prompts = [
-        "Open a new google doc and write an essay about cherries",
+        "Log in to google, then open a new google doc and write an essay about browser agents. make sure to include the title",
         "Open gmail and send an email to blueplus.d@gmail.com with the subject 'Hello' and the body 'This is a test email'",
+        """Use retrieval augmented generation to extract data about
+        3 papers about AI and write an essay about their architectures in google doc.
+        Make sure to only extract contents in html format, not pdf or any other format.
+         """,
     ]
-    # Create and run the agent
-    agent = Agent(system_prompt)
+    # third one should test rag, files, todolist, tab switching,
+    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan")
     results = await agent.run(
-        user_prompt=prompts[1],
-        # "https://accounts.google.com/v3/signin/identifier?checkedDomains=youtube&continue=https%3A%2F%2Faccounts.google.com%2F&flowEntry=ServiceLogin&flowName=GlifWebSignIn&followup=https%3A%2F%2Faccounts.google.com%2F&ifkv=AdBytiOYvUAqRJUi6-iHJ04pgCOhk2j6OcoLbvaXOx0XwJgfuW3iXQLuT72oPUhYKHIGRfbxqqxE&pstMsg=1&dsh=S757206094%3A1754856863191091",
-        max_iterations=20,
-        screenshot=True,
+        user_prompt=prompts[2],
+        url="https://arxiv.org/list/cs.AI/recent",
+        max_iterations=100,
+        take_screenshot=True,
     )
 
     # Print results
