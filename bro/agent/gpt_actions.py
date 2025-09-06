@@ -52,10 +52,17 @@ def gpt_actions(
     return {
         "model": model,
         "input": query,
-        "reasoning": {
-            "effort": "medium",
-            "summary": "auto",
-        },
+        # Conditionally add the "reasoning" field if the model is a GPT-5 variant
+        **(
+            {
+                "reasoning": {
+                    "effort": "medium",
+                    "summary": "auto",
+                }
+            }
+            if "gpt-5" in model
+            else {}
+        ),
         "tools": [
             {
                 "type": "function",
@@ -123,8 +130,8 @@ def gpt_actions(
             {
                 "type": "function",
                 "name": "search",
-                "description": """Search Google for a query and navigate to results, or switch to an existing open tab by index. 
-                Use this to navigate to any website or return to a previously opened page.""",
+                "description": """Search Google for a query and navigate to results, switch to an existing open tab by index, or open search in a new tab. 
+                Use this to navigate to any website, return to a previously opened page, or open searches in new tabs.""",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -138,9 +145,13 @@ def gpt_actions(
                             If provided, the agent will switch to this tab instead of performing a search. 
                             Use this when you want to return to a previously opened page. 
                             Check the OPEN BROWSER TABS section in your context to see available tab indices.""",
-                        }
+                        },
+                        "new_tab": {
+                            "type": "boolean",
+                            "description": "If true, open the search in a new browser tab instead of navigating the current tab. Ignored if tab_index is provided.",
+                        },
                     },
-                    "required": ["query", "tab_index"],
+                    "required": ["query", "tab_index", "new_tab"],
                     "additionalProperties": False,
                 },
                 "strict": True,
@@ -151,7 +162,7 @@ def gpt_actions(
                 "description": """Extract content from the current page. Two scenarios: 
                 1) Basic extraction (use_rag=false) automatically saves content to task files for later reading, 
                 2) RAG extraction (use_rag=true) stores chunks in vector database for semantic search via search_rag"""
-                "Only use this tool when all text for the page is visible on the current page.",
+                "Only use this tool when the full contents, not just the title, are visible on the current page.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -165,7 +176,7 @@ def gpt_actions(
                             "description": "File name to save the extracted content to.",
                         },
                         "description": {
-                            "type": "string", 
+                            "type": "string",
                             "description": "Description of what is being extracted (e.g., 'ML research paper', 'product specifications'). Used for tracking in agent state.",
                         },
                     },

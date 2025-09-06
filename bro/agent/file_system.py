@@ -2,17 +2,21 @@ from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from playwright.async_api import Page
 
-def _get_bro_directories():
+def _get_bro_directories(user_id: str = "default", session_id: str = "default"):
     """
-    Get Bro application directories, creating them if they don't exist.
+    Get Bro application directories with session-based structure, creating them if they don't exist.
+    
+    Args:
+        user_id: User identifier for directory structure
+        session_id: Session identifier for directory structure
     
     Returns:
         tuple: (extractions_dir, files_dir) as Path objects
     """
     from pathlib import Path
     
-    # Create ~/.bro directory structure
-    bro_dir = Path.home() / ".bro"
+    # Create ~/.bro/user_id/session-id directory structure
+    bro_dir = Path.home() / ".bro" / user_id / f"session-{session_id}"
     extractions_dir = bro_dir / "extractions"
     files_dir = bro_dir / "files"
     
@@ -103,6 +107,8 @@ async def _save_extraction_to_file(
     page_title: str,
     file_name: str,
     description: Optional[str] = None,
+    user_id: str = "default",
+    session_id: str = "default",
 ) -> str:
     """
     Save extraction to ~/.bro/extractions/ with human-readable filename.
@@ -120,7 +126,7 @@ async def _save_extraction_to_file(
     import json
 
     # Get the extractions directory
-    extractions_dir, _ = _get_bro_directories()
+    extractions_dir, _ = _get_bro_directories(user_id, session_id)
     
     # Use description for filename, fallback to page title
     base_name = file_name or description or page_title or "extraction"

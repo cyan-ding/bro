@@ -260,7 +260,7 @@ class PineconeVectorStore:
                 headers = chunk.metadata["headers"]
                 if headers:
                     # Store header titles as a list of strings
-                    header_titles = [h.get("title", "") for h in headers if isinstance(h, dict)]
+                    header_titles = [h.get("title", "") for h in headers if h is not None and isinstance(h, dict)]
                     if header_titles:
                         metadata["header_titles"] = header_titles[:10]  # Limit to avoid size issues
                         metadata["num_headers"] = len(headers)
@@ -354,6 +354,28 @@ class PineconeVectorStore:
             
         except Exception as e:
             raise RuntimeError(f"Failed to search: {str(e)}")
+            
+    async def clear_namespace(self) -> None:
+        """Clear all vectors from the current namespace."""
+        if not self.index:
+            print("⚠️ Not connected to Pinecone index")
+            return
+            
+        if not self.namespace:
+            print("⚠️ No namespace specified - cannot clear without namespace")
+            return
+            
+        try:
+            # Delete all vectors in the namespace
+            # Check if the namespace exists before trying to delete it
+            existing_namespaces = self.index.describe_index_stats().get("namespaces", {})
+            if self.namespace not in existing_namespaces:
+                print(f"⚠️ Namespace '{self.namespace}' does not exist, nothing to clear.")
+                return
+            self.index.delete(delete_all=True, namespace=self.namespace)
+            print(f"🗑️ Cleared all vectors from namespace: {self.namespace}")
+        except Exception as e:
+            print(f"❌ Error clearing namespace {self.namespace}: {e}")
             
     async def delete_index(self) -> None:
         """Delete the entire index."""
@@ -463,6 +485,21 @@ async def get_rag_pipeline() -> Optional['RAGPipeline']:
         RAG pipeline instance if initialized, None otherwise
     """
     return _global_pipeline
+
+
+async def clear_rag_namespace() -> None:
+    """
+    Clear all vectors from the current RAG namespace for testing purposes.
+    """
+    global _global_vector_store
+    
+    if _global_vector_store:
+        try:
+            await _global_vector_store.clear_namespace()
+        except Exception as e:
+            print(f"⚠️ Error clearing RAG namespace: {e}")
+    else:
+        print("⚠️ No active RAG vector store to clear")
 
 
 async def cleanup_rag_pipeline() -> None:
@@ -702,7 +739,7 @@ class RAGPipeline:
             if len(content) >= self.min_chunk_size:
                 return Chunk(
                     content=content,
-                    metadata={"headers": [h.copy() for h in headers]},
+                    metadata={"headers": [h.copy() for h in headers if h is not None]},
                     start_idx=start_pos,
                     end_idx=end_pos,
                 )
@@ -730,7 +767,7 @@ class RAGPipeline:
                 title = header_match.group(2).strip()
                 
                 # Remove any headers of the same or lower level
-                current_headers = [h for h in current_headers if h['level'] < level]
+                current_headers = [h for h in current_headers if h is not None and h.get('level', 0) < level]
                 current_headers.append({"level": level, "title": title})
 
                 # Start a new chunk with the header
@@ -1011,7 +1048,7 @@ async def test_chunking():
             
             # Show header context
             if chunk.metadata.get('headers'):
-                headers = [h['title'] for h in chunk.metadata['headers']]
+                headers = [h.get('title', '') for h in chunk.metadata['headers'] if h is not None and isinstance(h, dict)]
                 print(f"Headers: {headers}")
                 
     except Exception as e:
@@ -1088,7 +1125,7 @@ async def test_full_rag_pipeline():
                     print(f"  Result {i+1} (vector score: {result['score']:.3f}):")
                     print(f"    {result['content'][:150]}...")
                     if result['metadata'].get('headers'):
-                        headers = [h['title'] for h in result['metadata']['headers']]
+                        headers = [h.get('title', '') for h in result['metadata']['headers'] if h is not None and isinstance(h, dict)]
                         print(f"    Headers: {headers}")
                 
                 # Test reranked search
@@ -1106,7 +1143,7 @@ async def test_full_rag_pipeline():
                             print(f"  Result {i+1} (relevance: {result['relevance_score']:.3f}, vector: {result['vector_score']:.3f}):")
                             print(f"    {result['content'][:150]}...")
                             if result['metadata'].get('headers'):
-                                headers = [h['title'] for h in result['metadata']['headers']]
+                                headers = [h.get('title', '') for h in result['metadata']['headers'] if h is not None and isinstance(h, dict)]
                                 print(f"    Headers: {headers}")
                                 
                     except Exception as e:

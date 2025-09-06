@@ -71,60 +71,6 @@ def get_element_description(
     line += " />"
     return line
 
-
-def get_previous_action_description(
-    previous_action: Dict[str, Any], previous_elements: List[Dict[str, Any]]
-) -> str:
-    """
-    Get a descriptive string for the previous action.
-
-    Args:
-        previous_action: Dictionary containing action name and arguments
-        previous_elements: List of highlighted element data from previous iteration
-
-    Returns:
-        Descriptive string for the previous action
-    """
-    if not previous_action or not previous_elements:
-        return ""
-
-    action_name = previous_action.get("name", "unknown")
-    action_args = previous_action.get("arguments", {})
-    # Use a template for the previous action message
-    template = "\nPrevious action: {desc} Please follow up on this action."
-
-    # Create descriptive action text
-    if action_name == "click" and "target" in action_args:
-        idx = action_args.get("target")
-        element_desc = get_element_description(idx, previous_elements)
-        desc = f"You clicked on {element_desc} in the last iteration."
-    elif action_name == "input_text" and "target" in action_args:
-        idx = action_args.get("target")
-        element_desc = get_element_description(idx, previous_elements)
-        text_entered = action_args.get("input_text", "")
-        login = action_args.get("login", "")
-        if login:
-            retry_login = action_args.get("retry_login", False)
-            if retry_login:
-                desc = f"You tried and failed to log in with '{login}' into {element_desc} in the last iteration."
-            else:
-                desc = f"You tried to log in with '{login}' into {element_desc} in the last iteration."
-        else:
-            desc = (
-                f"You typed '{text_entered}' into {element_desc} in the last iteration."
-            )
-    elif action_name == "scroll":
-        how_much = action_args.get("how_much", "")
-        desc = f"You scrolled by {how_much} pixels in the last iteration."
-    elif action_name == "done":
-        reason = action_args.get("reason", "task completed")
-        desc = f"You marked the task as done with reason: '{reason}' in the last iteration."
-    else:
-        args_str = f" with arguments: {action_args}" if action_args else ""
-        desc = f"You executed '{action_name}{args_str}' in the last iteration."
-    return template.format(desc=desc)
-
-
 async def format_elements_text(highlighted_elements: List[Dict]) -> str:
     """
     Format the highlighted elements into readable text for the LLM.

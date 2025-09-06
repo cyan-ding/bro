@@ -230,12 +230,16 @@ async def extract(
             extracted_content = await _basic_text_extraction(page, html_content)
 
             # Auto-save to file
+            user_id = agent_state.user_id if agent_state else "default"
+            session_id = agent_state.session_id if agent_state else "default"
             saved_file_path = await _save_extraction_to_file(
                 content=extracted_content,
                 file_name=file_name,
                 page_url=page_url,
                 page_title=page_title,
                 description=description,
+                user_id=user_id,
+                session_id=session_id,
             )
 
             print(f"✅ Content saved to {saved_file_path}")
@@ -253,7 +257,6 @@ async def extract(
                     filename=filename,
                     content=f"Extraction file: {description}\nContent preview: {content_preview}\nFull content available in file ({len(extracted_content)} chars)",
                     action="extract_to_file",
-                    created_by_agent=True,
                 )
 
             # Return summary with file info
@@ -272,13 +275,12 @@ async def extract(
         print(f"❌ {error_msg}")
         return error_msg
 
-
-
 async def search(
     page: Page,
     query: str,
     tab_index: Optional[int] = None,
     agent_state: Optional[AgentState] = None,
+    new_tab: bool = False,
 ):
     """
     Search Google for the query and navigate to results, or switch to an existing tab.
@@ -288,62 +290,47 @@ async def search(
         query: The search query (ignored if tab_index is provided)
         tab_index: Optional zero-based index of an existing tab to switch to instead of searching
         agent_state: Agent state manager for getting tab information
+        new_tab: If True, open the search in a new tab instead of navigating the current tab
     """
-    # If tab_index is provided, try to switch to that tab
-    if tab_index is not None:
-        try:
-            if agent_state is None:
-                print(f"⚠️ Agent state not available, cannot switch to tab {tab_index}")
-            else:
-                # Get the tab by index from agent state
-                target_tab = agent_state.get_tab_by_index(tab_index)
-
-                if target_tab is None:
-                    print(
-                        f"⚠️ No tab found at index {tab_index}, performing search instead"
-                    )
-                else:
-                    print(f"🔄 Switching to tab {tab_index}: {target_tab.title}")
-
-                    # Get the browser context from the page
-                    context = page.context
-
-                    # Find the page with matching URL
-                    target_page = None
-                    for existing_page in context.pages:
-                        if existing_page.url == target_tab.url:
-                            target_page = existing_page
-                            break
-
-                    if target_page:
-                        # Bring the page to front (switch to it)
-                        await target_page.bring_to_front()
-
-                        # Navigate the current page object to the existing page's URL
-                        # This ensures the agent continues working with the same page object
-                        await page.goto(target_page.url, wait_until="load")
-
-                        print(
-                            f"✅ Successfully switched to tab {tab_index}: {target_tab.title}"
-                        )
-                        return
-                    else:
-                        print(
-                            f"⚠️ Tab {tab_index} not found in browser context, performing search instead"
-                        )
-
-        except Exception as e:
-            print(
-                f"⚠️ Error trying to switch to tab {tab_index}: {e}, performing search instead"
-            )
-
-    # Perform Google search (original functionality)
     import urllib.parse
+
+    # Handle switching to a new tab for search
+    context = page.context
+
+    if tab_index is not None:
+        target_tab = agent_state.get_tab_by_index(tab_index)
+        if not target_tab:
+            print(f"⚠️ No tab found at index {tab_index}, cannot switch to non-existent tab")
+            return
+        target_page = next((p for p in context.pages if p.url == target_tab.url), None)
+        if target_page:
+            await target_page.bring_to_front()
+            await agent_state.set_current_tab_index(tab_index)
+            return
+        else:
+            print(f"⚠️ Tab {tab_index} not found in browser context, cannot switch to tab")
+            return
+    if new_tab:
+        try:
+            new_page = await context.new_page()
+            page_to_use = new_page
+        except Exception as e:
+            print(f"⚠️ Error creating new tab for search: {e}")
+            page_to_use = page  # Fallback to current tab
+    else:
+        page_to_use = page
 
     encoded_query = urllib.parse.quote(query)
     search_url = f"https://www.google.com/search?q={encoded_query}"
+    await page_to_use.goto(search_url, wait_until="load")
 
-    await page.goto(search_url, wait_until="load")
+    if new_tab:
+        try:
+            agent_state.add_tab_state(page_to_use.url, await page_to_use.title(), is_active=True)
+            await page_to_use.bring_to_front()
+            await agent_state.set_current_tab_index(len(agent_state.tabs) - 1)
+        except Exception as e:
+            print(f"⚠️ Failed to update agent state for new tab: {e}")
 
 
 async def file_system(
@@ -365,8 +352,10 @@ async def file_system(
             if not args.filename or args.content is None:
                 return "Error: filename and content are required for write action"
 
-            # Get the files directory
-            _, files_dir = _get_bro_directories()
+            # Get the files directory using agent state session info
+            user_id = agent_state.user_id if agent_state else "default"
+            session_id = agent_state.session_id if agent_state else "default"
+            _, files_dir = _get_bro_directories(user_id, session_id)
 
             # Sanitize the filename
             safe_filename = _sanitize_filename(args.filename, "user_file")
@@ -384,7 +373,6 @@ async def file_system(
                     filename=unique_filename,
                     content=args.content,
                     action="write",
-                    created_by_agent=True,
                 )
 
             return f"Successfully wrote content to {file_path} ({len(args.content)} characters)"
@@ -393,15 +381,17 @@ async def file_system(
             if not args.filename:
                 return "Error: filename is required for read action"
 
-            # Get both directories to search for the file
-            extractions_dir, files_dir = _get_bro_directories()
+            # Get both directories to search for the file using agent state session info
+            user_id = agent_state.user_id if agent_state else "default"
+            session_id = agent_state.session_id if agent_state else "default"
+            extractions_dir, files_dir = _get_bro_directories(user_id, session_id)
             
             filename = args.filename
             file_path = None
             
             # Try to find the file in both directories
             possible_paths = [
-                files_dir / filename,           # User files
+                files_dir / filename,           # Downloaded files
                 extractions_dir / filename,     # Extraction files
             ]
             
@@ -421,7 +411,6 @@ async def file_system(
                     filename=filename,
                     content=content,
                     action="read",
-                    created_by_agent=False,
                 )
 
             return f"Content from {file_path}:\n\n{content}"
@@ -429,8 +418,10 @@ async def file_system(
 
 
         elif args.action == "list_files":
-            # List files in both ~/.bro directories
-            extractions_dir, files_dir = _get_bro_directories()
+            # List files in both ~/.bro directories using agent state session info
+            user_id = agent_state.user_id if agent_state else "default"
+            session_id = agent_state.session_id if agent_state else "default"
+            extractions_dir, files_dir = _get_bro_directories(user_id, session_id)
             
             all_files = []
             
@@ -446,19 +437,19 @@ async def file_system(
                     all_files.append("Extractions (~/.bro/extractions/):")
                     all_files.extend([f"  - {f}" for f in extraction_files])
             
-            # List user files
+            # List downloaded files
             if files_dir.exists():
-                user_files = []
+                downloaded_files = []
                 for file_path in files_dir.iterdir():
                     if file_path.is_file():
                         size = file_path.stat().st_size
-                        user_files.append(f"{file_path.name} ({size} bytes)")
+                        downloaded_files.append(f"{file_path.name} ({size} bytes)")
                 
-                if user_files:
+                if downloaded_files:
                     if all_files:  # Add separator if we have extraction files
                         all_files.append("")
-                    all_files.append("User Files (~/.bro/files/):")
-                    all_files.extend([f"  - {f}" for f in user_files])
+                    all_files.append("Downloaded Files (~/.bro/files/):")
+                    all_files.extend([f"  - {f}" for f in downloaded_files])
 
             if not all_files:
                 return "No files found in ~/.bro/ directories"

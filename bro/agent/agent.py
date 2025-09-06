@@ -24,17 +24,8 @@ from dotenv import load_dotenv
 from .gpt_actions import gpt_actions
 
 # Import utility functions
-from .action_utils import format_elements_text, get_previous_action_description
-from .actions import (
-    click,
-    done,
-    extract,
-    file_system,
-    input_text,
-    scroll,
-    search,
-    search_rag,
-)
+from .action_utils import format_elements_text
+from .actions import click, done, extract, file_system, input_text, scroll, search, search_rag
 from .agent_state import initialize_agent_state
 from .ai import gpt
 from .credentials import get_credentials
@@ -125,6 +116,7 @@ class Agent:
         enable_rag: bool = False,
         session_id: str = str(uuid.uuid4())[:8],
         user_id: Optional[str] = None,
+        model: str = "gpt-4.1-mini-2025-04-14",
     ):
         """
         Initialize the Bro agent.
@@ -132,19 +124,20 @@ class Agent:
         Args:
             system_prompt: The system prompt that defines Bro's behavior
             enable_rag: Whether to enable RAG pipeline for content processing
-            session_id: Unique identifier for this session (used in Pinecone namespace and agent state/file system)
+            session_id: Unique identifier for this session (used in Pinecone namespace )
             user_id: Unique identifier for the user (used for Pinecone index naming)
+            model: The model to use for the LLM
         """
         self.system_prompt = system_prompt
         self.session_id = session_id
         self.user_id = user_id or "default" 
         self.enable_rag = enable_rag
         self.rag_initialized = False
-
-        # Initialize agent state
-        self.agent_state = initialize_agent_state(session_id)
+        self.model = model
+        # Initialize agent state with session info
+        self.agent_state = initialize_agent_state(user_id=self.user_id, session_id=self.session_id)
         load_dotenv()
-        print(f"🔧 Initialized agent state for session: {session_id}")
+        print(f"🔧 Initialized agent state (user: {self.user_id}, session: {self.session_id})")
 
     async def _extract_reasoning_from_llm_response(
         self, llm_response: Dict[str, Any]
@@ -190,7 +183,7 @@ class Agent:
             return True
 
         try:
-            from .rag import initialize_rag_pipeline
+            from .rag import initialize_rag_pipeline, clear_rag_namespace
 
             print("🔄 Initializing Pinecone RAG pipeline...")
             await initialize_rag_pipeline(
@@ -200,6 +193,11 @@ class Agent:
                 chunk_overlap=150,
                 min_chunk_size=50,
             )
+            
+            # Clear namespace for testing purposes
+            print("🧪 Clearing Pinecone namespace for testing...")
+            await clear_rag_namespace()
+            
             self.rag_initialized = True
             print("✅ RAG pipeline initialized successfully")
             return True
@@ -211,51 +209,6 @@ class Agent:
             )
             self.enable_rag = False
             return False
-
-    async def _update_comprehensive_agent_state(
-        self, page: Page, iteration: int
-    ) -> None:
-        """
-        Perform comprehensive agent state updates at the end of each iteration.
-
-        This ensures all state is properly tracked and maintained across iterations.
-
-        Args:
-            page: Current browser page
-            iteration: Current iteration number
-        """
-        try:
-            print(f"🔄 Updating comprehensive agent state for iteration {iteration}")
-
-            # 1. Update current page/tab state
-            await self.agent_state.update_from_page(page)
-
-            # 2. Update tab states for all open pages in browser context
-            context = page.context
-            for browser_page in context.pages:
-                try:
-                    url = browser_page.url
-                    title = await browser_page.title()
-                    is_active = browser_page == page
-                    self.agent_state.add_tab_state(url, title, is_active)
-                except Exception as e:
-                    print(f"⚠️ Failed to update state for tab {browser_page.url}: {e}")
-
-            # 3. Log state summary for debugging
-            files_summary = self.agent_state.get_files_summary()
-            tabs_summary = self.agent_state.get_tabs_summary()
-
-            print(
-                f"📁 Files tracked: {files_summary['total_files']} (created: {files_summary['created_by_agent']})"
-            )
-            print(
-                f"🗂️ Tabs tracked: {tabs_summary['total_tabs']} (active: {tabs_summary['active_tab']})"
-            )
-            print(f"📊 RAG results: {len(self.agent_state.rag_results)}")
-            print(f"🔄 Action history: {len(self.agent_state.action_history)}")
-
-        except Exception as e:
-            print(f"⚠️ Error updating comprehensive agent state: {e}")
 
     async def _start(self, user_prompt: str) -> Dict[str, Any]:
         """
@@ -292,7 +245,7 @@ class Agent:
         params = gpt_actions(
             user_prompt=initial_prompt,
             system_prompt=self.system_prompt,
-            model="gpt-5-nano-2025-08-07",
+            model=self.model,
             screenshot=None,  # No screenshot available yet
         )
 
@@ -411,9 +364,6 @@ class Agent:
 
                         await click(page, target_xpath, iframe_xpath)
 
-                        # Update agent state with page after click (may trigger navigation)
-                        await self.agent_state.update_from_page(page)
-
                         success_msg = (
                             f"Successfully clicked on element at index {target_index}"
                         )
@@ -477,9 +427,6 @@ class Agent:
                             self.agent_state,
                         )
 
-                        # Update agent state with page after text input (form might change page state)
-                        await self.agent_state.update_from_page(page)
-
                         success_msg = f"Successfully entered text '{input_text_value}' into element at index {target_index}"
                         print(f"✅ {success_msg}")
                         results.append(success_msg)
@@ -513,9 +460,6 @@ class Agent:
                             print(f"🔍 Searching for: {query}")
 
                         await search(page, query or "", tab_index, self.agent_state)
-
-                        # Update agent state with new page after search/tab switch
-                        await self.agent_state.update_from_page(page)
 
                         if tab_index is not None:
                             success_msg = (
@@ -708,11 +652,13 @@ class Agent:
                 print(f"📊 {initial_result}")
                 results.append(initial_result)
 
-                # Set the previous action for the main loop
-                previous_action = {
-                    "name": initial_tool_call["name"],
-                    "arguments": initial_tool_call["arguments"],
-                }
+                # Add initial tool call to action history (no highlighted_elements available for initial call)
+                self.agent_state.add_action_context(
+                    action_name=initial_tool_call["name"],
+                    arguments=initial_tool_call["arguments"],
+                    result=result_messages[0] if result_messages else "No result",
+                    iteration=0,
+                )
 
                 # Continue with the main loop starting from iteration 1
                 start_iteration = 1
@@ -723,19 +669,30 @@ class Agent:
 
             try:
                 print("Starting agentic cycle...")
-                previous_action = None
-                previous_elements = None
+                
+                
                 last_signature: Optional[str] = None
+                
                 for iteration in range(start_iteration, max_iterations):
+
+                    # check if current tab index is not the page we are on, if so, switch to it
+                    if browser_context.pages:
+                        if (self.agent_state.current_tab_index is not None and 
+                            0 <= self.agent_state.current_tab_index < len(browser_context.pages)):
+                            page = browser_context.pages[self.agent_state.current_tab_index]
+                        else:
+                            page = browser_context.pages[0]
+
                     # Require a DOM change before proceeding to next iteration
                     # Take screenshot and get element information (optionally wait for change)
                     should_wait_for_change = False
-                    if previous_action and isinstance(previous_action, dict):
-                        action_name = previous_action.get("name")
-                        # Wait for change primarily after actions that likely cause SPA updates
-                        should_wait_for_change = action_name in (
+                    # Check if the last action was one that likely causes DOM changes
+                    if self.agent_state.action_history:
+                        last_action = self.agent_state.action_history[-1]
+                        print(last_action)
+                        should_wait_for_change = last_action.action_name in (
                             "click",
-                            "input_text",
+                            "input_text", 
                             "search",
                         )
 
@@ -745,9 +702,6 @@ class Agent:
                         previous_signature=last_signature,
                         take_screenshot=take_screenshot,
                     )
-
-                    # Update agent state with current page information
-                    await self.agent_state.update_from_page(page)
 
                     if not page_data:
                         raise RuntimeError(
@@ -764,15 +718,7 @@ class Agent:
                     )
                     # print("Elements text: ", elements_text)
 
-                    # Add previous action information to the prompt
-                    previous_action_text = ""
-                    if previous_action and previous_elements:
-                        if isinstance(previous_action, dict):
-                            previous_action_text = get_previous_action_description(
-                                previous_action, previous_elements
-                            )
-                        else:
-                            previous_action_text = f"\nPrevious action: You executed '{previous_action}' in the last iteration. Please follow up on this action to continue with the task."
+                    # Previous action information is now provided through agent_context (RECENT ACTIONS section)
 
                     screenshot_text = (
                         "A screenshot has been attached showing the current page with bounding boxes around interactive elements. "
@@ -800,8 +746,6 @@ class Agent:
 
 							{screenshot_text}
 
-							{previous_action_text}
-
 							Please choose the next action to take to complete the task.
 							"""
                     print(f"Sending LLM Query {iteration}...")
@@ -809,7 +753,7 @@ class Agent:
                     params = gpt_actions(
                         user_prompt=enhanced_prompt,
                         system_prompt=self.system_prompt,
-                        model="gpt-5-mini-2025-08-07",
+                        model=self.model,
                         screenshot=page_data["screenshot"],
                     )
 
@@ -818,9 +762,7 @@ class Agent:
                     reasoning = await self._extract_reasoning_from_llm_response(
                         llm_response
                     )
-                    if not reasoning:
-                        print("LLM response: ", llm_response)
-                    print(f"Reasoning: {reasoning}")
+         
                     # Parse for tool calls
                     tool_calls = await self._parse_tool_call(llm_response)
 
@@ -867,22 +809,31 @@ class Agent:
                             arguments=tool_call["arguments"],
                             result=result_message,
                             iteration=iteration,
+                            highlighted_elements=page_data["highlighted_elements"],
                         )
 
-                        # Update previous action for next iteration
-                        previous_action = {
-                            "name": tool_call["name"],
-                            "arguments": tool_call["arguments"],
-                        }
-                        previous_elements = page_data["highlighted_elements"]
-
-                    # Comprehensive agent state update at end of iteration
-                    await self._update_comprehensive_agent_state(page, iteration)
+                    # Agent state update at end of iteration
+                    await self.agent_state.update_tab_state(page)
+                    
+                    # Save agent state to file at end of iteration
+                    try:
+                        state_file = await self.agent_state.save_state_to_file(iteration)
+                        print(f"💾 Agent state saved to: {state_file}")
+                        
+                        # Print file tree for debugging
+                        if iteration % 5 == 0:  # Print tree every 5 iterations to avoid spam
+                            tree_repr = self.agent_state.get_file_tree_representation()
+                            print(f"📂 File tree:\n{tree_repr}")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Failed to save agent state: {e}")
 
                     # Check if the agent signaled task completion via done function
                     if "STOP_AGENT" in result_messages:
                         print("🛑 Agent signaled task completion, stopping execution.")
                         break
+
+                    print("=" * 100)
 
                 return results
 
@@ -904,18 +855,19 @@ async def main():
     # Load the Bro system prompt
     system_prompt = Path("bro.txt").read_text(encoding="utf-8")
     prompts = [
-        "Log in to google, then open a new google doc and write an essay about browser agents. make sure to include the title",
+        "Log in to google.",
         "Open gmail and send an email to blueplus.d@gmail.com with the subject 'Hello' and the body 'This is a test email'",
-        """Use retrieval augmented generation to extract data about
-        3 papers about AI and write an essay about their architectures in google doc.
-        Make sure to only extract contents in html format, not pdf or any other format.
+        """Find an article about attention is all you need on arxiv and use retrieval augmented generation to extract data. 
+        After you extract the data, use the search_rag tool to retrieve the relevant chunks. 
+        Then, go to google docs and write an essay about their architectures in google doc. That is your final output.
+        Make sure to only extract contents in html format, not pdf or any other format. DO NOT DO THE SAME ACTION YOU JUST DID.
          """,
     ]
     # third one should test rag, files, todolist, tab switching,
-    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan")
+    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan", model="gpt-5-2025-08-07")
     results = await agent.run(
-        user_prompt=prompts[2],
-        url="https://arxiv.org/list/cs.AI/recent",
+        user_prompt=prompts[0],
+        # url="https://arxiv.org/list/cs.AI/recent",
         max_iterations=100,
         take_screenshot=True,
     )

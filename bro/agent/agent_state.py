@@ -8,10 +8,89 @@ open tabs, and other relevant information that persists across iterations.
 @file purpose: Manages persistent agent state for context in LLM calls
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from patchright.async_api import Page
+from .action_utils import get_element_description
+
+
+def _generate_action_description(
+    action_name: str, 
+    arguments: Dict[str, Any], 
+    highlighted_elements: Optional[List[Dict[str, Any]]] = None
+) -> str:
+    """
+    Generate a human-readable description of an action with optional element context.
+    
+    Args:
+        action_name: Name of the action
+        arguments: Arguments passed to the action
+        highlighted_elements: Optional list of highlighted elements for detailed descriptions
+        
+    Returns:
+        Human-readable description of the action
+    """
+    def _get_element_desc(index):
+        """Helper to get element description with fallback."""
+        if highlighted_elements and get_element_description:
+            return get_element_description(index, highlighted_elements)
+        return f"element at index {index}"
+    
+    if action_name == "click":
+        target = arguments.get("target", "unknown")
+        element_desc = _get_element_desc(target)
+        return f"You clicked on {element_desc}"
+    elif action_name == "input_text":
+        target = arguments.get("target", "unknown")
+        element_desc = _get_element_desc(target)
+        text = arguments.get("input_text", "")
+        login = arguments.get("login")
+        if login:
+            retry_login = arguments.get("retry_login", False)
+            if retry_login:
+                return f"You retried login with '{login}' into {element_desc}"
+            else:
+                return f"You entered login credentials '{login}' into {element_desc}"
+        else:
+            return f"You typed '{text}' into {element_desc}"
+    elif action_name == "scroll":
+        how_much = arguments.get("how_much", "")
+        return f"You scrolled by {how_much} pixels"
+    elif action_name == "search":
+        query = arguments.get("query", "")
+        tab_index = arguments.get("tab_index")
+        if tab_index is not None:
+            return f"You switched to tab {tab_index}"
+        else:
+            return f"You searched for '{query}'"
+    elif action_name == "extract":
+        use_rag = arguments.get("use_rag", False)
+        file_name = arguments.get("file_name", "content")
+        description = arguments.get("description", "")
+        if use_rag:
+            return f"You extracted content using RAG processing ('{description}')"
+        else:
+            return f"You extracted content and saved it to '{file_name}' ('{description}')"
+    elif action_name == "file_system":
+        action_type = arguments.get("action", "")
+        filename = arguments.get("filename", "")
+        if action_type == "read":
+            return f"You read the file '{filename}'"
+        elif action_type == "write":
+            return f"You wrote content to file '{filename}'"
+        elif action_type == "list_files":
+            return "You listed files in the ~/.bro directory"
+        else:
+            return f"You performed file system action '{action_type}'"
+    elif action_name == "search_rag":
+        query = arguments.get("query", "")
+        top_k = arguments.get("top_k", 5)
+        return f"You searched the RAG database for '{query}' (top {top_k} results)"
+    elif action_name == "done":
+        reason = arguments.get("reason", "task completed")
+        return f"You marked the task as done with reason: '{reason}'"
+    else:
+        return f"You executed '{action_name}'"
 
 
 @dataclass
@@ -25,8 +104,6 @@ class FileState:
     filename: str
     content: str
     size: int
-    last_modified: datetime
-    created_by_agent: bool = False
     last_action: str = "unknown"  # read, write, create
 
 
@@ -35,13 +112,14 @@ class TabState:
     """
     Represents the state of an open browser tab/page.
     
-    Tracks open tabs to prevent duplicate navigation and maintain
-    awareness of the current browser state.
+    Tracks open tabs, including duplicates of the same URL, in the same
+    order as the browser context. The index corresponds to the tab's
+    position within the browser's tab strip (
+    0-based index matching context.pages order).
     """
     url: str
     title: str
     is_active: bool = False
-    last_accessed: datetime = field(default_factory=datetime.now)
 
 
 @dataclass
@@ -53,9 +131,8 @@ class RAGRetrievalResult:
     operations to maintain context across iterations.
     """
     query: str
-    timestamp: datetime
     results_count: int
-    full_results: List[Dict[str, Any]]  # Complete results with scores and metadata
+    full_results: List[Dict[str, Any]]  
 
 
 @dataclass
@@ -69,8 +146,8 @@ class ActionContext:
     action_name: str
     arguments: Dict[str, Any]
     result: str
-    timestamp: datetime
     iteration: int
+    description: Optional[str] = None  # Human-readable description of the action
 
 
 class AgentState:
@@ -83,25 +160,25 @@ class AgentState:
     for inclusion in LLM prompts.
     """
     
-    def __init__(self, session_id: str):
+    def __init__(self, user_id: str = "default", session_id: str = "default"):
         """
         Initialize the agent state.
         
         Args:
-            session_id: Unique identifier for this agent session
+            user_id: User identifier for session-based file management
+            session_id: Session identifier for session-based file management
         """
+        self.user_id = user_id
         self.session_id = session_id
         self.files: Dict[str, FileState] = {}
-        self.tabs: Dict[str, TabState] = {}
+        self.tabs: List[TabState] = []
         self.rag_results: List[RAGRetrievalResult] = []
         self.action_history: List[ActionContext] = []
         self.max_action_history = 5  # Keep last 5 actions for context
         self.max_rag_results = 10    # Keep last 10 RAG searches
         
-        # Track session metadata
-        self.session_start_time = datetime.now()
-        self.current_page_url: Optional[str] = None
-        self.current_page_title: Optional[str] = None
+        # Track session metadata        
+        self.current_tab_index: Optional[int] = None
         self.other_stuff: List[str] = []
         
     def add_file_state(
@@ -109,7 +186,6 @@ class AgentState:
         filename: str, 
         content: str, 
         action: str = "unknown",
-        created_by_agent: bool = False
     ) -> None:
         """
         Add or update file state information.
@@ -118,19 +194,14 @@ class AgentState:
             filename: Name of the file
             content: Current content of the file
             action: Action that was performed (read, write, create)
-            created_by_agent: Whether this file was created by the agent
         """
         # Normalize filename (handle session prefixes)
         normalized_name = filename
-        if filename.startswith(f"{self.session_id}_"):
-            normalized_name = filename[len(f"{self.session_id}_"):]
         
         self.files[normalized_name] = FileState(
             filename=normalized_name,
             content=content,
             size=len(content),
-            last_modified=datetime.now(),
-            created_by_agent=created_by_agent,
             last_action=action
         )
     
@@ -149,59 +220,69 @@ class AgentState:
     
     def add_tab_state(self, url: str, title: str, is_active: bool = False) -> None:
         """
-        Add or update browser tab state.
+        Append a browser tab state to the ordered list. Allows duplicates.
         
         Args:
             url: URL of the tab
             title: Title of the tab
             is_active: Whether this is the currently active tab
         """
-        # Mark all other tabs as inactive if this one is active
+        # If marking active, first clear active flags
         if is_active:
-            for tab in self.tabs.values():
+            for tab in self.tabs:
                 tab.is_active = False
         
-        self.tabs[url] = TabState(
-            url=url,
-            title=title,
-            is_active=is_active,
-            last_accessed=datetime.now()
-        )
+        self.tabs.append(TabState(url=url, title=title, is_active=is_active))
         
-        # Update current page tracking
+        # Update current tab tracking
         if is_active:
-            self.current_page_url = url
-            self.current_page_title = title
+            self.current_tab_index = len(self.tabs) - 1
     
     def remove_tab_state(self, url: str) -> None:
         """
-        Remove a tab from tracking (when closed).
-        
-        Args:
-            url: URL of the tab to remove
+        Remove the first matching tab by URL from tracking (when closed).
+        If multiple tabs share the same URL, only the first occurrence is removed.
         """
-        if url in self.tabs:
-            del self.tabs[url]
-            
-        # Clear current page if it was the removed tab
-        if self.current_page_url == url:
-            self.current_page_url = None
-            self.current_page_title = None
+        removed_index = None
+        for i, tab in enumerate(self.tabs):
+            if tab.url == url:
+                removed_index = i
+                break
+        if removed_index is None:
+            return
+        
+        del self.tabs[removed_index]
+        
+        # Adjust current tab index if necessary
+        if self.current_tab_index is not None:
+            if self.current_tab_index == removed_index:
+                self.current_tab_index = min(removed_index, len(self.tabs) - 1) if self.tabs else None
+            elif self.current_tab_index > removed_index:
+                self.current_tab_index -= 1
     
-    async def update_from_page(self, page: Page) -> None:
+    async def update_tab_state(self, page: Page) -> None:
         """
-        Update tab state from current page information.
-        
-        Args:
-            page: Playwright page object to extract state from
+        Assuming that the page variable in @agent is the active page, update agent tab state.
         """
+
+        context = page.context
+        pages = context.pages
+
         try:
-            url = page.url
-            title = await page.title()
-            self.add_tab_state(url, title, is_active=True)
+            # Compare the number of browser pages with the number of tracked tabs
+            if len(pages) > len(self.tabs):
+                # Find the index where new tabs start
+                start_idx = len(self.tabs)
+                for i in range(start_idx, len(pages)):
+                    new_url = pages[i].url
+                    new_title = await pages[i].title()
+                    # Add the new tab as inactive for now
+                    self.tabs.append(TabState(url=new_url, title=new_title, is_active=False))
+                    self.set_current_tab_index(len(self.tabs) - 1)
+
+            # if no new tabs/agent just switched tabs, that should be covered in the search tool already
         except Exception as e:
             print(f"⚠️ Failed to update page state: {e}")
-    
 
     def add_rag_preview(self, preview: str) -> None:
         """
@@ -226,7 +307,6 @@ class AgentState:
         
         rag_result = RAGRetrievalResult(
             query=query,
-            timestamp=datetime.now(),
             results_count=len(results),
             full_results=results
         )
@@ -242,7 +322,9 @@ class AgentState:
         action_name: str,
         arguments: Dict[str, Any],
         result: str,
-        iteration: int
+        iteration: int,
+        description: Optional[str] = None,
+        highlighted_elements: Optional[List[Dict[str, Any]]] = None
     ) -> None:
         """
         Add action context to history.
@@ -252,13 +334,19 @@ class AgentState:
             arguments: Arguments passed to the action
             result: Result of the action
             iteration: Iteration number when action was performed
+            description: Optional human-readable description of the action
+            highlighted_elements: Optional list of highlighted elements for detailed descriptions
         """
+        # Generate description if not provided
+        if description is None:
+            description = _generate_action_description(action_name, arguments, highlighted_elements)
+            
         action_context = ActionContext(
             action_name=action_name,
             arguments=arguments,
             result=result,
-            timestamp=datetime.now(),
-            iteration=iteration
+            iteration=iteration,
+            description=description
         )
         
         self.action_history.append(action_context)
@@ -280,32 +368,26 @@ class AgentState:
         context_parts = []
         
         # Session information
-        context_parts.append("=== AGENT SESSION CONTEXT ===")
-        context_parts.append(f"Session ID: {self.session_id}")
-        context_parts.append(f"Session Duration: {datetime.now() - self.session_start_time}")
-        
+        context_parts.append("=== AGENT SESSION CONTEXT ===")        
         # Current page information
-        if self.current_page_url:
-            context_parts.append(f"Current Page: {self.current_page_title} ({self.current_page_url})")
+        if self.current_tab_index is not None and self.tabs:
+            if 0 <= self.current_tab_index < len(self.tabs):
+                current_tab = self.tabs[self.current_tab_index]
+                context_parts.append(f"Current Page: {current_tab.title} ({current_tab.url}) [Tab {self.current_tab_index}]")
         
         # Browser tabs state
         if self.tabs:
             context_parts.append("\n=== OPEN BROWSER TABS ===")
-            # Convert tabs to list for consistent ordering and indexing
-            tab_list = list(self.tabs.values())
-            for i, tab in enumerate(tab_list):
+            for i, tab in enumerate(self.tabs):
                 status = "ACTIVE" if tab.is_active else "background"
-                time_ago = datetime.now() - tab.last_accessed
-                context_parts.append(f"[{i}] [{status}] {tab.title} ({tab.url}) - accessed {time_ago.seconds}s ago")
+                context_parts.append(f"[{i}] [{status}] {tab.title} ({tab.url})")
         
         # Files created/accessed by agent
         if self.files:
             context_parts.append("\n=== FILES MANAGED BY AGENT ===")
             for filename, file_state in self.files.items():
-                created_indicator = "[CREATED]" if file_state.created_by_agent else "[ACCESSED]"
-                time_ago = datetime.now() - file_state.last_modified
                 
-                context_parts.append(f"{created_indicator} {filename} ({file_state.size} chars, {file_state.last_action} {time_ago.seconds}s ago)")
+                context_parts.append(f"{filename} ({file_state.size} chars, {file_state.last_action})")
                 
                 if include_full_files and file_state.size < 2000:  # Include full content for small files
                     context_parts.append(f"Content:\n{file_state.content}")
@@ -314,25 +396,28 @@ class AgentState:
                     context_parts.append(f"Content preview:\n{preview}")
                 context_parts.append("")  # Empty line between files
         
-        # Recent RAG retrieval results
+        # RAG retrieval results
         if self.rag_results:
-            context_parts.append("=== RECENT RAG SEARCH RESULTS ===")
-            for i, rag_result in enumerate(self.rag_results[-3:], 1):  # Show last 3
-                time_ago = datetime.now() - rag_result.timestamp
-                context_parts.append(f"{i}. Query: '{rag_result.query}' ({rag_result.results_count} results, {time_ago.seconds}s ago)")
+            context_parts.append("=== RAG SEARCH RESULTS ===")
+            for i, rag_result in enumerate(self.rag_results, 1):  # Show all results
+                context_parts.append(f"{i}. Query: '{rag_result.query}' ({rag_result.results_count} results)")
                 # No preview shown - full results are only accessed when LLM explicitly reads them
         
         # Recent action history
         if self.action_history:
             context_parts.append("\n=== RECENT ACTIONS ===")
             for action in self.action_history[-3:]:  # Show last 3 actions
-                time_ago = datetime.now() - action.timestamp
-                args_str = ", ".join(f"{k}={v}" for k, v in list(action.arguments.items())[:2])  # Show first 2 args
-                if len(action.arguments) > 2:
-                    args_str += "..."
-                
-                result_preview = action.result[:100] + "..." if len(action.result) > 100 else action.result
-                context_parts.append(f"- Iteration {action.iteration}: {action.action_name}({args_str}) -> {result_preview} ({time_ago.seconds}s ago)")
+                if action.description:
+                    # Use human-readable description if available
+                    context_parts.append(f"- Iteration {action.iteration}: {action.description}")
+                else:
+                    # Fallback to technical format
+                    args_str = ", ".join(f"{k}={v}" for k, v in list(action.arguments.items())[:2])  # Show first 2 args
+                    if len(action.arguments) > 2:
+                        args_str += "..."
+                    
+                    result_preview = action.result[:100] + "..." if len(action.result) > 100 else action.result
+                    context_parts.append(f"- Iteration {action.iteration}: {action.action_name}({args_str}) -> {result_preview}")
         
         if self.other_stuff:
             for stuff in self.other_stuff:
@@ -351,9 +436,8 @@ class AgentState:
         """
         return {
             "total_files": len(self.files),
-            "created_by_agent": sum(1 for f in self.files.values() if f.created_by_agent),
             "total_content_size": sum(f.size for f in self.files.values()),
-            "files": {name: {"size": f.size, "created": f.created_by_agent, "action": f.last_action} 
+            "files": {name: {"size": f.size, "action": f.last_action} 
                      for name, f in self.files.items()}
         }
     
@@ -367,10 +451,28 @@ class AgentState:
         Returns:
             TabState object if index is valid, None otherwise
         """
-        tab_list = list(self.tabs.values())
-        if 0 <= index < len(tab_list):
-            return tab_list[index]
+        if 0 <= index < len(self.tabs):
+            return self.tabs[index]
         return None
+    
+    
+    def set_current_tab_index(self, index: int):
+        """
+        Set the current tab by index.
+        
+        Args:
+            index: Zero-based index of the tab to set as current
+            
+        Returns:
+            True if successful, False if index is invalid
+        """
+        if 0 <= index < len(self.tabs):
+            # Mark all tabs as inactive
+            for tab in self.tabs:
+                tab.is_active = False
+            # Mark the selected tab as active
+            self.tabs[index].is_active = True
+            self.current_tab_index = index
     
     def get_tabs_summary(self) -> Dict[str, Any]:
         """
@@ -381,9 +483,11 @@ class AgentState:
         """
         return {
             "total_tabs": len(self.tabs),
-            "active_tab": self.current_page_url,
-            "tabs": {url: {"title": tab.title, "active": tab.is_active} 
-                    for url, tab in self.tabs.items()}
+            "active_tab_index": self.current_tab_index,
+            "tabs": [
+                {"index": i, "url": tab.url, "title": tab.title, "active": tab.is_active}
+                for i, tab in enumerate(self.tabs)
+            ]
         }
     
     def clear_state(self) -> None:
@@ -394,9 +498,102 @@ class AgentState:
         self.tabs.clear()
         self.rag_results.clear()
         self.action_history.clear()
-        self.current_page_url = None
-        self.current_page_title = None
+        self.current_tab_index = None
         self.other_stuff.clear()
+    def get_session_directory(self):
+        """
+        Get the session directory path.
+        
+        Returns:
+            Path to the session directory
+        """
+        from pathlib import Path
+        return Path.home() / ".bro" / self.user_id / f"session-{self.session_id}"
+    
+    def get_file_tree_representation(self) -> str:
+        """
+        Generate a tree representation of the session file structure for debugging.
+        
+        Returns:
+            String representation of the file tree structure
+        """
+        from pathlib import Path
+        
+        session_dir = self.get_session_directory()
+        
+        if not session_dir.exists():
+            return f"Session directory does not exist: {session_dir}"
+        
+        def _build_tree(path: Path, prefix: str = "", is_last: bool = True) -> List[str]:
+            """Recursively build tree representation."""
+            lines = []
+            
+            if path.is_dir():
+                # Directory
+                connector = "└── " if is_last else "├── "
+                lines.append(f"{prefix}{connector}{path.name}/")
+                
+                # Get children and sort (directories first, then files)
+                try:
+                    children = list(path.iterdir())
+                    children.sort(key=lambda x: (not x.is_dir(), x.name.lower()))
+                    
+                    for i, child in enumerate(children):
+                        is_child_last = (i == len(children) - 1)
+                        child_prefix = prefix + ("    " if is_last else "│   ")
+                        lines.extend(_build_tree(child, child_prefix, is_child_last))
+                        
+                except PermissionError:
+                    lines.append(f"{prefix}    [Permission Denied]")
+                    
+            else:
+                # File
+                connector = "└── " if is_last else "├── "
+                size = path.stat().st_size if path.exists() else 0
+                size_str = f" ({size} bytes)" if size > 0 else ""
+                lines.append(f"{prefix}{connector}{path.name}{size_str}")
+                
+            return lines
+        
+        tree_lines = [f"Session Directory Tree: {session_dir}"]
+        tree_lines.extend(_build_tree(session_dir, "", True))
+        
+        return "\n".join(tree_lines)
+    
+    async def save_state_to_file(self, iteration: Optional[int] = None) -> str:
+        """
+        Save the current agent state to a JSON file in the session directory.
+        Uses a consistent filename that gets updated on each save instead of creating new files.
+        
+        Args:
+            iteration: Optional iteration number to include in the saved data
+            
+        Returns:
+            Path to the saved state file
+        """
+        import json
+        from datetime import datetime
+        
+        session_dir = self.get_session_directory()
+        session_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use consistent filename that gets updated instead of creating new files
+        filename = "agent_state.json"
+        state_file = session_dir / filename
+        
+        # Convert state to dictionary
+        state_data = self.to_dict()
+        state_data["user_id"] = self.user_id
+        state_data["session_id"] = self.session_id
+        state_data["saved_at"] = datetime.now().isoformat()
+        state_data["iteration"] = iteration
+        
+        # Save to file (overwrites existing file)
+        with open(state_file, 'w', encoding='utf-8') as f:
+            json.dump(state_data, f, indent=2, ensure_ascii=False)
+            
+        return str(state_file)
+    
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert state to dictionary for serialization.
@@ -405,30 +602,22 @@ class AgentState:
             Dictionary representation of the agent state
         """
         return {
+            "user_id": self.user_id,
             "session_id": self.session_id,
-            "session_start_time": self.session_start_time.isoformat(),
-            "current_page_url": self.current_page_url,
-            "current_page_title": self.current_page_title,
+            "current_tab_index": self.current_tab_index,
             "files": {
                 name: {
                     "filename": f.filename,
                     "content": f.content,
                     "size": f.size,
-                    "last_modified": f.last_modified.isoformat(),
-                    "created_by_agent": f.created_by_agent,
                     "last_action": f.last_action
                 }
                 for name, f in self.files.items()
             },
-            "tabs": {
-                url: {
-                    "url": t.url,
-                    "title": t.title,
-                    "is_active": t.is_active,
-                    "last_accessed": t.last_accessed.isoformat()
-                }
-                for url, t in self.tabs.items()
-            },
+            "tabs": [
+                {"index": i, "url": t.url, "title": t.title, "is_active": t.is_active}
+                for i, t in enumerate(self.tabs)
+            ],
             "rag_results_count": len(self.rag_results),
             "action_history_count": len(self.action_history),
             "other_stuff": self.other_stuff
@@ -439,18 +628,19 @@ class AgentState:
 _agent_state: Optional[AgentState] = None
 
 
-def initialize_agent_state(session_id: str) -> AgentState:
+def initialize_agent_state(user_id: str = "default", session_id: str = "default") -> AgentState:
     """
     Initialize the global agent state manager.
     
     Args:
-        session_id: Unique identifier for this agent session
+        user_id: User identifier for session-based file management
+        session_id: Session identifier for session-based file management
         
     Returns:
         Initialized AgentState instance
     """
     global _agent_state
-    _agent_state = AgentState(session_id)
+    _agent_state = AgentState(user_id=user_id, session_id=session_id)
     return _agent_state
 
 
