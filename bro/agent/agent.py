@@ -1,14 +1,3 @@
-"""
-Agent class for Bro - autonomous web interaction agent
-
-This module provides the Agent class that runs a loop making LLM calls and executing
-tool calls to complete web interaction tasks. It handles screenshots, bounding boxes,
-element indexing, and tool call parsing according to OpenAI documentation. The agent
-uses element indices for targeting and automatically maps them to XPath selectors.
-
-@file purpose: Provides the main agent loop for Bro web interaction
-"""
-
 import asyncio
 import json
 import uuid
@@ -16,20 +5,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from browser.use_cdp import use_cdp
+from utils.use_cdp import use_cdp
 from patchright.async_api import Page, async_playwright
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from .gpt_actions import gpt_actions
+from .build_llm_prompt import build_llm_prompt
 
 # Import utility functions
-from .action_utils import format_elements_text
+from utils.action_utils import format_elements_text
 from .actions import click, done, extract, file_system, input_text, scroll, search, search_rag
 from .agent_state import initialize_agent_state
-from .ai import gpt
-from .credentials import get_credentials
-from .dom_utils import take_screenshot_with_bounding_boxes
+from .ai import ai
+from utils.credentials import get_credentials
+from utils.dom_utils import take_screenshot_with_bounding_boxes
 
 
 @dataclass
@@ -67,32 +56,50 @@ class ActionResult:
         return f"[Iteration {self.iteration}] | {self.action}{args_str}{reason_str} | {self.result}"
 
 
-class OutputTextBlock(BaseModel):
-    type: Optional[str] = None
-    text: Optional[str] = None
-
-
-class SummaryTextBlock(BaseModel):
-    type: Optional[str] = None
-    text: Optional[str] = None
-
-
-class OutputItem(BaseModel):
-    # For assistant message blocks
-    type: Optional[str] = None
-    id: Optional[str] = None
-    status: Optional[str] = None
-    role: Optional[str] = None
-    content: Optional[List[OutputTextBlock]] = None
-    # For function call blocks
+# Clean Pydantic models for LiteLLM response handling
+class LiteLLMFunction(BaseModel):
     name: Optional[str] = None
     arguments: Optional[str] = None
-    # For reasoning blocks
-    summary: Optional[List[SummaryTextBlock]] = None
+    
+    class Config:
+        extra = "allow"  # Allow extra fields
 
 
-class OpenAIResponse(BaseModel):
-    output: List[OutputItem] = Field(default_factory=list)
+class LiteLLMToolCall(BaseModel):
+    type: str
+    function: LiteLLMFunction
+    id: Optional[str] = None
+    
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+
+class LiteLLMMessage(BaseModel):
+    role: str
+    content: Optional[str] = None
+    tool_calls: Optional[List[LiteLLMToolCall]] = None
+    reasoning_content: Optional[str] = None
+    
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+
+class LiteLLMChoice(BaseModel):
+    message: LiteLLMMessage
+    index: Optional[int] = None
+    finish_reason: Optional[str] = None
+    
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+
+class LiteLLMResponse(BaseModel):
+    choices: List[LiteLLMChoice]
+    model: Optional[str] = None
+    id: Optional[str] = None
+    
+    class Config:
+        extra = "allow"  # Allow extra fields
 
 
 class Agent:
@@ -116,7 +123,7 @@ class Agent:
         enable_rag: bool = False,
         session_id: str = str(uuid.uuid4())[:8],
         user_id: Optional[str] = None,
-        model: str = "gpt-4.1-mini-2025-04-14",
+        model: str = "gpt-5-mini-2025-08-07",
     ):
         """
         Initialize the Bro agent.
@@ -140,31 +147,44 @@ class Agent:
         print(f"🔧 Initialized agent state (user: {self.user_id}, session: {self.session_id})")
 
     async def _extract_reasoning_from_llm_response(
-        self, llm_response: Dict[str, Any]
+        self, llm_response: Any
     ) -> Optional[str]:
         """
-        Extract reasoning summary from either assistant message or reasoning block.
+        Extract reasoning from LiteLLM's response format.
         """
         if not llm_response:
             return None
 
         try:
-            parsed = OpenAIResponse.model_validate(llm_response, from_attributes=True)
-        except Exception:
+            # Convert LiteLLM ModelResponse to dict first
+            if hasattr(llm_response, 'model_dump'):
+                response_dict = llm_response.model_dump()
+            elif hasattr(llm_response, 'dict'):
+                response_dict = llm_response.dict()
+            else:
+                # Assume it's already a dict
+                response_dict = llm_response
+            
+            # Use Pydantic to parse the response cleanly
+            response = LiteLLMResponse.model_validate(response_dict)
+            
+            if not response.choices:
+                return None
+            
+            message = response.choices[0].message
+            
+            # Extract reasoning_content from LiteLLM's standardized field
+            if message.reasoning_content:
+                return message.reasoning_content.strip()
+                
+            # Fallback: extract from regular content if no tool calls (might be reasoning)
+            if message.content and not message.tool_calls:
+                return message.content.strip()
+                    
+        except Exception as e:
+            print(f"Error extracting reasoning with Pydantic: {e}")
             return None
 
-        if not parsed.output:
-            return None
-
-        # Prefer explicit reasoning summary if present
-        for item in parsed.output:
-            if item.type == "reasoning" and item.summary:
-                texts: List[str] = [
-                    s.text for s in item.summary if s and isinstance(s.text, str)
-                ]
-                if texts:
-                    combined = "\n".join(texts)
-                    return combined.strip()
         return None
 
     async def _initialize_rag_if_needed(self) -> bool:
@@ -242,14 +262,14 @@ class Agent:
         print("Making initial LLM call for task planning...")
 
         # Call the LLM without a screenshot since we don't have a webpage yet
-        params = gpt_actions(
+        params = build_llm_prompt(
             user_prompt=initial_prompt,
             system_prompt=self.system_prompt,
             model=self.model,
             screenshot=None,  # No screenshot available yet
         )
 
-        llm_response = await gpt(params)
+        llm_response = await ai(params)
         reasoning = await self._extract_reasoning_from_llm_response(llm_response)
 
         # Parse for tool calls
@@ -270,13 +290,13 @@ class Agent:
         }
 
     async def _parse_tool_call(
-        self, llm_response: Dict[str, Any]
+        self, llm_response: Any
     ) -> List[Dict[str, Any]]:
         """
-        Parse the LLM response for multiple tool calls according to OpenAI documentation.
+        Parse the LLM response for tool calls using clean Pydantic models.
 
         Args:
-            llm_response: The response from the LLM
+            llm_response: The chat completion response from LiteLLM
 
         Returns:
             List of tool call data if found, empty list otherwise
@@ -285,23 +305,51 @@ class Agent:
         if not llm_response:
             return []
 
-        tool_calls = []
         try:
-            parsed = OpenAIResponse.model_validate(llm_response, from_attributes=True)
+            # Convert LiteLLM ModelResponse to dict first
+            if hasattr(llm_response, 'model_dump'):
+                response_dict = llm_response.model_dump()
+            elif hasattr(llm_response, 'dict'):
+                response_dict = llm_response.dict()
+            else:
+                # Assume it's already a dict
+                response_dict = llm_response
+            
+            # Use Pydantic to parse the response cleanly
+            response = LiteLLMResponse.model_validate(response_dict)
+            
+            if not response.choices:
+                return []
+            
+            # Extract tool calls from the first choice
+            message = response.choices[0].message
+            if not message.tool_calls:
+                return []
+            
+            tool_calls = []
+            for tool_call in message.tool_calls:
+                if tool_call.type == "function":
+                    try:
+                        # Parse function arguments
+                        args_str = tool_call.function.arguments or "{}"
+                        args_obj = json.loads(args_str) if isinstance(args_str, str) else args_str
+                        
+                        tool_calls.append({
+                            "name": tool_call.function.name,
+                            "arguments": args_obj
+                        })
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing tool call arguments JSON: {e}")
+                        continue
+                    except Exception as e:
+                        print(f"Error processing tool call: {e}")
+                        continue
+            
+            return tool_calls
+
         except Exception as e:
-            print(f"Error validating OpenAI response: {e}")
+            print(f"Error parsing LiteLLM response with Pydantic: {e}")
             return []
-
-        for item in parsed.output:
-            if item.type == "function_call" and item.name and item.arguments:
-                try:
-                    args_obj = json.loads(item.arguments)
-                except json.JSONDecodeError as e:
-                    print(f"Error parsing function_call arguments JSON: {e}")
-                    continue
-                tool_calls.append({"name": item.name, "arguments": args_obj})
-
-        return tool_calls
 
     async def _execute_tool_call(
         self,
@@ -750,14 +798,14 @@ class Agent:
 							"""
                     print(f"Sending LLM Query {iteration}...")
                     # Call the LLM
-                    params = gpt_actions(
+                    params = build_llm_prompt(
                         user_prompt=enhanced_prompt,
                         system_prompt=self.system_prompt,
                         model=self.model,
                         screenshot=page_data["screenshot"],
                     )
 
-                    llm_response = await gpt(params)
+                    llm_response = await ai(params)
 
                     reasoning = await self._extract_reasoning_from_llm_response(
                         llm_response
@@ -864,7 +912,7 @@ async def main():
          """,
     ]
     # third one should test rag, files, todolist, tab switching,
-    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan", model="gpt-5-2025-08-07")
+    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan", model="claude-3-5-haiku-latest")
     results = await agent.run(
         user_prompt=prompts[0],
         # url="https://arxiv.org/list/cs.AI/recent",

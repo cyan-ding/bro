@@ -24,6 +24,7 @@ dependencies = [
     "cerebras-cloud-sdk",
     "anthropic",
     "openai",
+    "litellm",
     "chardet",
     "deptry==0.23.1",
     "faiss-cpu",

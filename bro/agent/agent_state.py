@@ -11,7 +11,7 @@ open tabs, and other relevant information that persists across iterations.
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from patchright.async_api import Page
-from .action_utils import get_element_description
+from utils.action_utils import get_element_description
 
 
 def _generate_action_description(

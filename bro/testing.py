@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Ensure we can import agent utilities from this script
 sys.path.append(str(Path(__file__).parent))
-from agent.action_utils import format_elements_text
+from utils.action_utils import format_elements_text
 from patchright.async_api import async_playwright
 
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
 import voyageai
-from browser.use_cdp import use_cdp
+from utils.use_cdp import use_cdp
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 from dotenv import load_dotenv

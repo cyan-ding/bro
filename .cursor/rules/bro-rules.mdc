@@ -5,23 +5,6 @@ alwaysApply: true
 
 **Bro** is an AI agent that autonomously interacts with the web. It takes a user-defined task, splits it into multiple subtasks to be run on parallel, which are assigned to other ai agents to complete. Bro navigates web pages using Chromium via Playwright, processes HTML, and repeatedly queries a language model (like `gpt-4o`) to decide the next action—until the task is completed.
 
-### File Documentation
-
-When you create a **new file**:
-
-* **For humans**: At the top of the file, include a few sentence docstring in natural language explaining:
-
-  * What this file does.
-  * How it fits into the Bro system.
-  * If it introduces a new abstraction or replaces an old one.
-  * Make sure to update this when relevant changes occur in the file. 
-* **For LLMs/AI**: Include structured metadata using standardized comments such as:
-
-  ```python
-  # @file purpose: Defines <purpose>
-  ```
----
-
 ### Development Rules
 
 * **Always use `uv` instead of `pip`**
@@ -49,4 +32,6 @@ When you create a **new file**:
 * **Before making any edits, outline what changes you will be making**
 
 * **If you get stuck on a problem or believe it is a dead end, suggest alternatives** 
+
+* **When handling json response parsing in Python, do not chain hasattr() or get(), use Pydantic models instead**
 ---

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from patchright.async_api import Page, async_playwright
-from browser.use_cdp import use_cdp
+from utils.use_cdp import use_cdp
 
 
 async def load_js_bundle() -> str:
