@@ -71,4 +71,4 @@ tmp/
 *.tmp
 
 # Bro specific files
-worker_history_*.md
+agent-state-observable

@@ -70,7 +70,7 @@ async def load_js_bundle() -> str:
     return bundle
 
 
-def _compute_highlight_signature(highlighted_elements: List[Dict[str, Any]]) -> str:
+def compute_highlight_signature(highlighted_elements: List[Dict[str, Any]]) -> str:
     """Compute a stable signature for a list of highlighted elements.
 
     The signature intentionally ignores volatile fields like element indices and
@@ -143,7 +143,7 @@ async def wait_for_navigation(page: Page, timeout_ms: int) -> Dict[str, Any]:
         build_args,
     )
     highlighted_elements = result.get("highlightedElements", [])
-    signature = _compute_highlight_signature(highlighted_elements)
+    signature = compute_highlight_signature(highlighted_elements)
     return {
         "type": "navigation",
         "signature": signature,
@@ -192,7 +192,7 @@ async def poll_dom(
             build_args,
         )
         highlighted_local = result_local.get("highlightedElements", [])
-        signature_local = _compute_highlight_signature(highlighted_local)
+        signature_local = compute_highlight_signature(highlighted_local)
         return highlighted_local, signature_local
 
     latest_signature: Optional[str] = None
@@ -249,7 +249,7 @@ async def poll_dom(
         await asyncio.sleep(poll_interval_ms / 1000.0)
 
 
-async def _wait_for_dom_change_or_navigation(
+async def wait_for_dom_change_or_navigation(
     page: Page,
     previous_signature: Optional[str],
     timeout_ms: int = 10000,
@@ -349,7 +349,7 @@ async def take_screenshot_with_bounding_boxes(
     # If requested, wait until either navigation or a genuine DOM change occurs
     if wait_for_change:
         try:
-            change_result = await _wait_for_dom_change_or_navigation(
+            change_result = await wait_for_dom_change_or_navigation(
                 page,
                 previous_signature=previous_signature,
                 timeout_ms=timeout_ms,
@@ -404,7 +404,7 @@ async def take_screenshot_with_bounding_boxes(
     signature = (
         cached_signature
         if wait_for_change and cached_signature
-        else _compute_highlight_signature(result.get("highlightedElements", []))
+        else compute_highlight_signature(result.get("highlightedElements", []))
     )
 
     return {
@@ -459,7 +459,7 @@ async def test_dom_polling_vs_direct_injection(
         "(args) => window.buildDomTree(args)",
         build_args,
     )
-    direct_signature = _compute_highlight_signature(
+    direct_signature = compute_highlight_signature(
         direct_result.get("highlightedElements", [])
     )
     print("direct_result: ", direct_result.get("highlightedElements", []))
@@ -473,7 +473,7 @@ async def test_dom_polling_vs_direct_injection(
     try:
         # Use a fake previous signature to force polling to timeout and return current state
         # fake_previous_signature = "fake_signature_for_testing"
-        change_result = await _wait_for_dom_change_or_navigation(
+        change_result = await wait_for_dom_change_or_navigation(
             page,
             previous_signature=direct_signature,
             timeout_ms=timeout_ms,

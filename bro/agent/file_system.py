@@ -1,8 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional
 from playwright.async_api import Page
 
-def _get_bro_directories(user_id: str = "default", session_id: str = "default"):
+def get_bro_directories(user_id: str = "default", session_id: str = "default"):
     """
     Get Bro application directories with session-based structure, creating them if they don't exist.
     
@@ -27,7 +26,7 @@ def _get_bro_directories(user_id: str = "default", session_id: str = "default"):
     return extractions_dir, files_dir
 
 
-def _sanitize_filename(filename: str, default_name: str = "content") -> str:
+def sanitize_filename(filename: str, default_name: str = "content") -> str:
     """
     Sanitize a filename to be filesystem-safe.
     
@@ -55,7 +54,7 @@ def _sanitize_filename(filename: str, default_name: str = "content") -> str:
     return safe_filename
 
 
-def _get_unique_filename(directory, base_filename: str) -> str:
+def get_unique_filename(directory, base_filename: str) -> str:
     """
     Get a unique filename in the directory, adding numbers if needed.
     
@@ -84,24 +83,7 @@ def _get_unique_filename(directory, base_filename: str) -> str:
         counter += 1
 
 
-class FileSystemArgs(BaseModel):
-    """
-    Pydantic model for file_system tool arguments from LLM.
-
-    This ensures proper validation and type conversion of arguments
-    passed from the LLM through the agent system.
-    """
-
-    action: Literal["write", "read", "list_files"] = Field(
-        description="Action to perform on the file system"
-    )
-    filename: Optional[str] = Field(
-        default=None, description="Name of the file to read/write"
-    )
-    content: Optional[str] = Field(default=None, description="Content to write to file")
-
-
-async def _save_extraction_to_file(
+async def save_extraction_to_file(
     content: str,
     page_url: str,
     page_title: str,
@@ -126,18 +108,18 @@ async def _save_extraction_to_file(
     import json
 
     # Get the extractions directory
-    extractions_dir, _ = _get_bro_directories(user_id, session_id)
+    extractions_dir, _ = get_bro_directories(user_id, session_id)
     
     # Use description for filename, fallback to page title
     base_name = file_name or description or page_title or "extraction"
-    safe_filename = _sanitize_filename(base_name, "extraction")
+    safe_filename = sanitize_filename(base_name, "extraction")
     
     # Ensure .json extension
     if not safe_filename.endswith('.json'):
         safe_filename = safe_filename.rsplit('.', 1)[0] + '.json'
     
     # Get unique filename to avoid overwrites
-    unique_filename = _get_unique_filename(extractions_dir, safe_filename)
+    unique_filename = get_unique_filename(extractions_dir, safe_filename)
     file_path = extractions_dir / unique_filename
 
     # Create extraction data structure
@@ -157,7 +139,7 @@ async def _save_extraction_to_file(
     return str(file_path)
 
 
-async def _basic_text_extraction(page: Page, html_content: str) -> str:
+async def basic_text_extraction(page: Page, html_content: str) -> str:
     """
     Perform basic text extraction from HTML content.
 

@@ -11,86 +11,7 @@ open tabs, and other relevant information that persists across iterations.
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from patchright.async_api import Page
-from utils.action_utils import get_element_description
-
-
-def _generate_action_description(
-    action_name: str, 
-    arguments: Dict[str, Any], 
-    highlighted_elements: Optional[List[Dict[str, Any]]] = None
-) -> str:
-    """
-    Generate a human-readable description of an action with optional element context.
-    
-    Args:
-        action_name: Name of the action
-        arguments: Arguments passed to the action
-        highlighted_elements: Optional list of highlighted elements for detailed descriptions
-        
-    Returns:
-        Human-readable description of the action
-    """
-    def _get_element_desc(index):
-        """Helper to get element description with fallback."""
-        if highlighted_elements and get_element_description:
-            return get_element_description(index, highlighted_elements)
-        return f"element at index {index}"
-    
-    if action_name == "click":
-        target = arguments.get("target", "unknown")
-        element_desc = _get_element_desc(target)
-        return f"You clicked on {element_desc}"
-    elif action_name == "input_text":
-        target = arguments.get("target", "unknown")
-        element_desc = _get_element_desc(target)
-        text = arguments.get("input_text", "")
-        login = arguments.get("login")
-        if login:
-            retry_login = arguments.get("retry_login", False)
-            if retry_login:
-                return f"You retried login with '{login}' into {element_desc}"
-            else:
-                return f"You entered login credentials '{login}' into {element_desc}"
-        else:
-            return f"You typed '{text}' into {element_desc}"
-    elif action_name == "scroll":
-        how_much = arguments.get("how_much", "")
-        return f"You scrolled by {how_much} pixels"
-    elif action_name == "search":
-        query = arguments.get("query", "")
-        tab_index = arguments.get("tab_index")
-        if tab_index is not None:
-            return f"You switched to tab {tab_index}"
-        else:
-            return f"You searched for '{query}'"
-    elif action_name == "extract":
-        use_rag = arguments.get("use_rag", False)
-        file_name = arguments.get("file_name", "content")
-        description = arguments.get("description", "")
-        if use_rag:
-            return f"You extracted content using RAG processing ('{description}')"
-        else:
-            return f"You extracted content and saved it to '{file_name}' ('{description}')"
-    elif action_name == "file_system":
-        action_type = arguments.get("action", "")
-        filename = arguments.get("filename", "")
-        if action_type == "read":
-            return f"You read the file '{filename}'"
-        elif action_type == "write":
-            return f"You wrote content to file '{filename}'"
-        elif action_type == "list_files":
-            return "You listed files in the ~/.bro directory"
-        else:
-            return f"You performed file system action '{action_type}'"
-    elif action_name == "search_rag":
-        query = arguments.get("query", "")
-        top_k = arguments.get("top_k", 5)
-        return f"You searched the RAG database for '{query}' (top {top_k} results)"
-    elif action_name == "done":
-        reason = arguments.get("reason", "task completed")
-        return f"You marked the task as done with reason: '{reason}'"
-    else:
-        return f"You executed '{action_name}'"
+from utils.action_utils import generate_action_description
 
 
 @dataclass
@@ -132,22 +53,48 @@ class RAGRetrievalResult:
     """
     query: str
     results_count: int
-    full_results: List[Dict[str, Any]]  
+    full_results: List[Dict[str, Any]]
 
+
+@dataclass
+class RAGContentAvailability:
+    """
+    Represents that RAG-processed state that is available for querying.
+    
+    Tracks when content has been processed and stored in the vector database
+    but no specific query has been performed yet.
+    """
+    source_url: str
+    source_title: str
+    chunks_count: int
+    content_length: int
+    processed_at: str  # ISO timestamp  
+
+
+@dataclass
+class StructuredOutputContext:
+    """
+    Represents structured output from LLM responses.
+    
+    Tracks thinking, evaluation of previous goals, memory, and next goals
+    from the LLM's structured JSON responses.
+    """
+    thinking: str
+    evaluation_previous_goal: str
+    memory: str
+    next_goal: str
 
 @dataclass
 class ActionContext:
     """
     Represents context from previous actions taken by the agent.
-    
-    Maintains a sliding window of recent actions and their outcomes
-    to provide continuity in the LLM context.
     """
     action_name: str
     arguments: Dict[str, Any]
     result: str
     iteration: int
     description: Optional[str] = None  # Human-readable description of the action
+    structured_output: Optional[StructuredOutputContext] = None  # Associated structured output
 
 
 class AgentState:
@@ -173,13 +120,14 @@ class AgentState:
         self.files: Dict[str, FileState] = {}
         self.tabs: List[TabState] = []
         self.rag_results: List[RAGRetrievalResult] = []
+        self.rag_content_available: List[RAGContentAvailability] = []
         self.action_history: List[ActionContext] = []
-        self.max_action_history = 5  # Keep last 5 actions for context
-        self.max_rag_results = 10    # Keep last 10 RAG searches
+        self.max_action_history = 100 
+        self.max_rag_results = 10   
+        self.max_rag_sources = 5   
         
         # Track session metadata        
         self.current_tab_index: Optional[int] = None
-        self.other_stuff: List[str] = []
         
     def add_file_state(
         self, 
@@ -284,11 +232,37 @@ class AgentState:
         except Exception as e:
             print(f"⚠️ Failed to update page state: {e}")
 
-    def add_rag_preview(self, preview: str) -> None:
+    def add_rag_content_availability(
+        self, 
+        source_url: str, 
+        source_title: str, 
+        chunks_count: int, 
+        content_length: int
+    ) -> None:
         """
-        Add RAG preview to state.
+        Add notification that RAG-processed content is available for querying.
+        
+        Args:
+            source_url: URL of the source content
+            source_title: Title of the source content
+            chunks_count: Number of chunks created
+            content_length: Total content length processed
         """
-        self.other_stuff.append(preview)
+        from datetime import datetime
+        
+        rag_content = RAGContentAvailability(
+            source_url=source_url,
+            source_title=source_title,
+            chunks_count=chunks_count,
+            content_length=content_length,
+            processed_at=datetime.now().isoformat()
+        )
+        
+        self.rag_content_available.append(rag_content)
+        
+        # Keep only the most recent content availability notices
+        if len(self.rag_content_available) > self.max_rag_sources:
+            self.rag_content_available = self.rag_content_available[-self.max_rag_sources:]
     
     def add_rag_result(
         self, 
@@ -302,9 +276,6 @@ class AgentState:
             query: The search query that was performed
             results: List of search results with content and metadata
         """
-        # Clear RAG previews since actual results are now available
-        self.other_stuff.clear()
-        
         rag_result = RAGRetrievalResult(
             query=query,
             results_count=len(results),
@@ -316,6 +287,7 @@ class AgentState:
         # Keep only the most recent RAG results
         if len(self.rag_results) > self.max_rag_results:
             self.rag_results = self.rag_results[-self.max_rag_results:]
+
     
     def add_action_context(
         self,
@@ -324,10 +296,12 @@ class AgentState:
         result: str,
         iteration: int,
         description: Optional[str] = None,
-        highlighted_elements: Optional[List[Dict[str, Any]]] = None
+        highlighted_elements: Optional[List[Dict[str, Any]]] = None,
+        structured_output: Optional[StructuredOutputContext] = None,
+        print_result: bool = True
     ) -> None:
         """
-        Add action context to history.
+        Add action context to history and optionally print it.
         
         Args:
             action_name: Name of the action that was performed
@@ -336,20 +310,29 @@ class AgentState:
             iteration: Iteration number when action was performed
             description: Optional human-readable description of the action
             highlighted_elements: Optional list of highlighted elements for detailed descriptions
+            structured_output: Optional content about thinking, memory, etc. 
+            print_result: Whether to print the action result to console
         """
         # Generate description if not provided
         if description is None:
-            description = _generate_action_description(action_name, arguments, highlighted_elements)
+            description = generate_action_description(action_name, arguments, highlighted_elements)
             
         action_context = ActionContext(
             action_name=action_name,
             arguments=arguments,
             result=result,
             iteration=iteration,
-            description=description
+            description=description,
+            structured_output=structured_output
         )
         
         self.action_history.append(action_context)
+        
+        # Print the action result if requested
+        if print_result:
+            action_str = f" | Action description: {description}" if description else f" | Action arguments: {arguments}"
+            thinking_str = f" | Thinking: {structured_output.thinking}" if structured_output and structured_output.thinking else ""
+            print(f"📊 [Iteration {iteration}] | {action_name}{action_str}{thinking_str} | {result}")
         
         # Keep only the most recent actions
         if len(self.action_history) > self.max_action_history:
@@ -396,17 +379,10 @@ class AgentState:
                     context_parts.append(f"Content preview:\n{preview}")
                 context_parts.append("")  # Empty line between files
         
-        # RAG retrieval results
-        if self.rag_results:
-            context_parts.append("=== RAG SEARCH RESULTS ===")
-            for i, rag_result in enumerate(self.rag_results, 1):  # Show all results
-                context_parts.append(f"{i}. Query: '{rag_result.query}' ({rag_result.results_count} results)")
-                # No preview shown - full results are only accessed when LLM explicitly reads them
-        
-        # Recent action history
+        # Action history with structured output
         if self.action_history:
-            context_parts.append("\n=== RECENT ACTIONS ===")
-            for action in self.action_history[-3:]:  # Show last 3 actions
+            context_parts.append("\n=== PAST ACTIONS ===")
+            for action in self.action_history[-10:]:  # Show last 10 actions to avoid overwhelming context
                 if action.description:
                     # Use human-readable description if available
                     context_parts.append(f"- Iteration {action.iteration}: {action.description}")
@@ -418,10 +394,27 @@ class AgentState:
                     
                     result_preview = action.result[:100] + "..." if len(action.result) > 100 else action.result
                     context_parts.append(f"- Iteration {action.iteration}: {action.action_name}({args_str}) -> {result_preview}")
+                
+                # Include structured output if available
+                if action.structured_output:
+                    context_parts.append(f"  Reasoning about previous goal: {action.structured_output.thinking}")
+                    context_parts.append(f"  Evaluation of previous goal: {action.structured_output.evaluation_previous_goal}")
+                    context_parts.append(f"  Memory: {action.structured_output.memory}")
+                    context_parts.append(f"  Current Goal: {action.structured_output.next_goal}")
+
+        # RAG content availability notices
+        if self.rag_content_available:
+            context_parts.append("=== RAG CONTENT AVAILABLE ===")
+            for i, content in enumerate(self.rag_content_available, 1):
+                context_parts.append(f"{i}. {content.source_title} ({content.source_url})")
+                context_parts.append(f"   Processed: {content.chunks_count} chunks, {content.content_length} chars")
+                context_parts.append("   Use search_rag to query this content")
         
-        if self.other_stuff:
-            for stuff in self.other_stuff:
-                context_parts.append(stuff)
+        # RAG retrieval results
+        if self.rag_results:
+            context_parts.append("=== RAG SEARCH RESULTS ===")
+            for i, rag_result in enumerate(self.rag_results, 1):  # Show all results
+                context_parts.append(f"{i}. Query: '{rag_result.query}' ({rag_result.results_count} results)")
         
         context_parts.append("=== END AGENT CONTEXT ===\n")
         
@@ -497,9 +490,9 @@ class AgentState:
         self.files.clear()
         self.tabs.clear()
         self.rag_results.clear()
+        self.rag_content_available.clear()
         self.action_history.clear()
         self.current_tab_index = None
-        self.other_stuff.clear()
     def get_session_directory(self):
         """
         Get the session directory path.
@@ -619,8 +612,33 @@ class AgentState:
                 for i, t in enumerate(self.tabs)
             ],
             "rag_results_count": len(self.rag_results),
-            "action_history_count": len(self.action_history),
-            "other_stuff": self.other_stuff
+            "rag_content_available": [
+                {
+                    "source_url": c.source_url,
+                    "source_title": c.source_title,
+                    "chunks_count": c.chunks_count,
+                    "content_length": c.content_length,
+                    "processed_at": c.processed_at
+                }
+                for c in self.rag_content_available
+            ],
+            "action_history": [
+                {
+                    "action_name": a.action_name,
+                    "arguments": a.arguments,
+                    "result": a.result,
+                    "iteration": a.iteration,
+                    "description": a.description,
+                    "structured_output": {
+                        "thinking": a.structured_output.thinking,
+                        "evaluation_previous_goal": a.structured_output.evaluation_previous_goal,
+                        "memory": a.structured_output.memory,
+                        "next_goal": a.structured_output.next_goal,
+                    } if a.structured_output else None
+                }
+                for a in self.action_history
+            ],
+            "action_history_count": len(self.action_history)
         }
 
 

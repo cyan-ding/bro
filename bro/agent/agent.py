@@ -1,7 +1,6 @@
 import asyncio
 import json
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +10,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from .build_llm_prompt import build_llm_prompt
+from .schemas import StructuredOutput, FileSystemArgs, RAGSearchArgs
 
 # Import utility functions
 from utils.action_utils import format_elements_text
@@ -21,39 +21,6 @@ from utils.credentials import get_credentials
 from utils.dom_utils import take_screenshot_with_bounding_boxes
 
 
-@dataclass
-class ActionResult:
-    """
-    Standardized result structure for agent actions.
-
-    Represents the result of a single action taken by the Bro agent,
-    including both successful tool executions and error conditions.
-    """
-
-    iteration: int
-    action: str
-    result: str
-    arguments: Optional[Dict[str, Any]] = None
-    reasoning: Optional[str] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert the dataclass to a dictionary for backward compatibility."""
-        result_dict = {
-            "iteration": self.iteration,  # iteration number to limit token use
-            "action": self.action,  # name of tool call
-            "result": self.result,  # result of tool call
-        }
-        if self.arguments is not None:
-            result_dict["arguments"] = self.arguments  # arguments of tool call
-        if self.reasoning is not None:
-            result_dict["reasoning"] = self.reasoning
-        return result_dict
-
-    def __str__(self) -> str:
-        """Return a formatted string representation for real-time visibility."""
-        args_str = f" | Args: {self.arguments}" if self.arguments else ""
-        reason_str = f" | Reasoning: {self.reasoning}" if self.reasoning else ""
-        return f"[Iteration {self.iteration}] | {self.action}{args_str}{reason_str} | {self.result}"
 
 
 # Clean Pydantic models for LiteLLM response handling
@@ -78,7 +45,7 @@ class LiteLLMMessage(BaseModel):
     role: str
     content: Optional[str] = None
     tool_calls: Optional[List[LiteLLMToolCall]] = None
-    reasoning_content: Optional[str] = None
+    thinking_content: Optional[str] = None
     
     class Config:
         extra = "allow"  # Allow extra fields
@@ -145,47 +112,6 @@ class Agent:
         self.agent_state = initialize_agent_state(user_id=self.user_id, session_id=self.session_id)
         load_dotenv()
         print(f"🔧 Initialized agent state (user: {self.user_id}, session: {self.session_id})")
-
-    async def _extract_reasoning_from_llm_response(
-        self, llm_response: Any
-    ) -> Optional[str]:
-        """
-        Extract reasoning from LiteLLM's response format.
-        """
-        if not llm_response:
-            return None
-
-        try:
-            # Convert LiteLLM ModelResponse to dict first
-            if hasattr(llm_response, 'model_dump'):
-                response_dict = llm_response.model_dump()
-            elif hasattr(llm_response, 'dict'):
-                response_dict = llm_response.dict()
-            else:
-                # Assume it's already a dict
-                response_dict = llm_response
-            
-            # Use Pydantic to parse the response cleanly
-            response = LiteLLMResponse.model_validate(response_dict)
-            
-            if not response.choices:
-                return None
-            
-            message = response.choices[0].message
-            
-            # Extract reasoning_content from LiteLLM's standardized field
-            if message.reasoning_content:
-                return message.reasoning_content.strip()
-                
-            # Fallback: extract from regular content if no tool calls (might be reasoning)
-            if message.content and not message.tool_calls:
-                return message.content.strip()
-                    
-        except Exception as e:
-            print(f"Error extracting reasoning with Pydantic: {e}")
-            return None
-
-        return None
 
     async def _initialize_rag_if_needed(self) -> bool:
         """
@@ -270,86 +196,79 @@ class Agent:
         )
 
         llm_response = await ai(params)
-        reasoning = await self._extract_reasoning_from_llm_response(llm_response)
-
-        # Parse for tool calls
-        tool_calls = await self._parse_tool_call(llm_response)
-
-        if not tool_calls:
+        # Parse structured JSON output
+        parsed = await self._parse_structured_json(llm_response)
+        if not parsed or not parsed.get("actions"):
             return {
                 "status": "error",
-                "result": "LLM did not make a tool call during initial setup. Initial setup failed",
+                "result": "LLM did not return actions during initial setup. Initial setup failed",
             }
 
-        # For the start function, we'll return the first tool call to be executed by the main run loop
+        thinking = parsed.get("thinking") or parsed.get("evaluation_previous_goal")
+        first_action = parsed["actions"][0]
+        # For the start function, we'll return the first action to be executed by the main run loop
         return {
             "status": "success",
-            "tool_call": tool_calls[0],  # Take the first tool call
+            "tool_call": first_action,
             "result": "Initial setup completed, tool call ready for execution",
-            "reasoning": reasoning,
+            "thinking": thinking,
         }
 
-    async def _parse_tool_call(
-        self, llm_response: Any
-    ) -> List[Dict[str, Any]]:
-        """
-        Parse the LLM response for tool calls using clean Pydantic models.
+    async def _parse_structured_json(self, llm_response: Any) -> Optional[Dict[str, Any]]:
+        """Parse the model's structured JSON content into actions and meta fields.
 
-        Args:
-            llm_response: The chat completion response from LiteLLM
+        Expects content to be a JSON object with keys: thinking, evaluation_previous_goal,
+        memory, next_goal, action (array of single-key objects like {"click": {...}}).
 
-        Returns:
-            List of tool call data if found, empty list otherwise
+        Returns a dict with keys: thinking, evaluation_previous_goal, memory, next_goal,
+        actions (normalized list of {name, arguments}).
         """
-        print("Parsing tool calls...")
         if not llm_response:
-            return []
-
+            return None
         try:
-            # Convert LiteLLM ModelResponse to dict first
+            # Normalize to dict
             if hasattr(llm_response, 'model_dump'):
                 response_dict = llm_response.model_dump()
             elif hasattr(llm_response, 'dict'):
                 response_dict = llm_response.dict()
             else:
-                # Assume it's already a dict
                 response_dict = llm_response
-            
-            # Use Pydantic to parse the response cleanly
             response = LiteLLMResponse.model_validate(response_dict)
             
-            if not response.choices:
-                return []
-            
-            # Extract tool calls from the first choice
-            message = response.choices[0].message
-            if not message.tool_calls:
-                return []
-            
-            tool_calls = []
-            for tool_call in message.tool_calls:
-                if tool_call.type == "function":
-                    try:
-                        # Parse function arguments
-                        args_str = tool_call.function.arguments or "{}"
-                        args_obj = json.loads(args_str) if isinstance(args_str, str) else args_str
-                        
-                        tool_calls.append({
-                            "name": tool_call.function.name,
-                            "arguments": args_obj
-                        })
-                    except json.JSONDecodeError as e:
-                        print(f"Error parsing tool call arguments JSON: {e}")
-                        continue
-                    except Exception as e:
-                        print(f"Error processing tool call: {e}")
-                        continue
-            
-            return tool_calls
+            try:
+                content = response.choices[0].message.content
+            except (AttributeError, IndexError) as e:
+                print(f"Error accessing message content: {e}")
+                return None
 
+            if not content:
+                print("No content in LLM response")
+                return None
+
+            try:
+                obj = json.loads(content)
+            except json.JSONDecodeError as e:
+                print(f"Failed to parse JSON content: {e}")
+                return None
+            
+            # Validate on structured output
+            validated = StructuredOutput.model_validate(obj)
+            normalized_actions: List[Dict[str, Any]] = []
+            for action in validated.actions:
+                normalized_actions.append({
+                    "name": action.action_name,
+                    "arguments": action.arguments.model_dump() if hasattr(action.arguments, 'model_dump') else action.arguments
+                })
+            return {
+                "thinking": validated.thinking,
+                "evaluation_previous_goal": validated.evaluation_previous_goal,
+                "memory": validated.memory,
+                "next_goal": validated.next_goal,
+                "actions": normalized_actions,
+            }
         except Exception as e:
-            print(f"Error parsing LiteLLM response with Pydantic: {e}")
-            return []
+            print(f"Error parsing structured JSON: {e}")
+            return None
 
     async def _execute_tool_call(
         self,
@@ -540,8 +459,6 @@ class Agent:
                         results.append(result)
 
                     case "file_system":
-                        # Import the Pydantic model
-                        from .actions import FileSystemArgs
 
                         try:
                             # Validate arguments using Pydantic model
@@ -563,9 +480,6 @@ class Agent:
                             continue
 
                     case "search_rag":
-                        # Import the Pydantic model
-                        from .actions import RAGSearchArgs
-
                         try:
                             # Validate arguments using Pydantic model
                             rag_args = RAGSearchArgs.model_validate(arguments)
@@ -622,7 +536,7 @@ class Agent:
         url: str = "",
         max_iterations: int = 10,
         take_screenshot: bool = False,
-    ) -> List[ActionResult]:
+    ) -> None:
         """
         Run the agent loop to complete the user's task.
 
@@ -632,7 +546,7 @@ class Agent:
             max_iterations: Maximum number of iterations to prevent infinite loops
 
         Returns:
-            List of ActionResult objects from the agent's execution
+            None (action results are tracked in agent state and printed to console)
         """
         print("Starting browser context...")
 
@@ -671,13 +585,15 @@ class Agent:
                 start_result = await self._start(user_prompt)
 
                 if start_result["status"] == "error":
-                    error_result = ActionResult(
-                        iteration=0,
-                        action="start",
+                    # Add error to agent state and print
+                    self.agent_state.add_action_context(
+                        action_name="start",
+                        arguments={},
                         result=start_result["result"],
+                        iteration=0,
+                        print_result=True
                     )
-                    print(f"❌ {error_result}")
-                    return [error_result]
+                    return
 
                 # Execute the initial tool call from start function
                 initial_tool_call = start_result["tool_call"]
@@ -686,33 +602,30 @@ class Agent:
                     [initial_tool_call], page, []
                 )
 
-                # Initialize results list
-                results = []
-
-                # Create ActionResult object for the initial tool call
-                initial_result = ActionResult(
-                    iteration=0,
-                    action=initial_tool_call["name"],
-                    arguments=initial_tool_call["arguments"],
-                    result=result_messages[0] if result_messages else "No result",
-                    reasoning=start_result.get("reasoning"),
-                )
-                print(f"📊 {initial_result}")
-                results.append(initial_result)
-
                 # Add initial tool call to action history (no highlighted_elements available for initial call)
+                # Create structured output context for initial call if available
+                initial_structured_output = None
+                if start_result.get("thinking"):
+                    from .agent_state import StructuredOutputContext
+                    initial_structured_output = StructuredOutputContext(
+                        thinking=start_result.get("thinking", ""),
+                        evaluation_previous_goal="",  # No previous goal for initial call
+                        memory="",  # No memory for initial call
+                        next_goal="",  # No next goal for initial call
+                    )
+
                 self.agent_state.add_action_context(
                     action_name=initial_tool_call["name"],
                     arguments=initial_tool_call["arguments"],
                     result=result_messages[0] if result_messages else "No result",
                     iteration=0,
+                    structured_output=initial_structured_output,
                 )
 
                 # Continue with the main loop starting from iteration 1
                 start_iteration = 1
             else:
                 await page.goto(url, wait_until="load")
-                results = []
                 start_iteration = 0
 
             try:
@@ -805,59 +718,58 @@ class Agent:
                         screenshot=page_data["screenshot"],
                     )
 
+                    # TODO get rid of this before open source
+                    with open("agent-state-observable", "w", encoding="utf-8") as f:
+                        f.write(enhanced_prompt)
                     llm_response = await ai(params)
 
-                    reasoning = await self._extract_reasoning_from_llm_response(
-                        llm_response
-                    )
-         
-                    # Parse for tool calls
-                    tool_calls = await self._parse_tool_call(llm_response)
-
-                    if not tool_calls:
-                        print(f"⚠️  Iteration {iteration}: No tool calls made by LLM")
-                        no_tool_result = ActionResult(
+                    parsed = await self._parse_structured_json(llm_response)
+                    if not parsed or not parsed.get("actions"):
+                        print(f"⚠️  Iteration {iteration}: No actions returned by LLM")
+                        # Add no actions result to agent state
+                        self.agent_state.add_action_context(
+                            action_name="no_actions",
+                            arguments={},
+                            result="ERROR: LLM did not return actions - task may be complete, or response invalid",
                             iteration=iteration,
-                            action="no_tool_call",
-                            result="ERROR: LLM did not make a tool call - task may be complete, or tool call failed",
-                            reasoning=reasoning,
+                            print_result=True
                         )
-                        print(f"📊 {no_tool_result}")
-                        results.append(no_tool_result)
                         break
 
-                    print(
-                        f"🔄 Iteration {iteration}: Executing {len(tool_calls)} tool call(s)"
-                    )
+                    tool_calls = parsed["actions"]
+                    print(f"🔄 Iteration {iteration}: Executing {len(tool_calls)} action(s)")
                     # Execute the tool calls
                     result_messages = await self._execute_tool_call(
                         tool_calls, page, page_data["highlighted_elements"]
                     )
 
-                    # Create ActionResult objects for each tool call
+                    # Create structured output context for action history
+                    structured_output_context = None
+                    if parsed and any(parsed.get(field) for field in ["thinking", "evaluation_previous_goal", "memory", "next_goal"]):
+                        from .agent_state import StructuredOutputContext
+                        structured_output_context = StructuredOutputContext(
+                            thinking=parsed.get("thinking", ""),
+                            evaluation_previous_goal=parsed.get("evaluation_previous_goal", ""),
+                            memory=parsed.get("memory", ""),
+                            next_goal=parsed.get("next_goal", ""),
+                        )
+
+                    # Add each tool call to agent state context with structured output
                     for i, tool_call in enumerate(tool_calls):
                         result_message = (
                             result_messages[i]
                             if i < len(result_messages)
                             else "No result"
                         )
-                        action_result = ActionResult(
-                            iteration=iteration,
-                            action=tool_call["name"],
-                            arguments=tool_call["arguments"],
-                            result=result_message,
-                            reasoning=reasoning if iteration == 0 else None,
-                        )
-                        print(f"📊 {action_result}")
-                        results.append(action_result)
 
-                        # Add action to agent state context
+                        # Add action to agent state context with structured output
                         self.agent_state.add_action_context(
                             action_name=tool_call["name"],
                             arguments=tool_call["arguments"],
                             result=result_message,
                             iteration=iteration,
                             highlighted_elements=page_data["highlighted_elements"],
+                            structured_output=structured_output_context,
                         )
 
                     # Agent state update at end of iteration
@@ -883,8 +795,6 @@ class Agent:
 
                     print("=" * 100)
 
-                return results
-
             finally:
                 print("Exiting browser...")
                 await browser_context.close()
@@ -905,25 +815,18 @@ async def main():
     prompts = [
         "Log in to google.",
         "Open gmail and send an email to blueplus.d@gmail.com with the subject 'Hello' and the body 'This is a test email'",
-        """Find an article about attention is all you need on arxiv and use retrieval augmented generation to extract data. 
-        After you extract the data, use the search_rag tool to retrieve the relevant chunks. 
-        Then, go to google docs and write an essay about their architectures in google doc. That is your final output.
-        Make sure to only extract contents in html format, not pdf or any other format. DO NOT DO THE SAME ACTION YOU JUST DID.
+        """Find three different research papers on AI on arxiv and use retrieval augmented generation to collect the informtation.
+        Afterwards, open a google doc and write an essay about the material you collected using RAG. 
          """,
     ]
     # third one should test rag, files, todolist, tab switching,
-    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan", model="claude-3-5-haiku-latest")
-    results = await agent.run(
+    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan", model="gemini-2.5-flash-lite")
+    await agent.run(
         user_prompt=prompts[0],
         # url="https://arxiv.org/list/cs.AI/recent",
         max_iterations=100,
         take_screenshot=True,
     )
-
-    # Print results
-    for result in results:
-        print(f"Iteration {result.iteration}: {result.action} - {result.result}")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

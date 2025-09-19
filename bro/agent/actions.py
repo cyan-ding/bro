@@ -7,20 +7,8 @@ from typing import Any, Optional
 
 from patchright.async_api import Page
 from .agent_state import AgentState
-from .file_system import FileSystemArgs, _get_bro_directories, _sanitize_filename, _get_unique_filename, _basic_text_extraction, _save_extraction_to_file
-from pydantic import BaseModel, Field
-
-
-class RAGSearchArgs(BaseModel):
-    """
-    Pydantic model for search_rag tool arguments from LLM.
-
-    This ensures proper validation and type conversion of arguments
-    passed from the LLM through the agent system.
-    """
-    query: str = Field(description="Search query for semantic search in RAG database")
-    top_k: int = Field(default=5, ge=1, le=50, description="Number of results to return")
-
+from .file_system import get_bro_directories, sanitize_filename, get_unique_filename, basic_text_extraction, save_extraction_to_file
+from .schemas import FileSystemArgs, RAGSearchArgs
 
 def _resolve_locator(
     page: Page, target: str, iframe_xpath: Optional[str] = None
@@ -203,10 +191,14 @@ async def extract(
                     await pipeline.vector_store.add_chunks(chunks)
                     print(f"✅ Stored {len(chunks)} chunks in vector database")
 
-                    # Add minimal description to agent_state for tracking
+                    # Add RAG content availability notification to agent_state
                     if agent_state:
-                        agent_state.add_rag_preview(
-                            preview=f"RAG processed content from {page_title}: {len(chunks)} chunks stored in vector database. Use search_rag to query this content.",
+                        total_content_length = sum(len(chunk.content) for chunk in chunks)
+                        agent_state.add_rag_content_availability(
+                            source_url=page_url,
+                            source_title=page_title,
+                            chunks_count=len(chunks),
+                            content_length=total_content_length
                         )
 
                 # Create summary of extracted content
@@ -227,12 +219,12 @@ async def extract(
             print(f"🔄 Extracting content from: {page_url}")
 
             # Extract content
-            extracted_content = await _basic_text_extraction(page, html_content)
+            extracted_content = await basic_text_extraction(page, html_content)
 
             # Auto-save to file
             user_id = agent_state.user_id if agent_state else "default"
             session_id = agent_state.session_id if agent_state else "default"
-            saved_file_path = await _save_extraction_to_file(
+            saved_file_path = await save_extraction_to_file(
                 content=extracted_content,
                 file_name=file_name,
                 page_url=page_url,
@@ -355,13 +347,13 @@ async def file_system(
             # Get the files directory using agent state session info
             user_id = agent_state.user_id if agent_state else "default"
             session_id = agent_state.session_id if agent_state else "default"
-            _, files_dir = _get_bro_directories(user_id, session_id)
+            _, files_dir = get_bro_directories(user_id, session_id)
 
             # Sanitize the filename
-            safe_filename = _sanitize_filename(args.filename, "user_file")
+            safe_filename = sanitize_filename(args.filename, "user_file")
             
             # Get unique filename to avoid overwrites
-            unique_filename = _get_unique_filename(files_dir, safe_filename)
+            unique_filename = get_unique_filename(files_dir, safe_filename)
             file_path = files_dir / unique_filename
 
             # Write the content
@@ -384,7 +376,7 @@ async def file_system(
             # Get both directories to search for the file using agent state session info
             user_id = agent_state.user_id if agent_state else "default"
             session_id = agent_state.session_id if agent_state else "default"
-            extractions_dir, files_dir = _get_bro_directories(user_id, session_id)
+            extractions_dir, files_dir = get_bro_directories(user_id, session_id)
             
             filename = args.filename
             file_path = None
@@ -421,7 +413,7 @@ async def file_system(
             # List files in both ~/.bro directories using agent state session info
             user_id = agent_state.user_id if agent_state else "default"
             session_id = agent_state.session_id if agent_state else "default"
-            extractions_dir, files_dir = _get_bro_directories(user_id, session_id)
+            extractions_dir, files_dir = get_bro_directories(user_id, session_id)
             
             all_files = []
             

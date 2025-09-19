@@ -15,7 +15,6 @@ async def ai(params: Dict[str, Any]):
     """
     load_dotenv()
     try:
-        # Use LiteLLM's async completion function
         response = await litellm.acompletion(**params)
         return response
     except Exception as e:
