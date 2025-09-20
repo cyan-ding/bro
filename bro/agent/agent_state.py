@@ -80,7 +80,7 @@ class StructuredOutputContext:
     from the LLM's structured JSON responses.
     """
     thinking: str
-    evaluation_previous_goal: str
+    evaluation_previous_actions: str
     memory: str
     next_goal: str
 
@@ -356,18 +356,18 @@ class AgentState:
         if self.current_tab_index is not None and self.tabs:
             if 0 <= self.current_tab_index < len(self.tabs):
                 current_tab = self.tabs[self.current_tab_index]
-                context_parts.append(f"Current Page: {current_tab.title} ({current_tab.url}) [Tab {self.current_tab_index}]")
+                context_parts.append(f"Current Page: {current_tab.title} ({current_tab.url[:30]}) [Tab {self.current_tab_index}]")
         
         # Browser tabs state
         if self.tabs:
             context_parts.append("\n=== OPEN BROWSER TABS ===")
             for i, tab in enumerate(self.tabs):
                 status = "ACTIVE" if tab.is_active else "background"
-                context_parts.append(f"[{i}] [{status}] {tab.title} ({tab.url})")
+                context_parts.append(f"[{i}] [{status}] {tab.title} ({tab.url[:30]})")
         
         # Files created/accessed by agent
         if self.files:
-            context_parts.append("\n=== FILES MANAGED BY AGENT ===")
+            context_parts.append("\n=== AGENT FILES ===")
             for filename, file_state in self.files.items():
                 
                 context_parts.append(f"{filename} ({file_state.size} chars, {file_state.last_action})")
@@ -382,7 +382,7 @@ class AgentState:
         # Action history with structured output
         if self.action_history:
             context_parts.append("\n=== PAST ACTIONS ===")
-            for action in self.action_history[-10:]:  # Show last 10 actions to avoid overwhelming context
+            for i, action in enumerate(self.action_history[-10:]):  # Show last 10 actions to avoid overwhelming context
                 if action.description:
                     # Use human-readable description if available
                     context_parts.append(f"- Iteration {action.iteration}: {action.description}")
@@ -395,10 +395,10 @@ class AgentState:
                     result_preview = action.result[:100] + "..." if len(action.result) > 100 else action.result
                     context_parts.append(f"- Iteration {action.iteration}: {action.action_name}({args_str}) -> {result_preview}")
                 
-                # Include structured output if available
-                if action.structured_output:
+                # Include specifics of most recent structured output if available
+                if i == len(self.action_history[-10:]) - 1 and action.structured_output:
                     context_parts.append(f"  Reasoning about previous goal: {action.structured_output.thinking}")
-                    context_parts.append(f"  Evaluation of previous goal: {action.structured_output.evaluation_previous_goal}")
+                    context_parts.append(f"  Evaluation of previous goal: {action.structured_output.evaluation_previous_actions}")
                     context_parts.append(f"  Memory: {action.structured_output.memory}")
                     context_parts.append(f"  Current Goal: {action.structured_output.next_goal}")
 
@@ -631,7 +631,7 @@ class AgentState:
                     "description": a.description,
                     "structured_output": {
                         "thinking": a.structured_output.thinking,
-                        "evaluation_previous_goal": a.structured_output.evaluation_previous_goal,
+                        "evaluation_previous_actions": a.structured_output.evaluation_previous_actions,
                         "memory": a.structured_output.memory,
                         "next_goal": a.structured_output.next_goal,
                     } if a.structured_output else None

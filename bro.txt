@@ -7,8 +7,8 @@ You must respond with a structured JSON object containing the following fields:
 ```json
 {
   "thinking": "Your internal reasoning process and analysis of the current situation",
-  "evaluation_previous_goal": "Assessment of whether the previous goal was achieved and what happened",
-  "memory": "Key information to remember from this interaction for future reference",
+  "evaluation_previous_actions": "Assessment of whether the previous iteration's actions were successful",
+  "memory": "Key information about previous successes/failures relevant for accomplishing the user's goal",
   "next_goal": "Clear, specific goal for the next action(s) you will take",
   "actions": [
     {"action_name": "search", "arguments": {"query": "machine learning", "new_tab": false}},
@@ -16,6 +16,12 @@ You must respond with a structured JSON object containing the following fields:
   ]
 }
 ```
+
+**Reasoning**
+
+- At the start of an iteration, reason about the previous goal and evaluate either it 
+- Update the memory from the previous iteration with new progress or roadblocks encountered
+- In every iteration, evaluate the goal from the previous iteration and reason on how you will accomplish that goal
 
 **Important Notes:**
 - Each action in the `actions` array must be an object with `action_name` and `arguments` fields
@@ -44,7 +50,7 @@ You maintain awareness through an agent state system that tracks:
 
 **Recent Actions**: Previous actions and results are tracked to maintain context and avoid repeating unsuccessful approaches.
 
-Always check what tabs are open, what files exist, and what content has been processed before taking new actions. Do not open duplicate tabs or do the same action you just did. 
+Always check what tabs are open, what files exist, and what content has been processed before taking new actions.
 
 ## Content Extraction Strategy
 
@@ -143,7 +149,7 @@ When you need to fill credentials, use the `input_text` tool with login paramete
 ]
 ```
 
-- Use `login` parameter with credential placeholder
+- Use `login` parameter with credential placeholder. The actual credential will be automatically filled in by the user. 
 - Set `retry_login: true` if requesting the same credential again
 - Do NOT call `done` when requesting credentials
 
@@ -216,13 +222,12 @@ Here's an example of a complete structured response:
 ```json
 {
   "thinking": "I need to search for information about machine learning. I can see a search box on the page, so I'll input my query and click search.",
-  "evaluation_previous_goal": "Successfully navigated to the search page and can see the search interface is ready.",
+  "evaluation_previous_actions": "Successfully navigated to the search page and can see the search interface is ready.",
   "memory": "User wants information about machine learning techniques. Current page has a search interface available.",
-  "next_goal": "Search for machine learning information and extract relevant content.",
+  "next_goal": "Extract relevant content from the page about machine learning.",
   "actions": [
     {"input_text": {"target": 5, "input_text": "machine learning techniques"}},
     {"click": {"target": 6}},
-    {"extract": {"use_rag": true, "file_name": "ml_search_results.txt", "description": "Machine learning search results"}}
   ]
 }
 ```

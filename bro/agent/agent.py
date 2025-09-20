@@ -204,7 +204,7 @@ class Agent:
                 "result": "LLM did not return actions during initial setup. Initial setup failed",
             }
 
-        thinking = parsed.get("thinking") or parsed.get("evaluation_previous_goal")
+        thinking = parsed.get("thinking") or parsed.get("evaluation_previous_actions")
         first_action = parsed["actions"][0]
         # For the start function, we'll return the first action to be executed by the main run loop
         return {
@@ -217,10 +217,10 @@ class Agent:
     async def _parse_structured_json(self, llm_response: Any) -> Optional[Dict[str, Any]]:
         """Parse the model's structured JSON content into actions and meta fields.
 
-        Expects content to be a JSON object with keys: thinking, evaluation_previous_goal,
+        Expects content to be a JSON object with keys: thinking, evaluation_previous_actions,
         memory, next_goal, action (array of single-key objects like {"click": {...}}).
 
-        Returns a dict with keys: thinking, evaluation_previous_goal, memory, next_goal,
+        Returns a dict with keys: thinking, evaluation_previous_actions, memory, next_goal,
         actions (normalized list of {name, arguments}).
         """
         if not llm_response:
@@ -261,7 +261,7 @@ class Agent:
                 })
             return {
                 "thinking": validated.thinking,
-                "evaluation_previous_goal": validated.evaluation_previous_goal,
+                "evaluation_previous_actions": validated.evaluation_previous_actions,
                 "memory": validated.memory,
                 "next_goal": validated.next_goal,
                 "actions": normalized_actions,
@@ -555,21 +555,21 @@ class Agent:
         if self.enable_rag and not rag_available:
             print("⚠️ RAG was requested but initialization failed")
 
-        await use_cdp()
+        # await use_cdp()
         async with async_playwright() as p:
-            # browser_context = await p.chromium.launch_persistent_context(
-            #     user_data_dir="./browser_data",
-            #     channel="chrome",
-            #     headless=False,
-            #     no_viewport=True,
-            # )
-            browser = await p.chromium.connect_over_cdp("http://localhost:9222")
-            # List contexts (Chrome profiles)
-            contexts = browser.contexts
-            if contexts:
-                browser_context = contexts[0]  # Use existing profile
-            else:
-                browser_context = await browser.new_context()  # Or create new
+            browser_context = await p.chromium.launch_persistent_context(
+                user_data_dir="./browser_data",
+                channel="chrome",
+                headless=False,
+                no_viewport=True,
+            )
+            # browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+            # # List contexts (Chrome profiles)
+            # contexts = browser.contexts
+            # if contexts:
+            #     browser_context = contexts[0]  # Use existing profile
+            # else:
+            #     browser_context = await browser.new_context()  # Or create new
             # Open a new tab
             page = (
                 browser_context.pages[0]
@@ -609,7 +609,7 @@ class Agent:
                     from .agent_state import StructuredOutputContext
                     initial_structured_output = StructuredOutputContext(
                         thinking=start_result.get("thinking", ""),
-                        evaluation_previous_goal="",  # No previous goal for initial call
+                        evaluation_previous_actions="",  # No previous goal for initial call
                         memory="",  # No memory for initial call
                         next_goal="",  # No next goal for initial call
                     )
@@ -630,12 +630,9 @@ class Agent:
 
             try:
                 print("Starting agentic cycle...")
-                
-                
                 last_signature: Optional[str] = None
                 
                 for iteration in range(start_iteration, max_iterations):
-
                     # check if current tab index is not the page we are on, if so, switch to it
                     if browser_context.pages:
                         if (self.agent_state.current_tab_index is not None and 
@@ -650,7 +647,6 @@ class Agent:
                     # Check if the last action was one that likely causes DOM changes
                     if self.agent_state.action_history:
                         last_action = self.agent_state.action_history[-1]
-                        print(last_action)
                         should_wait_for_change = last_action.action_name in (
                             "click",
                             "input_text", 
@@ -726,6 +722,7 @@ class Agent:
                     parsed = await self._parse_structured_json(llm_response)
                     if not parsed or not parsed.get("actions"):
                         print(f"⚠️  Iteration {iteration}: No actions returned by LLM")
+                        print(parsed)
                         # Add no actions result to agent state
                         self.agent_state.add_action_context(
                             action_name="no_actions",
@@ -745,11 +742,11 @@ class Agent:
 
                     # Create structured output context for action history
                     structured_output_context = None
-                    if parsed and any(parsed.get(field) for field in ["thinking", "evaluation_previous_goal", "memory", "next_goal"]):
+                    if parsed and any(parsed.get(field) for field in ["thinking", "evaluation_previous_actions", "memory", "next_goal"]):
                         from .agent_state import StructuredOutputContext
                         structured_output_context = StructuredOutputContext(
                             thinking=parsed.get("thinking", ""),
-                            evaluation_previous_goal=parsed.get("evaluation_previous_goal", ""),
+                            evaluation_previous_actions=parsed.get("evaluation_previous_actions", ""),
                             memory=parsed.get("memory", ""),
                             next_goal=parsed.get("next_goal", ""),
                         )
@@ -820,7 +817,7 @@ async def main():
          """,
     ]
     # third one should test rag, files, todolist, tab switching,
-    agent = Agent(system_prompt, enable_rag=True, session_id="test", user_id="cyan", model="gemini-2.5-flash-lite")
+    agent = Agent(system_prompt, enable_rag=False, session_id="test", user_id="cyan", model="gpt-5-nano")
     await agent.run(
         user_prompt=prompts[0],
         # url="https://arxiv.org/list/cs.AI/recent",

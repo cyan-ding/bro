@@ -114,7 +114,7 @@ class StructuredOutput(BaseModel):
     """
 
     thinking: str
-    evaluation_previous_goal: str
+    evaluation_previous_actions: str
     memory: str
     next_goal: str
     actions: List[Action] = Field(default_factory=list)

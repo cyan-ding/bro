@@ -117,7 +117,10 @@ async def click(page: Page, target: str, iframe_xpath: Optional[str] = None) -> 
     if not await element.count():
         raise ValueError(f"No element found with XPath: {target}")
 
-    await element.click(timeout=5000)
+    try:
+        await element.click(timeout=5000)
+    except Exception:
+        print("Failed to click element: Timed out")
 
 
 async def scroll(page: Page, how_much: int):
