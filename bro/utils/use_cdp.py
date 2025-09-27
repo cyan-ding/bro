@@ -16,8 +16,8 @@ async def use_cdp() -> None:
         except (urllib.error.URLError, urllib.error.HTTPError):
             return False
 
-
     if not is_chrome_running():
+        print("Starting Chrome with CDP...")
         if sys.platform == "darwin":
             # macOS default Chrome path
             chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -34,6 +34,23 @@ async def use_cdp() -> None:
                 f"--user-data-dir={user_data_dir}",
             ]
         )
+
+        # Wait for Chrome to start up
+        print("Waiting for Chrome to initialize...")
+        max_wait = 30  # Wait up to 30 seconds
+        wait_time = 0
+        while not is_chrome_running() and wait_time < max_wait:
+            await asyncio.sleep(1)
+            wait_time += 1
+            if wait_time % 5 == 0:  # Print every 5 seconds
+                print(f"Still waiting for Chrome... ({wait_time}s)")
+
+        if is_chrome_running():
+            print("✅ Chrome is running with CDP enabled")
+        else:
+            print("❌ Failed to start Chrome with CDP after 30 seconds")
+    else:
+        print("✅ Chrome is already running with CDP enabled")
 
 
 if __name__ == "__main__":

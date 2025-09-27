@@ -36,7 +36,8 @@ def build_llm_prompt(
         "messages": messages,
     }
     
-    if "response_format" in get_supported_openai_params(model=model):
+    supported_params = get_supported_openai_params(model=model)
+    if supported_params and "response_format" in supported_params:
         base_config["response_format"] = StructuredOutput
     
     # TODO add support for models that allow json_schema

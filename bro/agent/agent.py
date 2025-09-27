@@ -2,7 +2,7 @@ import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from utils.use_cdp import use_cdp
 from patchright.async_api import Page, async_playwright
@@ -10,17 +10,15 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from .build_llm_prompt import build_llm_prompt
-from .schemas import StructuredOutput, FileSystemArgs, RAGSearchArgs
+from .schemas import StructuredOutput
 
 # Import utility functions
 from utils.action_utils import format_elements_text
-from .actions import click, done, extract, file_system, input_text, scroll, search, search_rag
+from .actions import click, done, extract, input_text, scroll, search, todo_edit
 from .agent_state import initialize_agent_state
 from .ai import ai
 from utils.credentials import get_credentials
 from utils.dom_utils import take_screenshot_with_bounding_boxes
-
-
 
 
 # Clean Pydantic models for LiteLLM response handling
@@ -28,8 +26,6 @@ class LiteLLMFunction(BaseModel):
     name: Optional[str] = None
     arguments: Optional[str] = None
     
-    class Config:
-        extra = "allow"  # Allow extra fields
 
 
 class LiteLLMToolCall(BaseModel):
@@ -156,63 +152,6 @@ class Agent:
             self.enable_rag = False
             return False
 
-    async def _start(self, user_prompt: str) -> Dict[str, Any]:
-        """
-        Initialize the process when there are no webpages to take screenshots of yet.
-        This function focuses on starting the task by calling the LLM to plan
-        and execute the first action, typically a search.
-
-        Args:
-            user_prompt: The user's task description
-
-        Returns:
-            Dictionary containing the result of the initial setup
-        """
-        print("Starting initial setup...")
-
-        # Create initial prompt for the LLM to plan the task
-        initial_prompt = f"""
-        User task: {user_prompt}
-
-        You are starting a new web automation task. Your job is to:
-        1. Break down the user's task into specific subtasks
-        2. Identify the first website to visit
-        3. Navigate to the website using the search tool
-
-        CRITICAL INSTRUCTIONS:
-        - You MUST call the search tool to navigate to the first website
-        - This is the ONLY way to start navigating to websites
-        - The search tool is your primary navigation method
-        """
-
-        print("Making initial LLM call for task planning...")
-
-        # Call the LLM without a screenshot since we don't have a webpage yet
-        params = build_llm_prompt(
-            user_prompt=initial_prompt,
-            system_prompt=self.system_prompt,
-            model=self.model,
-            screenshot=None,  # No screenshot available yet
-        )
-
-        llm_response = await ai(params)
-        # Parse structured JSON output
-        parsed = await self._parse_structured_json(llm_response)
-        if not parsed or not parsed.get("actions"):
-            return {
-                "status": "error",
-                "result": "LLM did not return actions during initial setup. Initial setup failed",
-            }
-
-        thinking = parsed.get("thinking") or parsed.get("evaluation_previous_actions")
-        first_action = parsed["actions"][0]
-        # For the start function, we'll return the first action to be executed by the main run loop
-        return {
-            "status": "success",
-            "tool_call": first_action,
-            "result": "Initial setup completed, tool call ready for execution",
-            "thinking": thinking,
-        }
 
     async def _parse_structured_json(self, llm_response: Any) -> Optional[Dict[str, Any]]:
         """Parse the model's structured JSON content into actions and meta fields.
@@ -439,65 +378,46 @@ class Agent:
 
                     case "extract":
                         use_rag = arguments.get("use_rag", False)
-                        file_name = arguments.get(
-                            "file_name"
-                        )  # Optional file_name from LLM
-                        description = arguments.get(
-                            "description"
-                        )  # Optional description from LLM
+                        
                         print(f"📄 Extracting content from page (RAG: {use_rag})")
 
                         result = await extract(
                             page,
                             use_rag=use_rag,
                             agent_state=self.agent_state,
-                            file_name=file_name,
-                            description=description,
                         )
                         success_msg = "Successfully extracted content from page"
                         print(f"✅ {success_msg}")
                         results.append(result)
 
-                    case "file_system":
 
-                        try:
-                            # Validate arguments using Pydantic model
-                            fs_args = FileSystemArgs.model_validate(arguments)
-                            print(f"📁 File system operation: {fs_args.action}")
+                    # case "search_rag":
+                    #     try:
+                    #         # Validate arguments using Pydantic model
+                    #         rag_args = RAGSearchArgs.model_validate(arguments)
+                    #         print(f"🔍 RAG search: {rag_args.query}")
 
-                            result = await file_system(
-                                args=fs_args, agent_state=self.agent_state
-                            )
-                            print("✅ File system operation completed")
-                            results.append(result)
+                    #         result = await search_rag(
+                    #             args=rag_args, agent_state=self.agent_state
+                    #         )
+                    #         print("✅ RAG search completed")
+                    #         results.append(result)
 
-                        except Exception as e:
-                            error_msg = (
-                                f"Error: Invalid file_system arguments - {str(e)}"
-                            )
-                            print(f"❌ {error_msg}")
-                            results.append(error_msg)
-                            continue
+                    #     except Exception as e:
+                    #         error_msg = (
+                    #             f"Error: Invalid search_rag arguments - {str(e)}"
+                    #         )
+                    #         print(f"❌ {error_msg}")
+                    #         results.append(error_msg)
+                    #         continue
 
-                    case "search_rag":
-                        try:
-                            # Validate arguments using Pydantic model
-                            rag_args = RAGSearchArgs.model_validate(arguments)
-                            print(f"🔍 RAG search: {rag_args.query}")
+                    case "todo_edit":
+                        todo_items = arguments.get("todo_items", [])
+                        print(f"📝 Updating todo list with {len(todo_items)} items")
 
-                            result = await search_rag(
-                                args=rag_args, agent_state=self.agent_state
-                            )
-                            print("✅ RAG search completed")
-                            results.append(result)
-
-                        except Exception as e:
-                            error_msg = (
-                                f"Error: Invalid search_rag arguments - {str(e)}"
-                            )
-                            print(f"❌ {error_msg}")
-                            results.append(error_msg)
-                            continue
+                        result = await todo_edit(todo_items, self.agent_state)
+                        print(f"✅ {result}")
+                        results.append(result)
 
                     case "done":
                         reason = arguments.get("reason")
@@ -506,13 +426,10 @@ class Agent:
                             print(f"❌ {error_msg}")
                             results.append(error_msg)
                             continue
-                        print(f"🏁 Task completed with reason: {reason}")
+                        print(f"🏁 Agent believes task is complete: {reason}")
                         result = await done(reason)
                         results.append(result)
                         print(f"✅ {result}")
-                        # Signal to stop the agent loop
-                        results.append("STOP_AGENT")
-                        print("🛑 Agent signaled task completion")
 
                     case _:
                         error_msg = f"Unknown tool: {tool_name}"
@@ -529,6 +446,57 @@ class Agent:
                 results.append(error_msg)
 
         return results
+
+    async def _handle_user_decision(self, reason: str) -> Tuple[str, str]:
+        """
+        Handle user decision when the agent signals completion.
+
+        Args:
+            reason: The reason the agent believes the task is complete
+
+        Returns:
+            Tuple of (decision, user_input) where decision is 'done', 'modify', or 'intervene'
+        """
+        print("\n" + "="*80)
+        print("🤖 AGENT COMPLETION NOTIFICATION")
+        print("="*80)
+        print(f"The agent believes the task is complete: {reason}")
+        print("\nWhat would you like to do?")
+        print("  ✅ [D] DONE - Accept completion and exit")
+        print("  🔄 [M] MODIFY - Provide additional instructions to continue")
+        print("  🛠️  [I] INTERVENE - Allow manual intervention then continue")
+        print("="*80)
+
+        while True:
+            try:
+                choice = input("\nEnter your choice (D/M/I): ").strip().upper()
+
+                if choice in ['D', 'DONE']:
+                    return 'done', ''
+                elif choice in ['M', 'MODIFY']:
+                    print("\n📝 Please provide additional instructions for the agent:")
+                    user_input = input("> ").strip()
+                    if user_input:
+                        return 'modify', user_input
+                    else:
+                        print("❌ Please provide some instructions.")
+                        continue
+                elif choice in ['I', 'INTERVENE']:
+                    print("\n🛠️  MANUAL INTERVENTION MODE")
+                    print("The browser will remain open for you to make manual changes.")
+                    print("Press ENTER when you're done with manual changes to continue automation...")
+                    input()
+                    return 'intervene', ''
+                else:
+                    print("❌ Invalid choice. Please enter D, M, or I.")
+                    continue
+
+            except KeyboardInterrupt:
+                print("\n\n🛑 Exiting on user request...")
+                return 'done', ''
+            except EOFError:
+                print("\n\n🛑 EOF detected, exiting...")
+                return 'done', ''
 
     async def run(
         self,
@@ -555,21 +523,21 @@ class Agent:
         if self.enable_rag and not rag_available:
             print("⚠️ RAG was requested but initialization failed")
 
-        # await use_cdp()
         async with async_playwright() as p:
-            browser_context = await p.chromium.launch_persistent_context(
-                user_data_dir="./browser_data",
-                channel="chrome",
-                headless=False,
-                no_viewport=True,
-            )
-            # browser = await p.chromium.connect_over_cdp("http://localhost:9222")
-            # # List contexts (Chrome profiles)
-            # contexts = browser.contexts
-            # if contexts:
-            #     browser_context = contexts[0]  # Use existing profile
-            # else:
-            #     browser_context = await browser.new_context()  # Or create new
+            # browser_context = await p.chromium.launch_persistent_context(
+            #     user_data_dir="./browser_data",
+            #     channel="chrome",
+            #     headless=False,
+            #     no_viewport=True,
+            # )
+            await use_cdp()
+            browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+            # List contexts (Chrome profiles)
+            contexts = browser.contexts
+            if contexts:
+                browser_context = contexts[0]  # Use existing profile
+            else:
+                browser_context = await browser.new_context()  # Or create new
             # Open a new tab
             page = (
                 browser_context.pages[0]
@@ -579,54 +547,14 @@ class Agent:
             # Install DOM change detector early so it persists across navigations
             # page = await browser_context.new_page()
 
-            # If no URL provided, use the start function to initialize the process
+            # If no URL provided, navigate to blank page to start
             if not url:
-                print("No initial URL provided, running start function...")
-                start_result = await self._start(user_prompt)
-
-                if start_result["status"] == "error":
-                    # Add error to agent state and print
-                    self.agent_state.add_action_context(
-                        action_name="start",
-                        arguments={},
-                        result=start_result["result"],
-                        iteration=0,
-                        print_result=True
-                    )
-                    return
-
-                # Execute the initial tool call from start function
-                initial_tool_call = start_result["tool_call"]
-                print(f"🚀 Executing initial tool call: {initial_tool_call['name']}")
-                result_messages = await self._execute_tool_call(
-                    [initial_tool_call], page, []
-                )
-
-                # Add initial tool call to action history (no highlighted_elements available for initial call)
-                # Create structured output context for initial call if available
-                initial_structured_output = None
-                if start_result.get("thinking"):
-                    from .agent_state import StructuredOutputContext
-                    initial_structured_output = StructuredOutputContext(
-                        thinking=start_result.get("thinking", ""),
-                        evaluation_previous_actions="",  # No previous goal for initial call
-                        memory="",  # No memory for initial call
-                        next_goal="",  # No next goal for initial call
-                    )
-
-                self.agent_state.add_action_context(
-                    action_name=initial_tool_call["name"],
-                    arguments=initial_tool_call["arguments"],
-                    result=result_messages[0] if result_messages else "No result",
-                    iteration=0,
-                    structured_output=initial_structured_output,
-                )
-
-                # Continue with the main loop starting from iteration 1
-                start_iteration = 1
+                print("No initial URL provided, starting with blank page...")
+                await page.goto("about:blank")
             else:
                 await page.goto(url, wait_until="load")
-                start_iteration = 0
+
+            start_iteration = 0
 
             try:
                 print("Starting agentic cycle...")
@@ -649,44 +577,54 @@ class Agent:
                         last_action = self.agent_state.action_history[-1]
                         should_wait_for_change = last_action.action_name in (
                             "click",
-                            "input_text", 
+                            "input_text",
                             "search",
                         )
 
-                    page_data = await take_screenshot_with_bounding_boxes(
-                        page,
-                        wait_for_change=should_wait_for_change,
-                        previous_signature=last_signature,
-                        take_screenshot=take_screenshot,
-                    )
-
-                    if not page_data:
-                        raise RuntimeError(
-                            "Invalid page: unable to take screenshot or analyze DOM. Please check the URL and try again."
+                    page_data = None
+                    try:
+                        page_data = await take_screenshot_with_bounding_boxes(
+                            page,
+                            wait_for_change=should_wait_for_change,
+                            previous_signature=last_signature,
+                            take_screenshot=take_screenshot,
+                        )
+                    except Exception as e:
+                        # Add screenshot error to agent state so agent can react
+                        error_msg = f"Failed to take screenshot: {str(e)}. You may need to navigate to a website first using the search tool."
+                        print(f"⚠️ Screenshot error: {error_msg}")
+                        self.agent_state.add_action_context(
+                            action_name="screenshot_error",
+                            arguments={},
+                            result=error_msg,
+                            iteration=iteration,
+                            print_result=True
                         )
 
-                    viewport_info = page_data["viewport_info"]
-                    # Update signature for next iteration change detection
-                    last_signature = page_data.get("signature")
+                    if not page_data:
+                        # Continue to LLM call without screenshot data
+                        viewport_info = {"pixelsAbove": 0, "pixelsBelow": 0, "documentHeight": 0, "innerHeight": 0}
+                        elements_text = "No page loaded - you may need to use the search tool to navigate to a website."
+                        screenshot_text = ""
+                    else:
+                        viewport_info = page_data["viewport_info"]
+                        # Update signature for next iteration change detection
+                        last_signature = page_data.get("signature")
 
-                    # Format the user prompt with current page information
-                    elements_text = await format_elements_text(
-                        page_data["highlighted_elements"]
-                    )
-                    # print("Elements text: ", elements_text)
+                        # Format the user prompt with current page information
+                        elements_text = await format_elements_text(
+                            page_data["highlighted_elements"]
+                        )
+                        # print("Elements text: ", elements_text)
 
-                    # Previous action information is now provided through agent_context (RECENT ACTIONS section)
+                        screenshot_text = (
+                            "A screenshot has been attached showing the current page with bounding boxes around interactive elements. "
+                            "Each box has an index number that corresponds to the elements listed above. "
+                            if page_data.get("screenshot")
+                            else ""
+                        )
 
-                    screenshot_text = (
-                        "A screenshot has been attached showing the current page with bounding boxes around interactive elements. "
-                        "Each box has an index number that corresponds to the elements listed above. "
-                        if page_data.get("screenshot")
-                        else ""
-                    )
-                    # Get agent state context for LLM
-                    agent_context = self.agent_state.get_context_for_llm(
-                        include_full_files=True
-                    )
+                    agent_context = self.agent_state.get_context_for_llm()
 
                     enhanced_prompt = f"""
                             User prompt: 
@@ -711,7 +649,7 @@ class Agent:
                         user_prompt=enhanced_prompt,
                         system_prompt=self.system_prompt,
                         model=self.model,
-                        screenshot=page_data["screenshot"],
+                        screenshot=page_data.get("screenshot") if page_data else None,
                     )
 
                     # TODO get rid of this before open source
@@ -737,7 +675,7 @@ class Agent:
                     print(f"🔄 Iteration {iteration}: Executing {len(tool_calls)} action(s)")
                     # Execute the tool calls
                     result_messages = await self._execute_tool_call(
-                        tool_calls, page, page_data["highlighted_elements"]
+                        tool_calls, page, page_data.get("highlighted_elements", []) if page_data else []
                     )
 
                     # Create structured output context for action history
@@ -765,7 +703,7 @@ class Agent:
                             arguments=tool_call["arguments"],
                             result=result_message,
                             iteration=iteration,
-                            highlighted_elements=page_data["highlighted_elements"],
+                            highlighted_elements=page_data.get("highlighted_elements", []) if page_data else [],
                             structured_output=structured_output_context,
                         )
 
@@ -774,21 +712,29 @@ class Agent:
                     
                     # Save agent state to file at end of iteration
                     try:
-                        state_file = await self.agent_state.save_state_to_file(iteration)
+                        state_file = await self.agent_state.save_state_to_file()
                         print(f"💾 Agent state saved to: {state_file}")
-                        
-                        # Print file tree for debugging
-                        if iteration % 5 == 0:  # Print tree every 5 iterations to avoid spam
-                            tree_repr = self.agent_state.get_file_tree_representation()
-                            print(f"📂 File tree:\n{tree_repr}")
                             
                     except Exception as e:
                         print(f"⚠️ Failed to save agent state: {e}")
 
                     # Check if the agent signaled task completion via done function
-                    if "STOP_AGENT" in result_messages:
-                        print("🛑 Agent signaled task completion, stopping execution.")
-                        break
+                    await_decision_messages = [msg for msg in result_messages if msg.startswith("AWAIT_USER_DECISION:")]
+                    if await_decision_messages:
+                        reason = await_decision_messages[0].replace("AWAIT_USER_DECISION: ", "")
+                        decision, user_input = await self._handle_user_decision(reason)
+
+                        if decision == 'done':
+                            print("🛑 User accepted task completion, stopping execution.")
+                            break
+                        elif decision == 'modify':
+                            # Add user's additional instructions to the original prompt
+                            user_prompt = f"{user_prompt}\n\nADDITIONAL INSTRUCTIONS: {user_input}"
+                            print(f"🔄 Continuing with additional instructions: {user_input}")
+                            # Continue with the loop - the new instructions will be included in the next iteration
+                        elif decision == 'intervene':
+                            print("🛠️  Continuing after manual intervention...")
+                            # Continue with the loop - user made manual changes
 
                     print("=" * 100)
 
@@ -810,14 +756,17 @@ async def main():
     # Load the Bro system prompt
     system_prompt = Path("bro.txt").read_text(encoding="utf-8")
     prompts = [
-        "Log in to google.",
+        "Log in to linkedin.",
         "Open gmail and send an email to blueplus.d@gmail.com with the subject 'Hello' and the body 'This is a test email'",
-        """Find three different research papers on AI on arxiv and use retrieval augmented generation to collect the informtation.
-        Afterwards, open a google doc and write an essay about the material you collected using RAG. 
+        """Find three different research papers on AI on arxiv and collect the full text info (not just the abstract).
+        Afterwards, output an essay about the material you collected. 
          """,
     ]
     # third one should test rag, files, todolist, tab switching,
-    agent = Agent(system_prompt, enable_rag=False, session_id="test", user_id="cyan", model="gpt-5-nano")
+    agent = Agent(system_prompt, enable_rag=False, session_id="test", user_id="cyan", model="gemini/gemini-2.5-flash-preview-09-2025")
+    # claude-sonnet-4-20250514
+    # gemini/gemini-2.5-flash-preview-09-2025
+    # groq/llama-4-scout-17b-16e-instruct
     await agent.run(
         user_prompt=prompts[0],
         # url="https://arxiv.org/list/cs.AI/recent",

@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal, Union
+from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -30,36 +30,33 @@ class SearchArgs(BaseModel):
 class ExtractArgs(BaseModel):
     """Arguments for the extract action."""
 
-    use_rag: bool
-    file_name: str
-    description: str
+    # Dummy field to satisfy Vertex AI schema requirements (no empty objects allowed)
+    dummy: Optional[bool] = None
 
-class RAGSearchArgs(BaseModel):
-    """
-    Pydantic model for search_rag tool arguments from LLM.
+# class RAGSearchArgs(BaseModel):
+#     """
+#     Pydantic model for search_rag tool arguments from LLM.
 
-    This ensures proper validation and type conversion of arguments
-    passed from the LLM through the agent system.
-    """
-    query: str = Field(description="Search query for semantic search in RAG database")
-    top_k: int = Field(default=5, ge=1, le=50, description="Number of results to return")
+#     This ensures proper validation and type conversion of arguments
+#     passed from the LLM through the agent system.
+#     """
+#     query: str = Field(description="Search query for semantic search in RAG database")
+#     top_k: int = Field(default=5, ge=1, le=50, description="Number of results to return")
 
 
-class FileSystemArgs(BaseModel):
-    """
-    Pydantic model for file_system tool arguments from LLM.
 
-    This ensures proper validation and type conversion of arguments
-    passed from the LLM through the agent system.
-    """
 
-    action: Literal["write", "read", "list_files"] = Field(
-        description="Action to perform on the file system"
-    )
-    filename: Optional[str] = Field(
-        default=None, description="Name of the file to read/write"
-    )
-    content: Optional[str] = Field(default=None, description="Content to write to file")
+class TodoItem(BaseModel):
+    """A single todo item."""
+
+    task: str
+    completed: bool = False
+
+
+class TodoEditArgs(BaseModel):
+    """Arguments for the todo_edit action."""
+
+    todo_items: List[TodoItem]
 
 
 class DoneArgs(BaseModel):
@@ -71,12 +68,12 @@ class DoneArgs(BaseModel):
 # Create a discriminated union for all action types
 ActionUnion = Union[
     ClickArgs,
-    InputTextArgs, 
+    InputTextArgs,
     ScrollArgs,
     SearchArgs,
     ExtractArgs,
-    FileSystemArgs,
-    RAGSearchArgs,
+    TodoEditArgs,
+    # RAGSearchArgs,
     DoneArgs,
 ]
 
@@ -86,8 +83,8 @@ ALLOWED_ACTIONS = {
     "scroll": ScrollArgs,
     "search": SearchArgs,
     "extract": ExtractArgs,
-    "file_system": FileSystemArgs,
-    "search_rag": RAGSearchArgs,
+    "todo_edit": TodoEditArgs,
+    # "search_rag": RAGSearchArgs,
     "done": DoneArgs,
 }
 

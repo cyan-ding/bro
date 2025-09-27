@@ -7,8 +7,8 @@ from typing import Any, Optional
 
 from patchright.async_api import Page
 from .agent_state import AgentState
-from .file_system import get_bro_directories, sanitize_filename, get_unique_filename, basic_text_extraction, save_extraction_to_file
-from .schemas import FileSystemArgs, RAGSearchArgs
+from .rag import get_rag_pipeline
+
 
 def _resolve_locator(
     page: Page, target: str, iframe_xpath: Optional[str] = None
@@ -140,8 +140,6 @@ async def extract(
     page: Page,
     use_rag: bool = False,
     agent_state: Optional[AgentState] = None,
-    file_name: Optional[str] = None,
-    description: Optional[str] = None,
 ) -> str:
     """
     Extract content from the current page with automatic file persistence or RAG processing.
@@ -152,7 +150,6 @@ async def extract(
                  If False, extract content and auto-save to file (Scenario 1)
         agent_state: Agent state manager for tracking extraction descriptions
         file_name: Name of the file to save the extracted content to
-        description: Brief description of what was extracted (used for filename)
 
     Returns:
         Scenario 1 (no RAG): Content summary + file save confirmation
@@ -164,106 +161,80 @@ async def extract(
         page_url = page.url
         page_title = await page.title()
 
-        # Generate description if not provided
-        if not description:
-            description = f"Content from {page_title or page_url}"
-        
-        if not file_name:
-            file_name = f"{page_title or page_url}.json"
+        pipeline = await get_rag_pipeline()
 
-        if use_rag:
-            # SCENARIO 1: RAG Processing - store in vector DB only, NO agent_state pollution
-            print(f"🔄 Processing page content through RAG pipeline: {page_url}")
+        # if use_rag:
+        #     # SCENARIO 1: RAG Processing - store in vector DB only, NO agent_state pollution
+        #     print(f"🔄 Processing page content through RAG pipeline: {page_url}")
 
-            # Import RAG functions here to avoid circular imports
-            from .rag import get_rag_pipeline
+        #     # Process through RAG pipeline
+        #     chunks = await pipeline.process(html_content, generate_embeddings=True)
 
-            pipeline = await get_rag_pipeline()
-            if not pipeline:
-                # Fallback to basic extraction if RAG not initialized
-                print(
-                    "⚠️ RAG pipeline not initialized, falling back to basic extraction"
-                )
-                use_rag = False  # Switch to scenario 1
-            else:
-                # Process through RAG pipeline
-                chunks = await pipeline.process(html_content, generate_embeddings=True)
+        #     if chunks:
+        #         await pipeline.vector_store.add_chunks(chunks)
+        #         print(f"✅ Stored {len(chunks)} chunks in vector database")
 
-                if chunks:
-                    # Store chunks in vector database ONLY
-                    await pipeline.vector_store.add_chunks(chunks)
-                    print(f"✅ Stored {len(chunks)} chunks in vector database")
+        #         # Add RAG content availability notification to agent_state
+        #         if agent_state:
+        #             total_content_length = sum(len(chunk.content) for chunk in chunks)
+        #             agent_state.add_rag_content_availability(
+        #                 source_url=page_url,
+        #                 source_title=page_title,
+        #                 chunks_count=len(chunks),
+        #                 content_length=total_content_length
+        #             )
 
-                    # Add RAG content availability notification to agent_state
-                    if agent_state:
-                        total_content_length = sum(len(chunk.content) for chunk in chunks)
-                        agent_state.add_rag_content_availability(
-                            source_url=page_url,
-                            source_title=page_title,
-                            chunks_count=len(chunks),
-                            content_length=total_content_length
-                        )
+        #     # Create summary of extracted content
+        #     total_content_length = sum(len(chunk.content) for chunk in chunks)
 
-                # Create summary of extracted content
-                total_content_length = sum(len(chunk.content) for chunk in chunks)
+        #     result = f"""RAG Processing Complete for {page_url}:
+        #         - Total chunks created: {len(chunks)}
+        #         - Total content length: {total_content_length} characters
+        #         - Content stored in vector database for semantic search
+        #         - Use search_rag to query this content
 
-                result = f"""RAG Processing Complete for {page_url}:
-                    - Total chunks created: {len(chunks)}
-                    - Total content length: {total_content_length} characters
-                    - Content stored in vector database for semantic search
-                    - Use search_rag to query this content
+        #         Content processed and stored in vector database"""
 
-                    Description: {description}"""
+        #     return result
 
-                return result
+        # else:
+        # SCENARIO 2: Basic extraction - return content directly
+        print(f"🔄 Extracting content from: {page_url}")
 
-        else:
-            # SCENARIO 2: Basic extraction - auto-save to file and add description to agent_state
-            print(f"🔄 Extracting content from: {page_url}")
+        # Extract content using basic DOM text extraction
+        try:
+            extracted_content = pipeline.html_to_markdown(page.content)
+        except Exception as e:
+            extracted_content = f"Error extracting content, defaulting to whole page content: {str(e)}"
+            extracted_content = await page.evaluate("""
+                () => {
+                    const body = document.body;
+                    return body ? body.innerText : '';
+                }
+            """)
+            
+            if not extracted_content.strip():
+                extracted_content = "No content could be extracted from this page."
 
-            # Extract content
-            extracted_content = await basic_text_extraction(page, html_content)
+        print(f"✅ Content extracted ({len(extracted_content)} characters)")
 
-            # Auto-save to file
-            user_id = agent_state.user_id if agent_state else "default"
-            session_id = agent_state.session_id if agent_state else "default"
-            saved_file_path = await save_extraction_to_file(
+        # Add content to agent_state for tracking
+        if agent_state:
+            agent_state.add_extraction(
                 content=extracted_content,
-                file_name=file_name,
-                page_url=page_url,
-                page_title=page_title,
-                description=description,
-                user_id=user_id,
-                session_id=session_id,
+                source_url=page_url[:30],
+                source_title=page_title or "Unknown Page"
             )
 
-            print(f"✅ Content saved to {saved_file_path}")
+        # Return the extracted content directly
+        result = f"""Content Extraction Complete:
+            - Source: {page_title} ({page_url})
+            - Content length: {len(extracted_content)} characters
 
-            # Add minimal description to agent_state (NOT full content)
-            if agent_state:
-                content_preview = (
-                    extracted_content[:300] + "..."
-                    if len(extracted_content) > 300
-                    else extracted_content
-                )
-                # Use just the filename for agent state tracking
-                filename = saved_file_path.split('/')[-1]
-                agent_state.add_file_state(
-                    filename=filename,
-                    content=f"Extraction file: {description}\nContent preview: {content_preview}\nFull content available in file ({len(extracted_content)} chars)",
-                    action="extract_to_file",
-                )
+            Extracted Content:
+            {extracted_content}"""
 
-            # Return summary with file info
-            result = f"""Content Extraction Complete:
-                - Source: {page_title} ({page_url})
-                - Content length: {len(extracted_content)} characters
-                - Saved to: {saved_file_path}
-                - Description: {description}
-
-                Content is now available in ~/.bro/extractions/"""
-
-            return result
+        return result
 
     except Exception as e:
         error_msg = f"Error during content extraction: {str(e)}"
@@ -328,198 +299,101 @@ async def search(
             print(f"⚠️ Failed to update agent state for new tab: {e}")
 
 
-async def file_system(
-    args: FileSystemArgs,
-    agent_state: Optional[AgentState] = None,
-) -> str:
+
+
+# async def search_rag(
+#     args: RAGSearchArgs,
+#     agent_state: Optional[AgentState] = None,
+# ) -> str:
+#     """
+#     Search the RAG vector database for semantically relevant content.
+
+#     Args:
+#         args: Validated RAG search arguments from Pydantic model
+#         agent_state: Agent state manager for tracking RAG operations
+
+#     Returns:
+#         Formatted search results from the RAG database
+#     """
+#     try:
+#         # Import RAG functions
+#         from .rag import get_rag_pipeline
+
+#         pipeline = await get_rag_pipeline()
+#         if not pipeline:
+#             return "Error: RAG pipeline not initialized. Use extract with use_rag=true first to process content."
+
+#         # Perform semantic search
+#         results = await pipeline.search_with_reranking(
+#             args.query, top_k=args.top_k, score_threshold=0.3
+#         )
+
+#         if not results:
+#             return f"No relevant content found for query: '{args.query}'"
+
+#         # Add to agent state if available
+#         if agent_state:
+#             agent_state.add_rag_result(query=args.query, results=results)
+
+#         # Format results
+#         result_text = f"RAG Search Results for '{args.query}' (found {len(results)} results):\n\n"
+#         for i, result in enumerate(results, 1):
+#             score = result.get("relevance_score", result.get("score", 0))
+#             content = result.get("content", "")
+#             metadata = result.get("metadata", {})
+#             headers = metadata.get("headers", [])
+
+#             result_text += f"Result {i} (relevance: {score:.3f}):\n"
+#             if headers:
+#                 header_path = " > ".join([h["title"] for h in headers])
+#                 result_text += f"Section: {header_path}\n"
+#             result_text += f"Content: {content}\n\n"
+
+#         return result_text
+
+#     except Exception as e:
+#         return f"Error in RAG search operation: {str(e)}"
+
+
+async def todo_edit(todo_items: list, agent_state: Optional[AgentState] = None) -> str:
     """
-    Interact with the file system to store, retrieve, or search content.
+    Update the agent's todo list with a structured list of todo items.
 
     Args:
-        args: Validated file system arguments from Pydantic model
-        agent_state: Agent state manager for tracking file operations
+        todo_items: List of TodoItem objects or dictionaries with 'task' and 'completed' keys
+        agent_state: Agent state manager for tracking todo list
 
     Returns:
-        Result of the file system operation
+        Success message confirming the todo list update
     """
+    if not agent_state:
+        return "Error: Agent state not available"
+
     try:
-        if args.action == "write":
-            if not args.filename or args.content is None:
-                return "Error: filename and content are required for write action"
-
-            # Get the files directory using agent state session info
-            user_id = agent_state.user_id if agent_state else "default"
-            session_id = agent_state.session_id if agent_state else "default"
-            _, files_dir = get_bro_directories(user_id, session_id)
-
-            # Sanitize the filename
-            safe_filename = sanitize_filename(args.filename, "user_file")
-            
-            # Get unique filename to avoid overwrites
-            unique_filename = get_unique_filename(files_dir, safe_filename)
-            file_path = files_dir / unique_filename
-
-            # Write the content
-            file_path.write_text(args.content, encoding="utf-8")
-
-            # Add to agent state if available
-            if agent_state:
-                agent_state.add_file_state(
-                    filename=unique_filename,
-                    content=args.content,
-                    action="write",
-                )
-
-            return f"Successfully wrote content to {file_path} ({len(args.content)} characters)"
-
-        elif args.action == "read":
-            if not args.filename:
-                return "Error: filename is required for read action"
-
-            # Get both directories to search for the file using agent state session info
-            user_id = agent_state.user_id if agent_state else "default"
-            session_id = agent_state.session_id if agent_state else "default"
-            extractions_dir, files_dir = get_bro_directories(user_id, session_id)
-            
-            filename = args.filename
-            file_path = None
-            
-            # Try to find the file in both directories
-            possible_paths = [
-                files_dir / filename,           # Downloaded files
-                extractions_dir / filename,     # Extraction files
-            ]
-            
-            for path in possible_paths:
-                if path.exists():
-                    file_path = path
-                    break
-            
-            if not file_path:
-                return f"Error: File '{filename}' not found in ~/.bro/files/ or ~/.bro/extractions/"
-
-            content = file_path.read_text(encoding="utf-8")
-
-            # Add to agent state if available
-            if agent_state:
-                agent_state.add_file_state(
-                    filename=filename,
-                    content=content,
-                    action="read",
-                )
-
-            return f"Content from {file_path}:\n\n{content}"
-
-
-
-        elif args.action == "list_files":
-            # List files in both ~/.bro directories using agent state session info
-            user_id = agent_state.user_id if agent_state else "default"
-            session_id = agent_state.session_id if agent_state else "default"
-            extractions_dir, files_dir = get_bro_directories(user_id, session_id)
-            
-            all_files = []
-            
-            # List extraction files
-            if extractions_dir.exists():
-                extraction_files = []
-                for file_path in extractions_dir.iterdir():
-                    if file_path.is_file():
-                        size = file_path.stat().st_size
-                        extraction_files.append(f"{file_path.name} ({size} bytes)")
-                
-                if extraction_files:
-                    all_files.append("Extractions (~/.bro/extractions/):")
-                    all_files.extend([f"  - {f}" for f in extraction_files])
-            
-            # List downloaded files
-            if files_dir.exists():
-                downloaded_files = []
-                for file_path in files_dir.iterdir():
-                    if file_path.is_file():
-                        size = file_path.stat().st_size
-                        downloaded_files.append(f"{file_path.name} ({size} bytes)")
-                
-                if downloaded_files:
-                    if all_files:  # Add separator if we have extraction files
-                        all_files.append("")
-                    all_files.append("Downloaded Files (~/.bro/files/):")
-                    all_files.extend([f"  - {f}" for f in downloaded_files])
-
-            if not all_files:
-                return "No files found in ~/.bro/ directories"
-
-            return "\n".join(all_files)
-
+        # Convert TodoItem objects to dictionaries if needed
+        if todo_items and hasattr(todo_items[0], 'model_dump'):
+            todo_items_dict = [item.model_dump() for item in todo_items]
         else:
-            return f"Error: Unknown action '{args.action}'. Supported actions: write, read, list_files"
+            todo_items_dict = todo_items
 
+        result = agent_state.update_todo_list(todo_items_dict)
+        print(f"📝 {result}")
+        return result
     except Exception as e:
-        return f"Error in file_system operation: {str(e)}"
-
-
-async def search_rag(
-    args: RAGSearchArgs,
-    agent_state: Optional[AgentState] = None,
-) -> str:
-    """
-    Search the RAG vector database for semantically relevant content.
-
-    Args:
-        args: Validated RAG search arguments from Pydantic model
-        agent_state: Agent state manager for tracking RAG operations
-
-    Returns:
-        Formatted search results from the RAG database
-    """
-    try:
-        # Import RAG functions
-        from .rag import get_rag_pipeline
-
-        pipeline = await get_rag_pipeline()
-        if not pipeline:
-            return "Error: RAG pipeline not initialized. Use extract with use_rag=true first to process content."
-
-        # Perform semantic search
-        results = await pipeline.search_with_reranking(
-            args.query, top_k=args.top_k, score_threshold=0.3
-        )
-
-        if not results:
-            return f"No relevant content found for query: '{args.query}'"
-
-        # Add to agent state if available
-        if agent_state:
-            agent_state.add_rag_result(query=args.query, results=results)
-
-        # Format results
-        result_text = f"RAG Search Results for '{args.query}' (found {len(results)} results):\n\n"
-        for i, result in enumerate(results, 1):
-            score = result.get("relevance_score", result.get("score", 0))
-            content = result.get("content", "")
-            metadata = result.get("metadata", {})
-            headers = metadata.get("headers", [])
-
-            result_text += f"Result {i} (relevance: {score:.3f}):\n"
-            if headers:
-                header_path = " > ".join([h["title"] for h in headers])
-                result_text += f"Section: {header_path}\n"
-            result_text += f"Content: {content}\n\n"
-
-        return result_text
-
-    except Exception as e:
-        return f"Error in RAG search operation: {str(e)}"
+        error_msg = f"Error updating todo list: {str(e)}"
+        print(f"❌ {error_msg}")
+        return error_msg
 
 
 async def done(reason: str):
     """
     Signal that the user's task is completed or that the agent is unable to proceed.
+    Instead of stopping, this now notifies the user and awaits their decision.
 
     Args:
             reason: The reason for completion or stopping
     """
-    # This function serves as a signal to stop the agent execution
-    # The actual stopping logic is handled in the agent loop
-    print(f"Task completion signaled: {reason}")
-    return f"Task completed: {reason}"
+    # This function serves as a signal to notify the user for decision
+    # The actual user interaction logic is handled in the agent loop
+    print(f"🤖 Agent believes task is complete: {reason}")
+    return f"AWAIT_USER_DECISION: {reason}"

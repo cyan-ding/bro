@@ -15,17 +15,17 @@ from utils.action_utils import generate_action_description
 
 
 @dataclass
-class FileState:
+class Extraction:
     """
-    Represents the state of a file that the agent has interacted with.
+    Represents extracted content from a web page.
     
-    Tracks both the content and metadata of files that the LLM has
-    created, read, or modified during the session.
+    Tracks the content, source information, and metadata of content
+    that has been extracted during the session.
     """
-    filename: str
     content: str
-    size: int
-    last_action: str = "unknown"  # read, write, create
+    source_url: str
+    source_title: str
+    content_length: int
 
 
 @dataclass 
@@ -72,10 +72,19 @@ class RAGContentAvailability:
 
 
 @dataclass
+class TodoItem:
+    """
+    Represents a single todo item in the agent's todo list.
+    """
+    task: str
+    completed: bool = False
+
+
+@dataclass
 class StructuredOutputContext:
     """
     Represents structured output from LLM responses.
-    
+
     Tracks thinking, evaluation of previous goals, memory, and next goals
     from the LLM's structured JSON responses.
     """
@@ -110,61 +119,55 @@ class AgentState:
     def __init__(self, user_id: str = "default", session_id: str = "default"):
         """
         Initialize the agent state.
-        
+
         Args:
-            user_id: User identifier for session-based file management
-            session_id: Session identifier for session-based file management
+            user_id: User identifier for session tracking
+            session_id: Session identifier for session tracking
         """
         self.user_id = user_id
         self.session_id = session_id
-        self.files: Dict[str, FileState] = {}
+        self.extractions: List[Extraction] = []
         self.tabs: List[TabState] = []
         self.rag_results: List[RAGRetrievalResult] = []
         self.rag_content_available: List[RAGContentAvailability] = []
         self.action_history: List[ActionContext] = []
-        self.max_action_history = 100 
-        self.max_rag_results = 10   
-        self.max_rag_sources = 5   
-        
-        # Track session metadata        
+        self.todo_list: List[TodoItem] = []
+        self.max_action_history = 100
+        self.max_rag_results = 10
+        self.max_rag_sources = 5
+        self.max_extractions = 50  # Limit number of extractions to keep
+
+        # Track session metadata
         self.current_tab_index: Optional[int] = None
         
-    def add_file_state(
+    def add_extraction(
         self, 
-        filename: str, 
-        content: str, 
-        action: str = "unknown",
+        content: str,
+        source_url: str,
+        source_title: str,
     ) -> None:
         """
-        Add or update file state information.
+        Add extracted content to the state.
         
         Args:
-            filename: Name of the file
-            content: Current content of the file
-            action: Action that was performed (read, write, create)
+            content: The extracted content
+            source_url: URL of the source page
+            source_title: Title of the source page
         """
-        # Normalize filename (handle session prefixes)
-        normalized_name = filename
         
-        self.files[normalized_name] = FileState(
-            filename=normalized_name,
+        extraction = Extraction(
             content=content,
-            size=len(content),
-            last_action=action
+            source_url=source_url,
+            source_title=source_title,
+            content_length=len(content),
         )
-    
-    def get_file_content(self, filename: str) -> Optional[str]:
-        """
-        Get the content of a tracked file.
         
-        Args:
-            filename: Name of the file to retrieve
-            
-        Returns:
-            File content if exists, None otherwise
-        """
-        file_state = self.files.get(filename)
-        return file_state.content if file_state else None
+        self.extractions.append(extraction)
+        
+        # Keep only the most recent extractions
+        if len(self.extractions) > self.max_extractions:
+            self.extractions = self.extractions[-self.max_extractions:]
+    
     
     def add_tab_state(self, url: str, title: str, is_active: bool = False) -> None:
         """
@@ -185,28 +188,6 @@ class AgentState:
         # Update current tab tracking
         if is_active:
             self.current_tab_index = len(self.tabs) - 1
-    
-    def remove_tab_state(self, url: str) -> None:
-        """
-        Remove the first matching tab by URL from tracking (when closed).
-        If multiple tabs share the same URL, only the first occurrence is removed.
-        """
-        removed_index = None
-        for i, tab in enumerate(self.tabs):
-            if tab.url == url:
-                removed_index = i
-                break
-        if removed_index is None:
-            return
-        
-        del self.tabs[removed_index]
-        
-        # Adjust current tab index if necessary
-        if self.current_tab_index is not None:
-            if self.current_tab_index == removed_index:
-                self.current_tab_index = min(removed_index, len(self.tabs) - 1) if self.tabs else None
-            elif self.current_tab_index > removed_index:
-                self.current_tab_index -= 1
     
     async def update_tab_state(self, page: Page) -> None:
         """
@@ -265,13 +246,13 @@ class AgentState:
             self.rag_content_available = self.rag_content_available[-self.max_rag_sources:]
     
     def add_rag_result(
-        self, 
-        query: str, 
+        self,
+        query: str,
         results: List[Dict[str, Any]]
     ) -> None:
         """
         Add RAG retrieval results to state.
-        
+
         Args:
             query: The search query that was performed
             results: List of search results with content and metadata
@@ -281,12 +262,35 @@ class AgentState:
             results_count=len(results),
             full_results=results
         )
-        
+
         self.rag_results.append(rag_result)
-        
+
         # Keep only the most recent RAG results
         if len(self.rag_results) > self.max_rag_results:
             self.rag_results = self.rag_results[-self.max_rag_results:]
+
+    def update_todo_list(self, todo_items: List[Dict[str, Any]]) -> str:
+        """
+        Update the entire todo list with a structured list of todo items.
+
+        Args:
+            todo_items: List of dictionaries with 'task' and 'completed' keys
+
+        Returns:
+            Success message with todo count
+        """
+        # Clear existing todo list
+        self.todo_list.clear()
+
+        # Convert dictionaries to TodoItem objects
+        for item_dict in todo_items:
+            if 'task' in item_dict:
+                task = item_dict['task']
+                completed = item_dict.get('completed', False)
+                self.todo_list.append(TodoItem(task=task, completed=completed))
+
+        completed_count = sum(1 for item in self.todo_list if item.completed)
+        return f"Todo list updated with {len(self.todo_list)} items ({completed_count} completed)"
 
     
     def add_action_context(
@@ -338,7 +342,7 @@ class AgentState:
         if len(self.action_history) > self.max_action_history:
             self.action_history = self.action_history[-self.max_action_history:]
     
-    def get_context_for_llm(self, include_full_files: bool = True) -> str:
+    def get_context_for_llm(self) -> str:
         """
         Generate formatted context string for inclusion in LLM prompts.
         
@@ -365,20 +369,22 @@ class AgentState:
                 status = "ACTIVE" if tab.is_active else "background"
                 context_parts.append(f"[{i}] [{status}] {tab.title} ({tab.url[:30]})")
         
-        # Files created/accessed by agent
-        if self.files:
-            context_parts.append("\n=== AGENT FILES ===")
-            for filename, file_state in self.files.items():
-                
-                context_parts.append(f"{filename} ({file_state.size} chars, {file_state.last_action})")
-                
-                if include_full_files and file_state.size < 2000:  # Include full content for small files
-                    context_parts.append(f"Content:\n{file_state.content}")
-                elif file_state.size >= 2000:  # Show preview for large files
-                    preview = file_state.content[:500] + "..." if len(file_state.content) > 500 else file_state.content
-                    context_parts.append(f"Content preview:\n{preview}")
-                context_parts.append("")  # Empty line between files
+        # Extracted content by agent
+        if self.extractions:
+            context_parts.append("\n=== EXTRACTED CONTENT ===")
+            for i, extraction in enumerate(self.extractions):  
+                context_parts.append(f"{i}. {extraction.source_title} ({extraction.source_url})")
+                context_parts.append(f"   Length: {extraction.content_length} chars")
+                context_parts.append(f"   Content:\n{extraction.content}")
+                context_parts.append("")  # Empty line between extractions
         
+        # Todo list
+        if self.todo_list:
+            context_parts.append("\n=== TODO LIST ===")
+            for i, todo in enumerate(self.todo_list, 1):
+                status = "[x]" if todo.completed else "[ ]"
+                context_parts.append(f"{i}. {status} {todo.task}")
+
         # Action history with structured output
         if self.action_history:
             context_parts.append("\n=== PAST ACTIONS ===")
@@ -391,10 +397,10 @@ class AgentState:
                     args_str = ", ".join(f"{k}={v}" for k, v in list(action.arguments.items())[:2])  # Show first 2 args
                     if len(action.arguments) > 2:
                         args_str += "..."
-                    
+
                     result_preview = action.result[:100] + "..." if len(action.result) > 100 else action.result
                     context_parts.append(f"- Iteration {action.iteration}: {action.action_name}({args_str}) -> {result_preview}")
-                
+
                 # Include specifics of most recent structured output if available
                 if i == len(self.action_history[-10:]) - 1 and action.structured_output:
                     context_parts.append(f"  Reasoning about previous goal: {action.structured_output.thinking}")
@@ -419,20 +425,6 @@ class AgentState:
         context_parts.append("=== END AGENT CONTEXT ===\n")
         
         return "\n".join(context_parts)
-    
-    def get_files_summary(self) -> Dict[str, Any]:
-        """
-        Get a summary of tracked files for debugging/monitoring.
-        
-        Returns:
-            Dictionary with file summary information
-        """
-        return {
-            "total_files": len(self.files),
-            "total_content_size": sum(f.size for f in self.files.values()),
-            "files": {name: {"size": f.size, "action": f.last_action} 
-                     for name, f in self.files.items()}
-        }
     
     def get_tab_by_index(self, index: int) -> Optional[TabState]:
         """
@@ -487,73 +479,16 @@ class AgentState:
         """
         Clear all state (useful for testing or reset scenarios).
         """
-        self.files.clear()
+        self.extractions.clear()
         self.tabs.clear()
         self.rag_results.clear()
         self.rag_content_available.clear()
         self.action_history.clear()
+        self.todo_list.clear()
         self.current_tab_index = None
-    def get_session_directory(self):
-        """
-        Get the session directory path.
-        
-        Returns:
-            Path to the session directory
-        """
-        from pathlib import Path
-        return Path.home() / ".bro" / self.user_id / f"session-{self.session_id}"
     
-    def get_file_tree_representation(self) -> str:
-        """
-        Generate a tree representation of the session file structure for debugging.
-        
-        Returns:
-            String representation of the file tree structure
-        """
-        from pathlib import Path
-        
-        session_dir = self.get_session_directory()
-        
-        if not session_dir.exists():
-            return f"Session directory does not exist: {session_dir}"
-        
-        def _build_tree(path: Path, prefix: str = "", is_last: bool = True) -> List[str]:
-            """Recursively build tree representation."""
-            lines = []
-            
-            if path.is_dir():
-                # Directory
-                connector = "└── " if is_last else "├── "
-                lines.append(f"{prefix}{connector}{path.name}/")
-                
-                # Get children and sort (directories first, then files)
-                try:
-                    children = list(path.iterdir())
-                    children.sort(key=lambda x: (not x.is_dir(), x.name.lower()))
-                    
-                    for i, child in enumerate(children):
-                        is_child_last = (i == len(children) - 1)
-                        child_prefix = prefix + ("    " if is_last else "│   ")
-                        lines.extend(_build_tree(child, child_prefix, is_child_last))
-                        
-                except PermissionError:
-                    lines.append(f"{prefix}    [Permission Denied]")
-                    
-            else:
-                # File
-                connector = "└── " if is_last else "├── "
-                size = path.stat().st_size if path.exists() else 0
-                size_str = f" ({size} bytes)" if size > 0 else ""
-                lines.append(f"{prefix}{connector}{path.name}{size_str}")
-                
-            return lines
-        
-        tree_lines = [f"Session Directory Tree: {session_dir}"]
-        tree_lines.extend(_build_tree(session_dir, "", True))
-        
-        return "\n".join(tree_lines)
     
-    async def save_state_to_file(self, iteration: Optional[int] = None) -> str:
+    async def save_state_to_file(self) -> str:
         """
         Save the current agent state to a JSON file in the session directory.
         Uses a consistent filename that gets updated on each save instead of creating new files.
@@ -565,9 +500,8 @@ class AgentState:
             Path to the saved state file
         """
         import json
-        from datetime import datetime
-        
-        session_dir = self.get_session_directory()
+        from pathlib import Path
+        session_dir = Path.home() / ".bro" / self.user_id / f"session-{self.session_id}"
         session_dir.mkdir(parents=True, exist_ok=True)
         
         # Use consistent filename that gets updated instead of creating new files
@@ -576,10 +510,6 @@ class AgentState:
         
         # Convert state to dictionary
         state_data = self.to_dict()
-        state_data["user_id"] = self.user_id
-        state_data["session_id"] = self.session_id
-        state_data["saved_at"] = datetime.now().isoformat()
-        state_data["iteration"] = iteration
         
         # Save to file (overwrites existing file)
         with open(state_file, 'w', encoding='utf-8') as f:
@@ -588,6 +518,7 @@ class AgentState:
         return str(state_file)
     
     def to_dict(self) -> Dict[str, Any]:
+        from datetime import datetime
         """
         Convert state to dictionary for serialization.
         
@@ -597,16 +528,17 @@ class AgentState:
         return {
             "user_id": self.user_id,
             "session_id": self.session_id,
+            "last_edited": datetime.now().isoformat(),
             "current_tab_index": self.current_tab_index,
-            "files": {
-                name: {
-                    "filename": f.filename,
-                    "content": f.content,
-                    "size": f.size,
-                    "last_action": f.last_action
+            "extractions": [
+                {
+                    "content": e.content,
+                    "source_url": e.source_url,
+                    "source_title": e.source_title,
+                    "content_length": e.content_length,
                 }
-                for name, f in self.files.items()
-            },
+                for e in self.extractions
+            ],
             "tabs": [
                 {"index": i, "url": t.url, "title": t.title, "is_active": t.is_active}
                 for i, t in enumerate(self.tabs)
@@ -621,6 +553,13 @@ class AgentState:
                     "processed_at": c.processed_at
                 }
                 for c in self.rag_content_available
+            ],
+            "todo_list": [
+                {
+                    "task": todo.task,
+                    "completed": todo.completed
+                }
+                for todo in self.todo_list
             ],
             "action_history": [
                 {
@@ -638,7 +577,6 @@ class AgentState:
                 }
                 for a in self.action_history
             ],
-            "action_history_count": len(self.action_history)
         }
 
 
