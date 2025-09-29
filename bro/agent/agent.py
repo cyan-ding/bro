@@ -234,7 +234,6 @@ class Agent:
                         target_index = arguments.get("target")
                         input_text_value = arguments.get("input_text")
                         placeholder = arguments.get("login")
-                        retry_login = bool(arguments.get("retry_login", False))
 
                         if target_index is None:
                             error_msg = "Error: target is required for text_input"
@@ -255,7 +254,7 @@ class Agent:
                                 f"🔐 Looking up credentials for placeholder: {placeholder}"
                             )
                             credentials = await get_credentials(
-                                placeholder, retry_login=retry_login
+                                placeholder
                             )
                             if credentials:
                                 input_text_value = credentials

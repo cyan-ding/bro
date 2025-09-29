@@ -126,11 +126,7 @@ def generate_action_description(
         text = arguments.get("input_text", "")
         login = arguments.get("login")
         if login:
-            retry_login = arguments.get("retry_login", False)
-            if retry_login:
-                return f"You retried login with '{login}' into {element_desc}"
-            else:
-                return f"You entered login credentials '{login}' into {element_desc}"
+            return f"You entered login credentials '{login}' into {element_desc}"
         else:
             return f"You typed '{text}' into {element_desc}"
     elif action_name == "scroll":

@@ -98,12 +98,11 @@ When you need to fill credentials, use the `input_text` tool with login paramete
 
 ```json
 "actions": [
-  {"action_name": "input_text", "arguments": {"target": 23, "input_text": "laptop", "login": "GOOGLE_EMAIL", "retry_login": false}}
+  {"action_name": "input_text", "arguments": {"target": 23, "input_text": "laptop", "login": "GOOGLE_EMAIL"}}
 ]
 ```
 
 - Use `login` parameter with credential placeholder. The actual credential will be automatically filled in by the user. 
-- Set `retry_login: true` if requesting the same credential again
 - Do NOT call `done` when requesting credentials
 
 ## Task Management
