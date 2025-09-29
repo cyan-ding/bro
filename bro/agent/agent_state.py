@@ -2,7 +2,7 @@
 Agent State Management for Bro
 
 This module provides centralized state management for the Bro agent, tracking context
-that should be included in LLM calls including file operations, RAG retrieval results,
+that should be included in LLM calls including file operations,
 open tabs, and other relevant information that persists across iterations.
 
 @file purpose: Manages persistent agent state for context in LLM calls
@@ -43,32 +43,6 @@ class TabState:
     is_active: bool = False
 
 
-@dataclass
-class RAGRetrievalResult:
-    """
-    Represents a RAG retrieval operation result.
-    
-    Stores the query, results, and metadata from semantic search
-    operations to maintain context across iterations.
-    """
-    query: str
-    results_count: int
-    full_results: List[Dict[str, Any]]
-
-
-@dataclass
-class RAGContentAvailability:
-    """
-    Represents that RAG-processed state that is available for querying.
-    
-    Tracks when content has been processed and stored in the vector database
-    but no specific query has been performed yet.
-    """
-    source_url: str
-    source_title: str
-    chunks_count: int
-    content_length: int
-    processed_at: str  # ISO timestamp  
 
 
 @dataclass
@@ -111,7 +85,7 @@ class AgentState:
     Centralized state management for the Bro agent.
     
     This class maintains all context that should be included in LLM calls,
-    including file states, browser tabs, RAG results, and action history.
+    including file states, browser tabs, and action history.
     The state is designed to be serializable and provides formatted output
     for inclusion in LLM prompts.
     """
@@ -128,13 +102,9 @@ class AgentState:
         self.session_id = session_id
         self.extractions: List[Extraction] = []
         self.tabs: List[TabState] = []
-        self.rag_results: List[RAGRetrievalResult] = []
-        self.rag_content_available: List[RAGContentAvailability] = []
         self.action_history: List[ActionContext] = []
         self.todo_list: List[TodoItem] = []
         self.max_action_history = 100
-        self.max_rag_results = 10
-        self.max_rag_sources = 5
         self.max_extractions = 50  # Limit number of extractions to keep
 
         # Track session metadata
@@ -213,61 +183,6 @@ class AgentState:
         except Exception as e:
             print(f"⚠️ Failed to update page state: {e}")
 
-    def add_rag_content_availability(
-        self, 
-        source_url: str, 
-        source_title: str, 
-        chunks_count: int, 
-        content_length: int
-    ) -> None:
-        """
-        Add notification that RAG-processed content is available for querying.
-        
-        Args:
-            source_url: URL of the source content
-            source_title: Title of the source content
-            chunks_count: Number of chunks created
-            content_length: Total content length processed
-        """
-        from datetime import datetime
-        
-        rag_content = RAGContentAvailability(
-            source_url=source_url,
-            source_title=source_title,
-            chunks_count=chunks_count,
-            content_length=content_length,
-            processed_at=datetime.now().isoformat()
-        )
-        
-        self.rag_content_available.append(rag_content)
-        
-        # Keep only the most recent content availability notices
-        if len(self.rag_content_available) > self.max_rag_sources:
-            self.rag_content_available = self.rag_content_available[-self.max_rag_sources:]
-    
-    def add_rag_result(
-        self,
-        query: str,
-        results: List[Dict[str, Any]]
-    ) -> None:
-        """
-        Add RAG retrieval results to state.
-
-        Args:
-            query: The search query that was performed
-            results: List of search results with content and metadata
-        """
-        rag_result = RAGRetrievalResult(
-            query=query,
-            results_count=len(results),
-            full_results=results
-        )
-
-        self.rag_results.append(rag_result)
-
-        # Keep only the most recent RAG results
-        if len(self.rag_results) > self.max_rag_results:
-            self.rag_results = self.rag_results[-self.max_rag_results:]
 
     def update_todo_list(self, todo_items: List[Dict[str, Any]]) -> str:
         """
@@ -408,19 +323,6 @@ class AgentState:
                     context_parts.append(f"  Memory: {action.structured_output.memory}")
                     context_parts.append(f"  Current Goal: {action.structured_output.next_goal}")
 
-        # RAG content availability notices
-        if self.rag_content_available:
-            context_parts.append("=== RAG CONTENT AVAILABLE ===")
-            for i, content in enumerate(self.rag_content_available, 1):
-                context_parts.append(f"{i}. {content.source_title} ({content.source_url})")
-                context_parts.append(f"   Processed: {content.chunks_count} chunks, {content.content_length} chars")
-                context_parts.append("   Use search_rag to query this content")
-        
-        # RAG retrieval results
-        if self.rag_results:
-            context_parts.append("=== RAG SEARCH RESULTS ===")
-            for i, rag_result in enumerate(self.rag_results, 1):  # Show all results
-                context_parts.append(f"{i}. Query: '{rag_result.query}' ({rag_result.results_count} results)")
         
         context_parts.append("=== END AGENT CONTEXT ===\n")
         
@@ -481,8 +383,6 @@ class AgentState:
         """
         self.extractions.clear()
         self.tabs.clear()
-        self.rag_results.clear()
-        self.rag_content_available.clear()
         self.action_history.clear()
         self.todo_list.clear()
         self.current_tab_index = None
@@ -542,17 +442,6 @@ class AgentState:
             "tabs": [
                 {"index": i, "url": t.url, "title": t.title, "is_active": t.is_active}
                 for i, t in enumerate(self.tabs)
-            ],
-            "rag_results_count": len(self.rag_results),
-            "rag_content_available": [
-                {
-                    "source_url": c.source_url,
-                    "source_title": c.source_title,
-                    "chunks_count": c.chunks_count,
-                    "content_length": c.content_length,
-                    "processed_at": c.processed_at
-                }
-                for c in self.rag_content_available
             ],
             "todo_list": [
                 {

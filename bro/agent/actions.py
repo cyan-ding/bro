@@ -7,7 +7,11 @@ from typing import Any, Optional
 
 from patchright.async_api import Page
 from .agent_state import AgentState
-from .rag import get_rag_pipeline
+import re
+from typing import Sequence
+from bs4 import BeautifulSoup
+from bs4.element import Comment
+from markdownify import markdownify as md
 
 
 def _resolve_locator(
@@ -94,10 +98,6 @@ async def input_text(
         if await strategy():
             print(f"Successfully entered text using {strategy.__name__}")
 
-            # Clear RAG results when input_text is called (indicates task completion phase)
-            if agent_state:
-                agent_state.rag_results.clear()
-                print("🧹 Cleared RAG results - task completion phase detected")
 
             return
 
@@ -134,26 +134,190 @@ async def scroll(page: Page, how_much: int):
     await page.evaluate(f"window.scrollBy(0, {how_much})")
 
 
+def _remove_comments_and_noncontent(root: BeautifulSoup) -> None:
+    """Remove comments, scripts, styles, and non-content chrome elements."""
+
+    # Remove comments
+    for c in root.find_all(string=lambda t: isinstance(t, Comment)):
+        c.extract()  # safer for strings
+
+    # Remove obvious non-content tags
+    blacklist_tags: Sequence[str] = (
+        "script",
+        "style",
+        "noscript",
+        "svg",
+        "canvas",
+        "iframe",
+        "object",
+        "embed",
+        "form",
+        "input",
+        "button",
+        "select",
+        "label",
+        "nav",
+        "aside",
+        "template",
+        "menu",
+        "dialog",
+    )
+    for t in root.find_all(blacklist_tags):
+        t.decompose()
+
+    # Remove by ARIA role when present
+    roles_to_remove = {
+        "navigation",
+        "banner",
+        "complementary",
+        "contentinfo",
+        "search",
+        "menu",
+        "menubar",
+        "dialog",
+        "button",
+        "form",
+        "toolbar",
+        "tablist",
+        "tab",
+        "alert",
+        "status",
+    }
+    for t in root.find_all(attrs={"role": True}):
+        try:
+            role_val = t.attrs.get("role", "")
+            role_tokens = {
+                r.strip().lower() for r in str(role_val).split() if r.strip()
+            }
+            if role_tokens & roles_to_remove:
+                t.decompose()
+        except (AttributeError, TypeError, ValueError):
+            continue
+
+    # Remove elements with display:none in style attribute
+    for element in root.find_all(style=True):
+        if re.search(r"display\s*:\s*none", element["style"], re.IGNORECASE):
+            element.decompose()
+
+    # Remove elements with CSS classes that might be hidden
+    for element in root.find_all(class_=["hidden", "invisible"]):
+        element.decompose()
+
+    # Remove elements with "dropdown" in any part of the class name
+    for element in root.find_all(
+        class_=lambda c: c
+        and any(
+            "dropdown" in cls.lower() for cls in (c if isinstance(c, list) else [c])
+        )
+    ):
+        element.decompose()
+
+
+def _remove_unwanted_sections(text: str) -> str:
+    """Remove unwanted sections like references, citations, sources, etc."""
+    # Remove Wikipedia-style citation links like [[184]](#cite_note-187)
+    text = re.sub(r"\[\[\d+\]\]\(#cite_note[^)]*\)", "", text)
+
+    # Remove Wikipedia edit links like [edit](/w/index.php?title=...&action=edit&section=25 "Edit section: ...")
+    text = re.sub(r"\[edit\]\([^)]*\)", "", text)
+
+    # Remove additional edit section links like [&action=edit&section=1 "Edit section: History")]
+    text = re.sub(r"\[&action=edit&section=[^\]]*\]", "", text)
+
+    # Remove markdown images like ![Wikipedia](/static/images/mobile/copyright/wikipedia-wordmark-en.svg)
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+
+    # Convert markdown links to plain text like [Apache web server](/wiki/Apache_webserver "Apache webserver") -> Apache web server
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+
+    text = re.sub(r"\n{3,}", "\n", text)
+    # Define section patterns that should be removed (case-insensitive)
+    unwanted_sections = [
+        r"references?",
+        r"citations?",
+        r"sources?",
+        r"bibliography",
+        r"further reading",
+        r"external links?",
+        r"see also",
+        r"notes?",
+        r"footnotes?",
+        r"endnotes?",
+        r"works cited",
+        r"literature cited",
+        r"additional sources?",
+        r"related links?",
+        r"useful links?",
+    ]
+
+    # Create a pattern that matches any of these section headers
+    # Match headers at any level (# to ######) followed by the unwanted section names
+    section_pattern = r"^(#{1,6})\s*(" + "|".join(unwanted_sections) + r")\s*$"
+
+    lines = text.split("\n")
+    filtered_lines = []
+    skip_section = False
+    current_section_level = 0
+
+    for line in lines:
+        line_stripped = line.strip()
+
+        # Check if this line is a header
+        header_match = re.match(r"^(#{1,6})\s+(.+)$", line_stripped)
+
+        if header_match:
+            header_level = len(header_match.group(1))
+
+            # Check if this is an unwanted section header
+            if re.match(section_pattern, line_stripped, re.IGNORECASE):
+                skip_section = True
+                current_section_level = header_level
+                continue
+
+            # If we're in a skip section and encounter a header at same or higher level, stop skipping
+            elif skip_section and header_level <= current_section_level:
+                skip_section = False
+                current_section_level = 0
+
+        # If we're not skipping this section, add the line
+        if not skip_section:
+            filtered_lines.append(line)
+
+    return "\n".join(filtered_lines)
+
+
+def _html_to_markdown(html: str) -> str:
+    """Convert HTML to markdown using markdownify, removing unwanted sections."""
+    # fallback using beautifulsoup to strip script tags
+    soup = BeautifulSoup(html, "html.parser")
+    _remove_comments_and_noncontent(soup)
+    html = str(soup)
+
+    normalized_html = md(
+        html,
+        heading_style="ATX",  # Use # headers
+        bullets="-",  # Use - for bullets
+        escape_misc=False,  # Don't escape special chars
+    )
+
+    return _remove_unwanted_sections(normalized_html)
+
+
 
 
 async def extract(
     page: Page,
-    use_rag: bool = False,
     agent_state: Optional[AgentState] = None,
 ) -> str:
     """
-    Extract content from the current page with automatic file persistence or RAG processing.
+    Extract content from the current page and convert to markdown.
 
     Args:
         page: The browser page
-        use_rag: If True, process content through RAG pipeline for chunking and embedding (Scenario 2)
-                 If False, extract content and auto-save to file (Scenario 1)
         agent_state: Agent state manager for tracking extraction descriptions
-        file_name: Name of the file to save the extracted content to
 
     Returns:
-        Scenario 1 (no RAG): Content summary + file save confirmation
-        Scenario 2 (RAG): Processing summary only (no agent_state pollution)
+        Content extraction result with markdown content
     """
     try:
         # Get the page HTML content
@@ -161,49 +325,11 @@ async def extract(
         page_url = page.url
         page_title = await page.title()
 
-        pipeline = await get_rag_pipeline()
-
-        # if use_rag:
-        #     # SCENARIO 1: RAG Processing - store in vector DB only, NO agent_state pollution
-        #     print(f"🔄 Processing page content through RAG pipeline: {page_url}")
-
-        #     # Process through RAG pipeline
-        #     chunks = await pipeline.process(html_content, generate_embeddings=True)
-
-        #     if chunks:
-        #         await pipeline.vector_store.add_chunks(chunks)
-        #         print(f"✅ Stored {len(chunks)} chunks in vector database")
-
-        #         # Add RAG content availability notification to agent_state
-        #         if agent_state:
-        #             total_content_length = sum(len(chunk.content) for chunk in chunks)
-        #             agent_state.add_rag_content_availability(
-        #                 source_url=page_url,
-        #                 source_title=page_title,
-        #                 chunks_count=len(chunks),
-        #                 content_length=total_content_length
-        #             )
-
-        #     # Create summary of extracted content
-        #     total_content_length = sum(len(chunk.content) for chunk in chunks)
-
-        #     result = f"""RAG Processing Complete for {page_url}:
-        #         - Total chunks created: {len(chunks)}
-        #         - Total content length: {total_content_length} characters
-        #         - Content stored in vector database for semantic search
-        #         - Use search_rag to query this content
-
-        #         Content processed and stored in vector database"""
-
-        #     return result
-
-        # else:
-        # SCENARIO 2: Basic extraction - return content directly
         print(f"🔄 Extracting content from: {page_url}")
 
-        # Extract content using basic DOM text extraction
+        # Extract content using HTML to markdown conversion
         try:
-            extracted_content = pipeline.html_to_markdown(page.content)
+            extracted_content = _html_to_markdown(html_content)
         except Exception as e:
             extracted_content = f"Error extracting content, defaulting to whole page content: {str(e)}"
             extracted_content = await page.evaluate("""
@@ -212,7 +338,7 @@ async def extract(
                     return body ? body.innerText : '';
                 }
             """)
-            
+
             if not extracted_content.strip():
                 extracted_content = "No content could be extracted from this page."
 
@@ -301,58 +427,6 @@ async def search(
 
 
 
-# async def search_rag(
-#     args: RAGSearchArgs,
-#     agent_state: Optional[AgentState] = None,
-# ) -> str:
-#     """
-#     Search the RAG vector database for semantically relevant content.
-
-#     Args:
-#         args: Validated RAG search arguments from Pydantic model
-#         agent_state: Agent state manager for tracking RAG operations
-
-#     Returns:
-#         Formatted search results from the RAG database
-#     """
-#     try:
-#         # Import RAG functions
-#         from .rag import get_rag_pipeline
-
-#         pipeline = await get_rag_pipeline()
-#         if not pipeline:
-#             return "Error: RAG pipeline not initialized. Use extract with use_rag=true first to process content."
-
-#         # Perform semantic search
-#         results = await pipeline.search_with_reranking(
-#             args.query, top_k=args.top_k, score_threshold=0.3
-#         )
-
-#         if not results:
-#             return f"No relevant content found for query: '{args.query}'"
-
-#         # Add to agent state if available
-#         if agent_state:
-#             agent_state.add_rag_result(query=args.query, results=results)
-
-#         # Format results
-#         result_text = f"RAG Search Results for '{args.query}' (found {len(results)} results):\n\n"
-#         for i, result in enumerate(results, 1):
-#             score = result.get("relevance_score", result.get("score", 0))
-#             content = result.get("content", "")
-#             metadata = result.get("metadata", {})
-#             headers = metadata.get("headers", [])
-
-#             result_text += f"Result {i} (relevance: {score:.3f}):\n"
-#             if headers:
-#                 header_path = " > ".join([h["title"] for h in headers])
-#                 result_text += f"Section: {header_path}\n"
-#             result_text += f"Content: {content}\n\n"
-
-#         return result_text
-
-#     except Exception as e:
-#         return f"Error in RAG search operation: {str(e)}"
 
 
 async def todo_edit(todo_items: list, agent_state: Optional[AgentState] = None) -> str:

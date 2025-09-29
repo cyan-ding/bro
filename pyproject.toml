@@ -27,12 +27,8 @@ dependencies = [
     "litellm",
     "chardet",
     "deptry==0.23.1",
-    "faiss-cpu",
-    "numpy",
     "markdownify>=1.2.0",
     "beautifulsoup4>=4.13.4",
-    "pinecone>=7.3.0",
-    "voyageai>=0.3.4",
 ]
 
 [tool.setuptools.packages.find]

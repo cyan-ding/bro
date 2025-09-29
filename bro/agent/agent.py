@@ -83,7 +83,6 @@ class Agent:
     def __init__(
         self,
         system_prompt: str,
-        enable_rag: bool = False,
         session_id: str = str(uuid.uuid4())[:8],
         user_id: Optional[str] = None,
         model: str = "gpt-5-mini-2025-08-07",
@@ -93,64 +92,19 @@ class Agent:
 
         Args:
             system_prompt: The system prompt that defines Bro's behavior
-            enable_rag: Whether to enable RAG pipeline for content processing
-            session_id: Unique identifier for this session (used in Pinecone namespace )
-            user_id: Unique identifier for the user (used for Pinecone index naming)
+            session_id: Unique identifier for this session
+            user_id: Unique identifier for the user
             model: The model to use for the LLM
         """
         self.system_prompt = system_prompt
         self.session_id = session_id
-        self.user_id = user_id or "default" 
-        self.enable_rag = enable_rag
-        self.rag_initialized = False
+        self.user_id = user_id or "default"
         self.model = model
         # Initialize agent state with session info
         self.agent_state = initialize_agent_state(user_id=self.user_id, session_id=self.session_id)
         load_dotenv()
         print(f"🔧 Initialized agent state (user: {self.user_id}, session: {self.session_id})")
 
-    async def _initialize_rag_if_needed(self) -> bool:
-        """
-        Helper function to initialize RAG pipeline if enabled and not already initialized.
-        Uses Pinecone cloud vector database.
-
-        Returns:
-            True if RAG is available (was already initialized or just initialized),
-            False if RAG is disabled or initialization failed.
-        """
-        if not self.enable_rag:
-            return False
-
-        if self.rag_initialized:
-            return True
-
-        try:
-            from .rag import initialize_rag_pipeline, clear_rag_namespace
-
-            print("🔄 Initializing Pinecone RAG pipeline...")
-            await initialize_rag_pipeline(
-                index_name=f"bro-user-{self.user_id}",
-                namespace=f"session-{self.session_id}",
-                max_chunk_size=800,
-                chunk_overlap=150,
-                min_chunk_size=50,
-            )
-            
-            # Clear namespace for testing purposes
-            print("🧪 Clearing Pinecone namespace for testing...")
-            await clear_rag_namespace()
-            
-            self.rag_initialized = True
-            print("✅ RAG pipeline initialized successfully")
-            return True
-
-        except Exception as e:
-            print(f"❌ Failed to initialize RAG pipeline: {e}")
-            print(
-                "💡 Make sure PINECONE_API_KEY and VOYAGE_API_KEY environment variables are set"
-            )
-            self.enable_rag = False
-            return False
 
 
     async def _parse_structured_json(self, llm_response: Any) -> Optional[Dict[str, Any]]:
@@ -377,13 +331,10 @@ class Agent:
                         results.append(success_msg)
 
                     case "extract":
-                        use_rag = arguments.get("use_rag", False)
-                        
-                        print(f"📄 Extracting content from page (RAG: {use_rag})")
+                        print("📄 Extracting content from page")
 
                         result = await extract(
                             page,
-                            use_rag=use_rag,
                             agent_state=self.agent_state,
                         )
                         success_msg = "Successfully extracted content from page"
@@ -391,25 +342,6 @@ class Agent:
                         results.append(result)
 
 
-                    # case "search_rag":
-                    #     try:
-                    #         # Validate arguments using Pydantic model
-                    #         rag_args = RAGSearchArgs.model_validate(arguments)
-                    #         print(f"🔍 RAG search: {rag_args.query}")
-
-                    #         result = await search_rag(
-                    #             args=rag_args, agent_state=self.agent_state
-                    #         )
-                    #         print("✅ RAG search completed")
-                    #         results.append(result)
-
-                    #     except Exception as e:
-                    #         error_msg = (
-                    #             f"Error: Invalid search_rag arguments - {str(e)}"
-                    #         )
-                    #         print(f"❌ {error_msg}")
-                    #         results.append(error_msg)
-                    #         continue
 
                     case "todo_edit":
                         todo_items = arguments.get("todo_items", [])
@@ -518,10 +450,6 @@ class Agent:
         """
         print("Starting browser context...")
 
-        # Initialize RAG if enabled
-        rag_available = await self._initialize_rag_if_needed()
-        if self.enable_rag and not rag_available:
-            print("⚠️ RAG was requested but initialization failed")
 
         async with async_playwright() as p:
             # browser_context = await p.chromium.launch_persistent_context(
@@ -742,28 +670,19 @@ class Agent:
                 print("Exiting browser...")
                 await browser_context.close()
 
-                # Cleanup RAG pipeline if it was initialized
-                if self.rag_initialized:
-                    try:
-                        from .rag import cleanup_rag_pipeline
-
-                        await cleanup_rag_pipeline()
-                    except Exception as e:
-                        print(f"⚠️ Error during RAG cleanup: {e}")
 
 
 async def main():
     # Load the Bro system prompt
     system_prompt = Path("bro.txt").read_text(encoding="utf-8")
     prompts = [
-        "Log in to linkedin.",
+        "Log in to linkedin and report back on what three people have posted.",
         "Open gmail and send an email to blueplus.d@gmail.com with the subject 'Hello' and the body 'This is a test email'",
         """Find three different research papers on AI on arxiv and collect the full text info (not just the abstract).
         Afterwards, output an essay about the material you collected. 
          """,
     ]
-    # third one should test rag, files, todolist, tab switching,
-    agent = Agent(system_prompt, enable_rag=False, session_id="test", user_id="cyan", model="gemini/gemini-2.5-flash-preview-09-2025")
+    agent = Agent(system_prompt, session_id="test", user_id="cyan", model="gemini/gemini-2.5-flash-preview-09-2025")
     # claude-sonnet-4-20250514
     # gemini/gemini-2.5-flash-preview-09-2025
     # groq/llama-4-scout-17b-16e-instruct

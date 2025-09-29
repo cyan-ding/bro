@@ -33,15 +33,6 @@ class ExtractArgs(BaseModel):
     # Dummy field to satisfy Vertex AI schema requirements (no empty objects allowed)
     dummy: Optional[bool] = None
 
-# class RAGSearchArgs(BaseModel):
-#     """
-#     Pydantic model for search_rag tool arguments from LLM.
-
-#     This ensures proper validation and type conversion of arguments
-#     passed from the LLM through the agent system.
-#     """
-#     query: str = Field(description="Search query for semantic search in RAG database")
-#     top_k: int = Field(default=5, ge=1, le=50, description="Number of results to return")
 
 
 
@@ -73,7 +64,6 @@ ActionUnion = Union[
     SearchArgs,
     ExtractArgs,
     TodoEditArgs,
-    # RAGSearchArgs,
     DoneArgs,
 ]
 
@@ -84,7 +74,6 @@ ALLOWED_ACTIONS = {
     "search": SearchArgs,
     "extract": ExtractArgs,
     "todo_edit": TodoEditArgs,
-    # "search_rag": RAGSearchArgs,
     "done": DoneArgs,
 }
 
