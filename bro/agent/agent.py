@@ -19,6 +19,7 @@ from .agent_state import initialize_agent_state
 from .ai import ai
 from utils.credentials import get_credentials
 from utils.dom_utils import take_screenshot_with_bounding_boxes
+from utils.input_manager import InputManager
 
 
 # Clean Pydantic models for LiteLLM response handling
@@ -100,6 +101,7 @@ class Agent:
         self.session_id = session_id
         self.user_id = user_id or "default"
         self.model = model
+        self.input_manager = None
         # Initialize agent state with session info
         self.agent_state = initialize_agent_state(user_id=self.user_id, session_id=self.session_id)
         load_dotenv()
@@ -254,7 +256,8 @@ class Agent:
                                 f"🔐 Looking up credentials for placeholder: {placeholder}"
                             )
                             credentials = await get_credentials(
-                                placeholder
+                                placeholder,
+                                input_manager=self.input_manager
                             )
                             if credentials:
                                 input_text_value = credentials
@@ -378,12 +381,13 @@ class Agent:
 
         return results
 
-    async def _handle_user_decision(self, reason: str) -> Tuple[str, str]:
+    async def _handle_user_decision(self, reason: str, input_manager: Optional[InputManager]=None) -> Tuple[str, str]:
         """
         Handle user decision when the agent signals completion.
 
         Args:
             reason: The reason the agent believes the task is complete
+            input_manager: Optional InputManager for queue-based input
 
         Returns:
             Tuple of (decision, user_input) where decision is 'done', 'modify', or 'intervene'
@@ -400,13 +404,23 @@ class Agent:
 
         while True:
             try:
-                choice = input("\nEnter your choice (D/M/I): ").strip().upper()
+                # Use input_manager if available, otherwise fall back to direct input
+                if input_manager:
+                    choice = await input_manager.get_decision()
+                    choice = choice.strip().upper()
+                else:
+                    choice = input("\nEnter your choice (D/M/I): ").strip().upper()
 
                 if choice in ['D', 'DONE']:
                     return 'done', ''
                 elif choice in ['M', 'MODIFY']:
                     print("\n📝 Please provide additional instructions for the agent:")
-                    user_input = input("> ").strip()
+                    if input_manager:
+                        user_input = await input_manager.get_decision()
+                        user_input = user_input.strip()
+                    else:
+                        user_input = input("> ").strip()
+
                     if user_input:
                         return 'modify', user_input
                     else:
@@ -416,7 +430,10 @@ class Agent:
                     print("\n🛠️  MANUAL INTERVENTION MODE")
                     print("The browser will remain open for you to make manual changes.")
                     print("Press ENTER when you're done with manual changes to continue automation...")
-                    input()
+                    if input_manager:
+                        await input_manager.get_decision()
+                    else:
+                        input()
                     return 'intervene', ''
                 else:
                     print("❌ Invalid choice. Please enter D, M, or I.")
@@ -435,6 +452,7 @@ class Agent:
         url: str = "",
         max_iterations: int = 10,
         take_screenshot: bool = False,
+        enable_input_queue: bool = True,
     ) -> None:
         """
         Run the agent loop to complete the user's task.
@@ -443,11 +461,18 @@ class Agent:
             user_prompt: The user's task description
             url: The URL to navigate to (optional)
             max_iterations: Maximum number of iterations to prevent infinite loops
+            take_screenshot: Whether to take screenshots during execution
+            enable_input_queue: Whether to enable the input queue for real-time user messages
 
         Returns:
             None (action results are tracked in agent state and printed to console)
         """
         print("Starting browser context...")
+
+        # Initialize input manager if enabled
+        if enable_input_queue:
+            self.input_manager = InputManager()
+            await self.input_manager.start()
 
 
         async with async_playwright() as p:
@@ -553,16 +578,29 @@ class Agent:
 
                     agent_context = self.agent_state.get_context_for_llm()
 
+                    # Check for new user messages from the input queue
+                    user_messages = []
+                    if self.input_manager:
+                        user_messages = self.input_manager.get_messages()
+
+                    # Append user messages to the prompt if any
+                    user_interrupt_text = ""
+                    if user_messages:
+                        interrupt_messages = "\n".join([f"- {msg}" for msg in user_messages])
+                        user_interrupt_text = f"\n\nUSER INTERRUPTS (New instructions from user):\n{interrupt_messages}\n"
+                        print(f"💬 Received {len(user_messages)} user message(s)")
+
                     enhanced_prompt = f"""
-                            User prompt: 
+                            User prompt:
 							{user_prompt}
+							{user_interrupt_text}
 
 							{agent_context}
 
 							Current page information:
 							{elements_text}
 
-							Viewport position: 
+							Viewport position:
 							There are {viewport_info["pixelsAbove"]} pixels above your current view and {viewport_info["pixelsBelow"]} pixels below.
 							The page is {viewport_info["documentHeight"]} pixels tall and your viewport is {viewport_info["innerHeight"]} pixels tall.
 
@@ -649,7 +687,7 @@ class Agent:
                     await_decision_messages = [msg for msg in result_messages if msg.startswith("AWAIT_USER_DECISION:")]
                     if await_decision_messages:
                         reason = await_decision_messages[0].replace("AWAIT_USER_DECISION: ", "")
-                        decision, user_input = await self._handle_user_decision(reason)
+                        decision, user_input = await self._handle_user_decision(reason, self.input_manager)
 
                         if decision == 'done':
                             print("🛑 User accepted task completion, stopping execution.")
@@ -668,6 +706,10 @@ class Agent:
             finally:
                 print("Exiting browser...")
                 await browser_context.close()
+
+                # Stop input manager if it was started
+                if self.input_manager:
+                    await self.input_manager.stop()
 
 
 

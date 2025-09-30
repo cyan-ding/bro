@@ -9,12 +9,13 @@ This module contains functions for handling user credentials using JSON storage.
 import json
 from pathlib import Path
 from typing import Optional
+from .input_manager import InputManager
 
 # In-process counter to detect repeated credential fetch attempts
 _credential_request_counts: dict[str, int] = {}
 
 
-async def get_credentials(placeholder: str) -> Optional[str]:
+async def get_credentials(placeholder: str, input_manager: Optional[InputManager] = None) -> Optional[str]:
     """
     Retrieve or update a credential value for a given placeholder from `credentials.json`.
 
@@ -24,6 +25,7 @@ async def get_credentials(placeholder: str) -> Optional[str]:
 
     Args:
         placeholder: The placeholder key (e.g., 'GOOGLE_EMAIL', 'GOOGLE_PASSWORD').
+        input_manager: Optional InputManager for queue-based input. Falls back to direct input() if not provided.
 
     Returns:
         The credential value if found and non-empty; otherwise None.
@@ -60,8 +62,13 @@ async def get_credentials(placeholder: str) -> Optional[str]:
     )
     print(prompt_msg)
 
+    # Use input_manager if available, otherwise fall back to direct input
     try:
-        value = input(f"Enter value for {placeholder}: ").strip()
+        if input_manager:
+            value = await input_manager.get_credential(placeholder)
+            value = value.strip()
+        else:
+            value = input(f"Enter value for {placeholder}: ").strip()
     except Exception:
         value = ""
 
