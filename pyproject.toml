@@ -29,6 +29,9 @@ dependencies = [
     "deptry==0.23.1",
     "markdownify>=1.2.0",
     "beautifulsoup4>=4.13.4",
+    "fastapi",
+    "uvicorn",
+    "sse-starlette",
 ]
 
 [tool.setuptools.packages.find]

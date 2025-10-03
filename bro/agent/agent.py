@@ -22,6 +22,7 @@ from utils.dom_utils import take_screenshot_with_bounding_boxes
 from utils.input_manager import InputManager
 
 
+from api.run_info import RunInfo
 # Clean Pydantic models for LiteLLM response handling
 class LiteLLMFunction(BaseModel):
     name: Optional[str] = None
@@ -87,6 +88,7 @@ class Agent:
         session_id: str = str(uuid.uuid4())[:8],
         user_id: Optional[str] = None,
         model: str = "gpt-5-mini-2025-08-07",
+        run_info: Optional[RunInfo] = None,
     ):
         """
         Initialize the Bro agent.
@@ -96,12 +98,14 @@ class Agent:
             session_id: Unique identifier for this session
             user_id: Unique identifier for the user
             model: The model to use for the LLM
+            run_info: Optional RunInfo object for logging
         """
         self.system_prompt = system_prompt
         self.session_id = session_id
         self.user_id = user_id or "default"
         self.model = model
         self.input_manager = None
+        self.run_info = run_info
         # Initialize agent state with session info
         self.agent_state = initialize_agent_state(user_id=self.user_id, session_id=self.session_id)
         load_dotenv()
@@ -513,9 +517,16 @@ class Agent:
                 last_signature: Optional[str] = None
                 
                 for iteration in range(start_iteration, max_iterations):
+                    # Log iteration start
+                    if self.run_info:
+                        await self.run_info.add_log_event(
+                            "iteration_start",
+                            {"iteration": iteration},
+                        )
+
                     # check if current tab index is not the page we are on, if so, switch to it
                     if browser_context.pages:
-                        if (self.agent_state.current_tab_index is not None and 
+                        if (self.agent_state.current_tab_index is not None and
                             0 <= self.agent_state.current_tab_index < len(browser_context.pages)):
                             page = browser_context.pages[self.agent_state.current_tab_index]
                         else:
@@ -623,6 +634,19 @@ class Agent:
                     llm_response = await ai(params)
 
                     parsed = await self._parse_structured_json(llm_response)
+
+                    # Log thinking content
+                    if self.run_info and parsed:
+                        await self.run_info.add_log_event(
+                            "thinking",
+                            {
+                                "thinking": parsed.get("thinking", ""),
+                                "evaluation_previous_actions": parsed.get("evaluation_previous_actions", ""),
+                                "memory": parsed.get("memory", ""),
+                                "next_goal": parsed.get("next_goal", "")
+                            },
+                        )
+
                     if not parsed or not parsed.get("actions"):
                         print(f"⚠️  Iteration {iteration}: No actions returned by LLM")
                         print(parsed)
@@ -662,6 +686,17 @@ class Agent:
                             else "No result"
                         )
 
+                        # Log action
+                        if self.run_info:
+                            await self.run_info.add_log_event(
+                                "action",
+                                {
+                                    "action_name": tool_call["name"],
+                                    "arguments": tool_call["arguments"],
+                                    "result": result_message
+                                },
+                            )
+
                         # Add action to agent state context with structured output
                         self.agent_state.add_action_context(
                             action_name=tool_call["name"],
@@ -674,12 +709,16 @@ class Agent:
 
                     # Agent state update at end of iteration
                     await self.agent_state.update_tab_state(page)
-                    
+
+                    # Update iteration in run_info
+                    if self.run_info:
+                        self.run_info.update_iteration(iteration, tool_calls[0]["name"] if tool_calls else "no_action")
+
                     # Save agent state to file at end of iteration
                     try:
                         state_file = await self.agent_state.save_state_to_file()
                         print(f"💾 Agent state saved to: {state_file}")
-                            
+
                     except Exception as e:
                         print(f"⚠️ Failed to save agent state: {e}")
 
