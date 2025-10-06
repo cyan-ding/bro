@@ -6,6 +6,7 @@ and interacting with running agents.
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from .models import (
@@ -29,6 +30,15 @@ app = FastAPI(
     title="Bro Agent API",
     description="API for managing Bro web automation agent runs",
     version="0.1.0",
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Global run manager instance
