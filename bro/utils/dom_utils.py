@@ -133,7 +133,6 @@ async def wait_for_navigation(page: Page, timeout_ms: int) -> Dict[str, Any]:
     # Get fresh DOM state after navigation
     build_args = {
         "doHighlightElements": False,
-        "debugMode": False,
         "overlapThreshold": 0.7,
         "indexByPosition": True,
     }
@@ -180,7 +179,6 @@ async def poll_dom(
 
     build_args = {
         "doHighlightElements": False,
-        "debugMode": False,
         "overlapThreshold": 0.7,
         "indexByPosition": True,
     }
@@ -373,7 +371,6 @@ async def take_screenshot_with_bounding_boxes(
         "(args) => window.buildDomTree(args)",
         {
             "doHighlightElements": take_screenshot,
-            "debugMode": False,
             "overlapThreshold": 0.7,
             "indexByPosition": True,
         },
@@ -443,7 +440,6 @@ async def test_dom_polling_vs_direct_injection(
 
     build_args = {
         "doHighlightElements": True,
-        "debugMode": False,
         "overlapThreshold": 0.7,
         "indexByPosition": True,
     }

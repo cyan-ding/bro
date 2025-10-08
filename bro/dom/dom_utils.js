@@ -4,13 +4,10 @@
  * These helpers are responsible for caching, DOM traversal (like XPath), visibility checks, and complex
  * interactivity assessments.
  *
- * By using a factory pattern, we can inject shared state (like `debugMode` and `PERF_METRICS`)
- * into the helpers' closure, allowing them to perform stateful operations (like performance tracking)
- * without polluting the global scope.
+ * By using a factory pattern, we can encapsulate stateful operations without polluting the global scope.
  */
 
-// This module is designed to be instantiated within a closure that provides debugMode and PERF_METRICS.
-export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
+export function createDomUtils() {
 
     /**
      * Caches DOM properties to avoid expensive re-calculations.
@@ -33,11 +30,9 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
         if (!element) return null;
         // early return with cache hit
         if (DOM_CACHE.boundingRects.has(element)) {
-            if (debugMode) PERF_METRICS.cacheMetrics.boundingRectCacheHits++;
             return DOM_CACHE.boundingRects.get(element);
         }
         // get bounding box normally
-        if (debugMode) PERF_METRICS.cacheMetrics.boundingRectCacheMisses++;
         let rect = element.getBoundingClientRect();
         if (rect) DOM_CACHE.boundingRects.set(element, rect);
         return rect;
@@ -49,10 +44,8 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
     function getCachedComputedStyle(element) {
         if (!element) return null;
         if (DOM_CACHE.computedStyles.has(element)) {
-            if (debugMode) PERF_METRICS.cacheMetrics.computedStyleCacheHits++;
             return DOM_CACHE.computedStyles.get(element);
         }
-        if (debugMode) PERF_METRICS.cacheMetrics.computedStyleCacheMisses++;
         let style = window.getComputedStyle(element);
         if (style) DOM_CACHE.computedStyles.set(element, style);
         return style;
@@ -64,10 +57,8 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
     function getCachedClientRects(element) {
         if (!element) return null;
         if (DOM_CACHE.clientRects.has(element)) {
-            if (debugMode) PERF_METRICS.cacheMetrics.clientRectsCacheHits++;
             return DOM_CACHE.clientRects.get(element);
         }
-        if (debugMode) PERF_METRICS.cacheMetrics.clientRectsCacheMisses++;
         const rects = element.getClientRects();
         if (rects) DOM_CACHE.clientRects.set(element, rects);
         return rects;
@@ -387,17 +378,17 @@ export function createDomUtils(debugMode, PERF_METRICS, measureDomOperation) {
 
     return {
         DOM_CACHE,
-        getCachedBoundingRect: measureDomOperation(getCachedBoundingRect, 'getCachedBoundingRect'),
-        getCachedComputedStyle: measureDomOperation(getCachedComputedStyle, 'getCachedComputedStyle'),
-        getCachedClientRects: measureDomOperation(getCachedClientRects, 'getCachedClientRects'),
-        getXPathTree: measureDomOperation(getXPathTree, 'getXPathTree'),
-        isElementAccepted: measureDomOperation(isElementAccepted, 'isElementAccepted'),
-        isElementVisible: measureDomOperation(isElementVisible, 'isElementVisible'),
-        isTextNodeVisible: measureDomOperation(isTextNodeVisible, 'isTextNodeVisible'),
-        isInteractiveCandidate: measureDomOperation(isInteractiveCandidate, 'isInteractiveCandidate'),
-        isInteractiveElement: measureDomOperation(isInteractiveElement, 'isInteractiveElement'),
-        isElementDistinctInteraction: measureDomOperation(isElementDistinctInteraction, 'isElementDistinctInteraction'),
-        isSufficientlyVisibleInViewport: measureDomOperation(isSufficientlyVisibleInViewport, 'isSufficientlyVisibleInViewport'),
-        indexElementByPosition: measureDomOperation(indexElementByPosition, 'indexElementByPosition')
+        getCachedBoundingRect,
+        getCachedComputedStyle,
+        getCachedClientRects,
+        getXPathTree,
+        isElementAccepted,
+        isElementVisible,
+        isTextNodeVisible,
+        isInteractiveCandidate,
+        isInteractiveElement,
+        isElementDistinctInteraction,
+        isSufficientlyVisibleInViewport,
+        indexElementByPosition
     };
 } 

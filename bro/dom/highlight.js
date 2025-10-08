@@ -4,11 +4,10 @@
  * highlighting elements on the page. It handles the creation of overlays, labels, and the logic
  * for updating their positions on scroll and resize events.
  *
- * This approach encapsulates all highlight-related DOM manipulation and passes in timing functions
- * (`pushTiming`, `popTiming`) to integrate with performance measurement.
+ * This approach encapsulates all highlight-related DOM manipulation.
  */
 
-export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
+export function createHighlightUtils(getXPathTree) {
 
     const HIGHLIGHT_CONTAINER_ID = "playwright-highlight-container";
     
@@ -52,17 +51,15 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
      * @param {Element} element The DOM element to highlight.
      * @param {number} index The highlight index number to display.
      * @param {Element|null} parentIframe The iframe containing the element, if any.
-     * @returns {number} The time taken to highlight the element.
      */
     function highlightElement(element, index, parentIframe = null, doHighlightElements = true) {
-        pushTiming('highlighting');
-        if (!element) return popTiming('highlighting');
+        if (!element) return;
         
         // Check if element is already highlighted to prevent duplicates
         const xpath = getXPathTree(element);
         const isAlreadyHighlighted = highlightedElements.some(el => el.xpath === xpath);
         if (isAlreadyHighlighted) {
-            return popTiming('highlighting');
+            return;
         }
         
         // current overlays for the element
@@ -90,7 +87,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             highlightedElements.push(elementInfo);
 
             if (!doHighlightElements) {
-                return popTiming('highlighting');
+                return;
             }
 
             // make a container for all highlights to easily delete them all at once
@@ -103,7 +100,7 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             }
             // early return if no children
             const rects = element.getClientRects();
-            if (!rects || rects.length === 0) return popTiming('highlighting');
+            if (!rects || rects.length === 0) return;
 
             // determine color of box based on index
             const colors = ["#FF0000", "#00FF00", "#0000FF", "#FFA500", "#800080", "#008080", "#FF69B4", "#4B0082", "#FF4500", "#2E8B57", "#DC143C", "#4682B4"];
@@ -243,10 +240,8 @@ export function createHighlightUtils(pushTiming, popTiming, getXPathTree) {
             };
             // add fragment containing label + colored boxes to container
             container.appendChild(fragment);
-            return popTiming('highlighting');
 
         } finally {
-            popTiming('highlighting');
             if (cleanupFn) {
                 // add to global array of cleanup functions for the given web page
                 (window._highlightCleanupFunctions = window._highlightCleanupFunctions || new Map()).set(element, cleanupFn);

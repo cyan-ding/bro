@@ -7,10 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface AgentControlsProps {
   onStart: (prompt: string, url?: string) => void;
   onStop: () => void;
+  onCloseBrowser: () => void;
   onSendInput: (message: string) => void;
   onSendDecision: (decision: "done" | "modify" | "intervene", instructions?: string) => void;
   isRunning: boolean;
@@ -23,6 +32,7 @@ interface AgentControlsProps {
 export default function AgentControls({
   onStart,
   onStop,
+  onCloseBrowser,
   onSendInput,
   onSendDecision,
   isRunning,
@@ -33,6 +43,7 @@ export default function AgentControls({
   const [inputMessage, setInputMessage] = useState("");
   const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [showModifyInput, setShowModifyInput] = useState(false);
+  const [showStopDialog, setShowStopDialog] = useState(false);
 
   const handleStart = () => {
     if (prompt.trim()) {
@@ -62,6 +73,18 @@ export default function AgentControls({
       onSendDecision(decision);
       setShowModifyInput(false);
     }
+  };
+
+  const handleStopClick = () => {
+    setShowStopDialog(true);
+  };
+
+  const handleStopConfirm = (closeBrowser: boolean) => {
+    onStop();
+    if (closeBrowser) {
+      onCloseBrowser();
+    }
+    setShowStopDialog(false);
   };
 
   return (
@@ -124,7 +147,7 @@ export default function AgentControls({
               </div>
             </div>
 
-            <Button onClick={onStop} variant="destructive" className="w-full">
+            <Button onClick={handleStopClick} variant="destructive" className="w-full">
               Stop Agent
             </Button>
           </div>
@@ -179,6 +202,42 @@ export default function AgentControls({
             )}
           </div>
         )}
+
+        {/* Stop Dialog */}
+        <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>End Agent Session</DialogTitle>
+              <DialogDescription>
+                Do you want to close the browser completely or just disconnect?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                <strong>Disconnect:</strong> Stops the agent but keeps the browser open. You can continue using the browser manually.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                <strong>Close Browser:</strong> Stops the agent and closes the Chrome browser window completely.
+              </p>
+            </div>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleStopConfirm(false)}
+                className="w-full sm:w-auto"
+              >
+                Disconnect Only
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => handleStopConfirm(true)}
+                className="w-full sm:w-auto"
+              >
+                Close Browser
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

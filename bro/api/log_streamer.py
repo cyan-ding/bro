@@ -9,7 +9,7 @@ import asyncio
 import json
 from typing import AsyncGenerator
 from .run_manager import RunInfo
-from .models import LogEvent
+from .models import LogEvent, RunStatus
 
 
 async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
@@ -28,7 +28,7 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
     try:
         while True:
             # Check if run is complete
-            if run_info.status in ["completed", "stopped", "error"]:
+            if run_info.status in [RunStatus.COMPLETED, RunStatus.STOPPED, RunStatus.ERROR]:
                 # Drain any remaining logs
                 while not run_info.log_queue.empty():
                     try:
@@ -63,7 +63,6 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
                 yield format_sse(event)
             except asyncio.TimeoutError:
                 # Send keepalive comment to prevent connection timeout
-                yield ": keepalive\n\n"
                 continue
 
     except asyncio.CancelledError:
@@ -92,4 +91,4 @@ def format_sse(event: LogEvent) -> str:
         SSE-formatted string
     """
     event_dict = event.model_dump()
-    return f"data: {json.dumps(event_dict)}\n\n"
+    return {"event": "message", "data": json.dumps(event_dict)}

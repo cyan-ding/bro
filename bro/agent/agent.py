@@ -474,8 +474,9 @@ class Agent:
         print("Starting browser context...")
 
         # Initialize input manager if enabled
+        # Disable stdin listener since we're running via API (uses queues directly)
         if enable_input_queue:
-            self.input_manager = InputManager()
+            self.input_manager = InputManager(enable_stdin=False)
             await self.input_manager.start()
 
 
@@ -487,13 +488,13 @@ class Agent:
             #     no_viewport=True,
             # )
             await use_cdp()
-            browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+            self.browser = await p.chromium.connect_over_cdp("http://localhost:9222")
             # List contexts (Chrome profiles)
-            contexts = browser.contexts
+            contexts = self.browser.contexts
             if contexts:
                 browser_context = contexts[0]  # Use existing profile
             else:
-                browser_context = await browser.new_context()  # Or create new
+                browser_context = await self.browser.new_context()  # Or create new
             # Open a new tab
             page = (
                 browser_context.pages[0]
@@ -741,15 +742,21 @@ class Agent:
                             # Continue with the loop - user made manual changes
 
                     print("=" * 100)
-
             finally:
                 print("Exiting browser...")
                 await browser_context.close()
-
-                # Stop input manager if it was started
                 if self.input_manager:
                     await self.input_manager.stop()
 
+    async def close_connection(self) -> None:
+        """
+        Close the browser connection (CDP connection only, does not kill Chrome process).
+        """
+        if self.browser:
+            await self.browser.close()
+            print("✅ Browser connection closed")
+            if self.input_manager:
+                await self.input_manager.stop()
 
 
 async def main():

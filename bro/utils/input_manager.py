@@ -34,23 +34,32 @@ class InputManager:
     - Decision queue: Responses to done() prompts
     """
 
-    def __init__(self):
-        """Initialize the input manager with queues and state."""
+    def __init__(self, enable_stdin: bool = True):
+        """
+        Initialize the input manager with queues and state.
+
+        Args:
+            enable_stdin: If True, starts stdin listener. Set to False for API/web server mode.
+        """
         self.message_queue: asyncio.Queue = asyncio.Queue()
         self.credential_queue: asyncio.Queue = asyncio.Queue()
         self.decision_queue: asyncio.Queue = asyncio.Queue()
         self.state = InputState()
         self._listener_task: Optional[asyncio.Task] = None
         self._running = False
+        self._enable_stdin = enable_stdin
 
     async def start(self) -> None:
-        """Start the input listener background task."""
+        """Start the input listener background task (only if stdin is enabled)."""
         if self._running:
             return
 
         self._running = True
-        self._listener_task = asyncio.create_task(self._input_listener())
-        print("🎤 Input listener started. You can send messages to the agent anytime.")
+
+        # Only start stdin listener if enabled (disabled for API/web server mode)
+        if self._enable_stdin:
+            self._listener_task = asyncio.create_task(self._input_listener())
+            print("🎤 Input listener started. You can send messages to the agent anytime.")
 
     async def stop(self) -> None:
         """Stop the input listener background task."""

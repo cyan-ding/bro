@@ -16,8 +16,6 @@ if TYPE_CHECKING:
 
 class RunInfo:
     """
-    Information about a single agent run.
-
     Tracks the agent instance, status, iteration progress, and provides
     queues for communication with the agent.
     """

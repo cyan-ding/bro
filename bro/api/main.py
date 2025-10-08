@@ -19,11 +19,16 @@ from .models import (
     SendDecisionRequest,
     SendDecisionResponse,
     StopRunResponse,
+    CloseBrowserResponse,
     RunStatus,
 )
 from .run_manager import RunManager
+from .mock_run_manager import MockRunManager
 from .log_streamer import stream_logs
 
+
+# Set to True to use mock data for frontend testing
+USE_MOCK = False
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -41,8 +46,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global run manager instance
-run_manager = RunManager()
+# Global run manager instance (mock or real based on USE_MOCK)
+run_manager = MockRunManager() if USE_MOCK else RunManager()
 
 
 @app.get("/")
@@ -51,6 +56,7 @@ async def root():
     return {
         "name": "Bro Agent API",
         "version": "0.1.0",
+        "mode": "MOCK" if USE_MOCK else "PRODUCTION",
         "endpoints": {
             "create_run": "POST /runs",
             "get_run_status": "GET /runs/{run_id}",
@@ -59,6 +65,7 @@ async def root():
             "send_input": "POST /runs/{run_id}/input",
             "send_decision": "POST /runs/{run_id}/decision",
             "stop_run": "POST /runs/{run_id}/stop",
+            "close_browser": "POST /browser/close",
         }
     }
 
@@ -241,6 +248,37 @@ async def stop_run(run_id: str):
         status=RunStatus.STOPPED,
         message="Run stopped successfully"
     )
+
+
+@app.post("/browser/close", response_model=CloseBrowserResponse)
+async def close_browser():
+    """
+    Close the Chrome browser subprocess.
+
+    This terminates the Chrome process that was started via CDP.
+    This is different from stopping a run - it actually closes the browser window.
+
+    Returns:
+        Confirmation of browser closure
+    """
+    try:
+        from utils.use_cdp import close_chrome
+
+        success = close_chrome()
+
+        if success:
+            return CloseBrowserResponse(
+                status="success",
+                message="Chrome browser closed successfully"
+            )
+        else:
+            return CloseBrowserResponse(
+                status="warning",
+                message="No Chrome process was tracked. Browser may have been started externally."
+            )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to close browser: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -104,6 +104,12 @@ class StopRunResponse(BaseModel):
     message: str
 
 
+class CloseBrowserResponse(BaseModel):
+    """Response after closing the Chrome browser."""
+    status: str
+    message: str
+
+
 class LogEvent(BaseModel):
     """A single log event for streaming."""
     timestamp: str

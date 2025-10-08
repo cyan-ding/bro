@@ -11,6 +11,7 @@ import {
   sendInput,
   sendDecision,
   stopRun,
+  closeBrowser,
   createLogStream,
   type LogEvent,
   type RunStatusResponse,
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [runStatus, setRunStatus] = useState<RunStatusResponse | null>(null);
   const [agentState, setAgentState] = useState<AgentStateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
   // Fetch run status periodically
   useEffect(() => {
@@ -35,6 +37,11 @@ export default function Dashboard() {
       try {
         const status = await getRunStatus(runId);
         setRunStatus(status);
+
+        // Stop polling if run is complete
+        if (status.status === "completed" || status.status === "stopped" || status.status === "error") {
+          clearInterval(interval);
+        }
       } catch (err) {
         console.error("Failed to fetch run status:", err);
       }
@@ -49,6 +56,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (!runId) return;
 
+    // Don't poll if run is complete
+    if (runStatus?.status === "completed" || runStatus?.status === "stopped" || runStatus?.status === "error") {
+      return;
+    }
+
     const fetchState = async () => {
       try {
         const state = await getAgentState(runId);
@@ -61,15 +73,16 @@ export default function Dashboard() {
     fetchState();
     const interval = setInterval(fetchState, 3000);
     return () => clearInterval(interval);
-  }, [runId]);
+  }, [runId, runStatus]);
 
   // Set up log streaming
   useEffect(() => {
     if (!runId) return;
 
-    const eventSource = createLogStream(runId);
+    const newEventSource = createLogStream(runId);
+    setEventSource(newEventSource);
 
-    eventSource.onmessage = (event) => {
+    newEventSource.onmessage = (event) => {
       try {
         // Skip empty or keepalive messages
         if (!event.data || event.data.trim() === "") {
@@ -78,18 +91,26 @@ export default function Dashboard() {
 
         const logEvent: LogEvent = JSON.parse(event.data);
         setLogs((prev) => [...prev, logEvent]);
+
+        // Close event source when run ends
+        if (logEvent.event_type === "final_status") {
+          newEventSource.close();
+          setEventSource(null);
+        }
       } catch (err) {
         console.error("Failed to parse log event:", err, "Data:", event.data);
       }
     };
 
-    eventSource.onerror = (err) => {
+    newEventSource.onerror = (err) => {
       console.error("EventSource error:", err);
-      eventSource.close();
+      newEventSource.close();
+      setEventSource(null);
     };
 
     return () => {
-      eventSource.close();
+      newEventSource.close();
+      setEventSource(null);
     };
   }, [runId]);
 
@@ -120,10 +141,24 @@ export default function Dashboard() {
     try {
       await stopRun(runId);
       setRunStatus((prev) => prev ? { ...prev, status: "stopped" } : null);
+
+      // Close event source when stopping
+      if (eventSource) {
+        eventSource.close();
+        setEventSource(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop agent");
     }
-  }, [runId]);
+  }, [runId, eventSource]);
+
+  const handleCloseBrowser = useCallback(async () => {
+    try {
+      await closeBrowser();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to close browser");
+    }
+  }, []);
 
   const handleSendInput = useCallback(async (message: string) => {
     if (!runId) return;
@@ -173,6 +208,7 @@ export default function Dashboard() {
             <AgentControls
               onStart={handleStart}
               onStop={handleStop}
+              onCloseBrowser={handleCloseBrowser}
               onSendInput={handleSendInput}
               onSendDecision={handleSendDecision}
               isRunning={isRunning}

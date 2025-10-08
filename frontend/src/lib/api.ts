@@ -186,6 +186,19 @@ export async function stopRun(runId: string): Promise<void> {
 }
 
 /**
+ * Close the Chrome browser subprocess.
+ */
+export async function closeBrowser(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/browser/close`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to close browser: ${response.statusText}`);
+  }
+}
+
+/**
  * Create an EventSource for streaming logs from a run.
  */
 export function createLogStream(runId: string): EventSource {
