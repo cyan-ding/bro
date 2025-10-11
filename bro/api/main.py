@@ -28,7 +28,7 @@ from .log_streamer import stream_logs
 
 
 # Set to True to use mock data for frontend testing
-USE_MOCK = False
+USE_MOCK = True
 
 # Initialize FastAPI app
 app = FastAPI(

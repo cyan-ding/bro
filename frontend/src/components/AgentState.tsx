@@ -136,7 +136,7 @@ export default function AgentState({ state, runStatus }: AgentStateProps) {
                     )}
                   </div>
                   <span className={`text-sm ${todo.completed ? "line-through text-muted-foreground" : ""}`}>
-                    {todo.content}
+                    {todo.task}
                   </span>
                 </div>
               ))}
@@ -156,15 +156,25 @@ export default function AgentState({ state, runStatus }: AgentStateProps) {
           ) : (
             <ScrollArea className="h-[300px] w-full">
               <div className="space-y-3">
-                {state.extractions.map((extraction, index) => (
-                  <div key={index}>
-                    <div className="text-xs text-muted-foreground mb-1">Extraction {index + 1}</div>
-                    <div className="text-sm bg-muted p-3 rounded-lg whitespace-pre-wrap">
-                      {extraction}
+                {state.extractions.map((extraction, index) => {
+                  const isString = typeof extraction === 'string';
+                  const extractionObj = !isString ? extraction : null;
+
+                  return (
+                    <div key={index}>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        Extraction {index + 1}
+                        {extractionObj?.source_title && (
+                          <span className="ml-2 font-medium">{extractionObj.source_title}</span>
+                        )}
+                      </div>
+                      <div className="text-sm bg-muted p-3 rounded-lg whitespace-pre-wrap">
+                        {isString ? extraction : extractionObj?.content}
+                      </div>
+                      {index < state.extractions.length - 1 && <Separator className="mt-3" />}
                     </div>
-                    {index < state.extractions.length - 1 && <Separator className="mt-3" />}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </ScrollArea>
           )}
@@ -191,9 +201,11 @@ export default function AgentState({ state, runStatus }: AgentStateProps) {
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
                           <code className="text-sm font-medium">{action.action_name}</code>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(action.timestamp).toLocaleTimeString()}
-                          </span>
+                          {action.timestamp && (
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(action.timestamp).toLocaleTimeString()}
+                            </span>
+                          )}
                         </div>
                         {Object.keys(action.arguments).length > 0 && (
                           <div className="text-xs">

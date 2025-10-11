@@ -46,23 +46,37 @@ export interface AgentStateResponse {
     title: string;
   }>;
   current_tab_index: number | null;
-  extractions: string[];
-  todo_list: Array<{
+  extractions: Array<string | {
     content: string;
+    source_url: string;
+    source_title: string;
+    content_length: number;
+  }>;
+  todo_list: Array<{
+    task: string;
     completed: boolean;
   }>;
-  action_history: Array<{
-    iteration: number;
-    action_name: string;
-    arguments: Record<string, unknown>;
-    result: string;
-    timestamp: string;
-  }>;
+  action_history: Array<ActionData>;
+  last_edited: string;
 }
 
-export interface SendInputRequest {
-  message: string;
+export interface ActionData {
+  iteration: number;
+  action_name: string;
+  arguments: Record<string, unknown>;
+  result: string;
+  timestamp?: string;
+  description?: string;
+  structured_output?: StructuredOutput | null;
 }
+
+export interface StructuredOutput {
+  thinking: string;
+  evaluation_previous_actions: string;
+  memory: string;
+  next_goal: string;
+}
+
 
 export interface SendDecisionRequest {
   decision: 'done' | 'modify' | 'intervene';
@@ -70,24 +84,17 @@ export interface SendDecisionRequest {
 }
 
 export interface LogEventData {
-  thinking?: string;
-  evaluation_previous_actions?: string;
-  memory?: string;
-  next_goal?: string;
-  action_name?: string;
-  arguments?: Record<string, unknown>;
-  result?: string;
+  action_data: ActionData;
   message?: string;
   error?: string;
   decision?: string;
   additional_instructions?: string;
-  iteration?: number;
 }
 
 export interface LogEvent {
   timestamp: string;
-  run_id: string;
   iteration: number;
+  run_id: string;
   event_type: string;
   data: LogEventData;
 }

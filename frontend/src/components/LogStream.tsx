@@ -44,32 +44,33 @@ export default function LogStream({ logs }: LogStreamProps) {
   };
 
   const renderLogData = (event: LogEvent) => {
+    const data = event.data;
     switch (event.event_type) {
       case "thinking":
         return (
           <div className="space-y-2 text-sm">
-            {event.data.thinking && (
+            {data.action_data.structured_output?.thinking && (
               <div>
                 <span className="font-medium">Thinking: </span>
-                <span className="text-muted-foreground">{event.data.thinking}</span>
+                <span className="text-muted-foreground">{data.action_data.structured_output?.thinking}</span>
               </div>
             )}
-            {event.data.evaluation_previous_actions && (
+            {data.action_data.structured_output?.evaluation_previous_actions && (
               <div>
                 <span className="font-medium">Evaluation: </span>
-                <span className="text-muted-foreground">{event.data.evaluation_previous_actions}</span>
+                <span className="text-muted-foreground">{data.action_data.structured_output?.evaluation_previous_actions}</span>
               </div>
             )}
-            {event.data.memory && (
+            {data.action_data.structured_output?.memory && (
               <div>
                 <span className="font-medium">Memory: </span>
-                <span className="text-muted-foreground">{event.data.memory}</span>
+                <span className="text-muted-foreground">{data.action_data.structured_output?.memory}</span>
               </div>
             )}
-            {event.data.next_goal && (
+            {data.action_data.structured_output?.next_goal && (
               <div>
                 <span className="font-medium">Next Goal: </span>
-                <span className="text-muted-foreground">{event.data.next_goal}</span>
+                <span className="text-muted-foreground">{data.action_data.structured_output?.next_goal}</span>
               </div>
             )}
           </div>
@@ -80,20 +81,20 @@ export default function LogStream({ logs }: LogStreamProps) {
           <div className="space-y-1 text-sm">
             <div>
               <span className="font-medium">Action: </span>
-              <code className="bg-muted px-1 py-0.5 rounded">{event.data.action_name}</code>
+              <code className="bg-muted px-1 py-0.5 rounded">{data.action_data.action_name}</code>
             </div>
-            {event.data.arguments && Object.keys(event.data.arguments).length > 0 && (
+            {data.action_data.arguments && Object.keys(data.action_data.arguments).length > 0 && (
               <div>
                 <span className="font-medium">Arguments: </span>
                 <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                  {JSON.stringify(event.data.arguments)}
+                  {JSON.stringify(data.action_data.arguments)}
                 </code>
               </div>
             )}
-            {event.data.result && (
+            {data.action_data.result && (
               <div>
                 <span className="font-medium">Result: </span>
-                <span className="text-muted-foreground">{event.data.result}</span>
+                <span className="text-muted-foreground">{data.action_data.result}</span>
               </div>
             )}
           </div>
@@ -102,7 +103,7 @@ export default function LogStream({ logs }: LogStreamProps) {
       case "status":
         return (
           <div className="text-sm">
-            <span className="text-muted-foreground">{event.data.message}</span>
+            <span className="text-muted-foreground">{data.message}</span>
           </div>
         );
 
@@ -110,7 +111,7 @@ export default function LogStream({ logs }: LogStreamProps) {
         return (
           <div className="text-sm text-destructive">
             <span className="font-medium">Error: </span>
-            <span>{event.data.error || event.data.message}</span>
+            <span>{data.error || data.message}</span>
           </div>
         );
 
@@ -118,7 +119,7 @@ export default function LogStream({ logs }: LogStreamProps) {
         return (
           <div className="text-sm">
             <span className="font-medium">User Input: </span>
-            <span className="text-muted-foreground">{event.data.message}</span>
+            <span className="text-muted-foreground">{data.message}</span>
           </div>
         );
 
@@ -126,11 +127,11 @@ export default function LogStream({ logs }: LogStreamProps) {
         return (
           <div className="text-sm">
             <span className="font-medium">Decision: </span>
-            <span className="text-muted-foreground">{event.data.decision}</span>
-            {event.data.additional_instructions && (
+            <span className="text-muted-foreground">{data.decision}</span>
+            {data.additional_instructions && (
               <div className="mt-1">
                 <span className="font-medium">Instructions: </span>
-                <span className="text-muted-foreground">{event.data.additional_instructions}</span>
+                <span className="text-muted-foreground">{data.additional_instructions}</span>
               </div>
             )}
           </div>
@@ -139,14 +140,14 @@ export default function LogStream({ logs }: LogStreamProps) {
       case "iteration_start":
         return (
           <div className="text-sm font-medium">
-            Iteration {event.data.iteration}
+            Iteration {data.action_data.iteration}
           </div>
         );
 
       default:
         return (
           <div className="text-sm text-muted-foreground">
-            {JSON.stringify(event.data)}
+            {JSON.stringify(data)}
           </div>
         );
     }
@@ -173,7 +174,7 @@ export default function LogStream({ logs }: LogStreamProps) {
                     </Badge>
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{formatTimestamp(log.timestamp)}</span>
+                        <span>{formatTimestamp(log.timestamp || "")}</span>
                         <span>•</span>
                         <span>Iteration {log.iteration}</span>
                       </div>

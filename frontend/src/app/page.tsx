@@ -90,6 +90,7 @@ export default function Dashboard() {
         }
 
         const logEvent: LogEvent = JSON.parse(event.data);
+        console.log(logEvent)
         setLogs((prev) => [...prev, logEvent]);
 
         // Close event source when run ends

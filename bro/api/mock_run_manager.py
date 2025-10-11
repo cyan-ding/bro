@@ -9,7 +9,7 @@ import asyncio
 import uuid
 from datetime import datetime
 from typing import Dict, Optional
-from .models import RunStatus, LogEvent
+from .models import RunStatus
 from .run_info import RunInfo
 
 
@@ -30,47 +30,64 @@ class MockAgentState:
         Convert mock agent state to dictionary.
 
         Returns:
-            Dictionary representation of mock agent state
+            Dictionary representation of mock agent state matching frontend expectations
         """
         return {
             "user_id": "test_user",
             "session_id": "test_session",
+            "last_edited": datetime.now().isoformat(),
             "current_tab_index": 0,
             "extractions": [
                 {
-                    "type": "data",
                     "content": "Mock extraction: Found product price $29.99",
-                    "timestamp": datetime.now().isoformat()
+                    "source_url": "https://example.com",
+                    "source_title": "Example Domain - Mock Page",
+                    "content_length": 44,
                 }
             ],
             "tabs": [
                 {
-                    "id": "tab_1",
+                    "index": 0,
                     "url": "https://example.com",
                     "title": "Example Domain - Mock Page",
                     "is_active": True
                 }
             ],
             "todo_list": [
-                {"task": "Navigate to website", "status": "completed"},
-                {"task": "Extract product information", "status": "in_progress"},
-                {"task": "Verify checkout process", "status": "pending"}
+                {"task": "Navigate to website", "completed": True},
+                {"task": "Extract product information", "completed": False},
+                {"task": "Verify checkout process", "completed": False}
             ],
             "action_history": [
                 {
                     "iteration": 1,
-                    "action": "navigate",
-                    "details": "Navigated to https://example.com",
-                    "timestamp": datetime.now().isoformat()
+                    "action_name": "navigate",
+                    "arguments": {"url": "https://example.com"},
+                    "result": "Successfully navigated to https://example.com",
+                    "timestamp": datetime.now().isoformat(),
+                    "description": "Navigating to initial URL",
+                    "structured_output": {
+                        "thinking": "I need to navigate to the target website first",
+                        "evaluation_previous_actions": "No previous actions yet",
+                        "memory": "Starting fresh navigation",
+                        "next_goal": "Navigate to https://example.com"
+                    }
                 },
                 {
                     "iteration": 2,
-                    "action": "click",
-                    "details": "Clicked on 'Products' link",
-                    "timestamp": datetime.now().isoformat()
+                    "action_name": "click",
+                    "arguments": {"element_id": "123", "selector": "button.products"},
+                    "result": "Clicked on 'Products' link",
+                    "timestamp": datetime.now().isoformat(),
+                    "description": "Clicking products button",
+                    "structured_output": {
+                        "thinking": "The products button should lead to the product catalog",
+                        "evaluation_previous_actions": "Successfully navigated to homepage",
+                        "memory": "On homepage, found products button",
+                        "next_goal": "Access product catalog"
+                    }
                 }
             ],
-            "last_edited": datetime.now().isoformat()
         }
 
 
@@ -181,9 +198,18 @@ class MockRunManager:
                     await run_info.add_log_event(
                         "action",
                         {
-                            "action": "navigate",
-                            "url": url or "https://example.com",
-                            "message": f"Navigating to {url or 'https://example.com'}"
+                            "iteration": i,
+                            "action_name": "navigate",
+                            "arguments": {"url": url or "https://example.com"},
+                            "result": f"Navigating to {url or 'https://example.com'}",
+                            "timestamp": datetime.now().isoformat(),
+                            "description": f"Navigating to {url or 'https://example.com'}",
+                            "structured_output": {
+                                "thinking": "The agent should visit the starting URL.",
+                                "evaluation_previous_actions": "",
+                                "memory": "",
+                                "next_goal": "Arrive at the page and analyze content."
+                            }
                         }
                     )
 
@@ -196,17 +222,69 @@ class MockRunManager:
                     }
                 )
 
-                # Simulate various actions
+                # Simulate various actions with proper ActionData structure
                 actions = [
-                    {"action": "click", "target": "button.submit", "message": "Clicking submit button"},
-                    {"action": "type", "target": "input#search", "text": "test query", "message": "Typing into search field"},
-                    {"action": "scroll", "direction": "down", "message": "Scrolling down page"},
-                    {"action": "extract", "data": "Product: Widget, Price: $29.99", "message": "Extracting product information"},
+                    {
+                        "iteration": i,
+                        "action_name": "click",
+                        "arguments": {"element_id": "submit_btn", "selector": "button.submit"},
+                        "result": "Successfully clicked submit button",
+                        "timestamp": datetime.now().isoformat(),
+                        "description": "Clicking submit button",
+                        "structured_output": {
+                            "thinking": "Need to submit the form to proceed",
+                            "evaluation_previous_actions": f"Completed {i-1} actions successfully",
+                            "memory": "Form filled, ready to submit",
+                            "next_goal": "Submit form and wait for response"
+                        }
+                    },
+                    {
+                        "iteration": i,
+                        "action_name": "type",
+                        "arguments": {"element_id": "search_input", "selector": "input#search", "text": "test query"},
+                        "result": "Successfully typed into search field",
+                        "timestamp": datetime.now().isoformat(),
+                        "description": "Typing into search field",
+                        "structured_output": {
+                            "thinking": "I should search for the relevant information",
+                            "evaluation_previous_actions": f"Navigation complete at iteration {i-1}",
+                            "memory": "Located search field on page",
+                            "next_goal": "Execute search query"
+                        }
+                    },
+                    {
+                        "iteration": i,
+                        "action_name": "scroll",
+                        "arguments": {"direction": "down", "amount": 500},
+                        "result": "Scrolled down 500 pixels",
+                        "timestamp": datetime.now().isoformat(),
+                        "description": "Scrolling down page",
+                        "structured_output": {
+                            "thinking": "Need to scroll to see more content",
+                            "evaluation_previous_actions": "Page loaded but content below fold",
+                            "memory": "Page has additional content below",
+                            "next_goal": "View content further down the page"
+                        }
+                    },
+                    {
+                        "iteration": i,
+                        "action_name": "extract",
+                        "arguments": {"selector": "div.product-info", "field": "text"},
+                        "result": "Extracted: Product: Widget, Price: $29.99",
+                        "timestamp": datetime.now().isoformat(),
+                        "description": "Extracting product information",
+                        "structured_output": {
+                            "thinking": "Found the product information I need to extract",
+                            "evaluation_previous_actions": "Successfully navigated to product page",
+                            "memory": "Located product details section",
+                            "next_goal": "Extract and store product data"
+                        }
+                    },
                 ]
 
-                action = actions[i % len(actions)]
+                action_data = actions[i % len(actions)]
                 await asyncio.sleep(0.6)
-                await run_info.add_log_event("action", action)
+                await run_info.add_log_event("action", {"action_data": action_data})
 
                 # Simulate result
                 await asyncio.sleep(0.4)
@@ -218,51 +296,55 @@ class MockRunManager:
                     }
                 )
 
-            # Simulate awaiting decision
-            run_info.set_status(RunStatus.AWAITING_DECISION)
-            await run_info.add_log_event(
-                "status",
-                {"message": "Task appears complete. Awaiting user decision."}
-            )
-
-            # Wait for decision or timeout
-            try:
-                decision = await asyncio.wait_for(
-                    run_info.agent.input_manager.decision_queue.get(),
-                    timeout=300.0  # 5 minutes
-                )
-
-                if decision.lower() in ['d', 'done']:
-                    run_info.set_status(RunStatus.COMPLETED)
-                    await run_info.add_log_event(
-                        "status",
-                        {"message": "Agent run completed successfully"}
-                    )
-                elif decision.lower() in ['m', 'modify']:
-                    # Get additional instructions
-                    instructions = await asyncio.wait_for(
-                        run_info.agent.input_manager.decision_queue.get(),
-                        timeout=30.0
-                    )
-                    run_info.set_status(RunStatus.RUNNING)
-                    await run_info.add_log_event(
-                        "status",
-                        {"message": f"Resuming with modifications: {instructions}"}
-                    )
-                    # Simulate one more iteration
-                    await asyncio.sleep(2)
-                    run_info.set_status(RunStatus.COMPLETED)
-                    await run_info.add_log_event(
-                        "status",
-                        {"message": "Modifications complete"}
-                    )
-
-            except asyncio.TimeoutError:
-                run_info.set_status(RunStatus.COMPLETED)
+            # Decision loop - keeps awaiting decisions until user says "done"
+            while True:
+                # Simulate awaiting decision
+                run_info.set_status(RunStatus.AWAITING_DECISION)
                 await run_info.add_log_event(
                     "status",
-                    {"message": "Auto-completed after timeout"}
+                    {"message": "Task appears complete. Awaiting user decision."}
                 )
+
+                # Wait for decision or timeout
+                try:
+                    decision = await asyncio.wait_for(
+                        run_info.agent.input_manager.decision_queue.get(),
+                        timeout=300.0  # 5 minutes
+                    )
+
+                    if decision.lower() in ['d', 'done']:
+                        run_info.set_status(RunStatus.COMPLETED)
+                        await run_info.add_log_event(
+                            "status",
+                            {"message": "Agent run completed successfully"}
+                        )
+                        break
+                    elif decision.lower() in ['m', 'modify']:
+                        # Get additional instructions
+                        instructions = await asyncio.wait_for(
+                            run_info.agent.input_manager.decision_queue.get(),
+                            timeout=30.0
+                        )
+                        run_info.set_status(RunStatus.RUNNING)
+                        await run_info.add_log_event(
+                            "status",
+                            {"message": f"Resuming with modifications: {instructions}"}
+                        )
+                        # Simulate brief work
+                        await asyncio.sleep(2)
+                        await run_info.add_log_event(
+                            "status",
+                            {"message": "Modifications complete"}
+                        )
+                        # Loop back to await decision again
+
+                except asyncio.TimeoutError:
+                    run_info.set_status(RunStatus.COMPLETED)
+                    await run_info.add_log_event(
+                        "status",
+                        {"message": "Auto-completed after timeout"}
+                    )
+                    break
 
         except asyncio.CancelledError:
             run_info.set_status(RunStatus.STOPPED)
