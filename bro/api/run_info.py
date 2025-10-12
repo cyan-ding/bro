@@ -6,9 +6,11 @@ This module is separated to avoid circular imports between agent and run_manager
 
 import asyncio
 from datetime import datetime
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from .models import RunStatus, LogEvent
+from agent.models import ActionContext
+
+from .models import RunStatus, LogEvent, SendDecisionRequest
 
 if TYPE_CHECKING:
     from agent.agent import Agent
@@ -87,20 +89,29 @@ class RunInfo:
     async def add_log_event(
         self,
         event_type: str,
-        data: Dict,
+        action_context: Optional[ActionContext] = None,
+        message: Optional[str] = None,
+        error: Optional[str] = None,
+        decision: Optional[SendDecisionRequest] = None,
     ) -> None:
         """
         Add a log event to the queue for streaming.
 
         Args:
             event_type: Type of event (action, thinking, result, error, status)
-            data: Event data
+            action_context: Optional action context for action events
+            message: Optional message text
+            error: Optional error message
+            decision: Optional decision request data
         """
         event = LogEvent(
             timestamp=datetime.now().isoformat(),
             run_id=self.run_id,
             iteration=self.current_iteration,
             event_type=event_type,
-            data=data
+            action_context=action_context,
+            message=message,
+            error=error,
+            decision=decision,
         )
         await self.log_queue.put(event)

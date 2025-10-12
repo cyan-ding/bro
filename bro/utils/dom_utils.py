@@ -24,7 +24,6 @@ async def load_js_bundle() -> str:
     base_path = Path(__file__).parent.parent / "dom"
     cache_file = base_path / "js_bundle_cache.txt"
     files_in_order = [
-        "metrics.js",
         "highlight.js",
         "dom_utils.js",
         "buildDomTree.js",

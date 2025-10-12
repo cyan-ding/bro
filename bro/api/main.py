@@ -28,7 +28,7 @@ from .log_streamer import stream_logs
 
 
 # Set to True to use mock data for frontend testing
-USE_MOCK = True
+USE_MOCK = False
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -66,7 +66,7 @@ async def root():
             "send_decision": "POST /runs/{run_id}/decision",
             "stop_run": "POST /runs/{run_id}/stop",
             "close_browser": "POST /browser/close",
-        }
+        },
     }
 
 
@@ -98,7 +98,7 @@ async def create_run(request: CreateRunRequest):
             session_id=run_info.session_id,
             user_id=run_info.user_id,
             status=run_info.status,
-            message="Run created successfully and started"
+            message="Run created successfully and started",
         )
 
     except Exception as e:
@@ -128,7 +128,7 @@ async def get_run_status(run_id: str):
         current_iteration=run_info.current_iteration,
         max_iterations=run_info.max_iterations,
         last_action=run_info.last_action,
-        message=run_info.error_message if run_info.status == RunStatus.ERROR else None
+        message=run_info.error_message if run_info.status == RunStatus.ERROR else None,
     )
 
 
@@ -184,13 +184,11 @@ async def send_input(run_id: str, request: SendInputRequest):
     if not success:
         raise HTTPException(
             status_code=400,
-            detail="Could not send input. Run may not exist or not be running."
+            detail="Could not send input. Run may not exist or not be running.",
         )
 
     return SendInputResponse(
-        run_id=run_id,
-        status="success",
-        message="Input sent to agent successfully"
+        run_id=run_id, status="success", message="Input sent to agent successfully"
     )
 
 
@@ -207,20 +205,18 @@ async def send_decision(run_id: str, request: SendDecisionRequest):
         Confirmation of decision submission
     """
     success = await run_manager.send_decision(
-        run_id,
-        request.decision.value,
-        request.additional_instructions
+        run_id, request.decision.value, request.additional_instructions
     )
     if not success:
         raise HTTPException(
             status_code=400,
-            detail="Could not send decision. Run may not exist or not awaiting decision."
+            detail="Could not send decision. Run may not exist or not awaiting decision.",
         )
 
     return SendDecisionResponse(
         run_id=run_id,
         status="success",
-        message=f"Decision '{request.decision.value}' sent to agent successfully"
+        message=f"Decision '{request.decision.value}' sent to agent successfully",
     )
 
 
@@ -240,13 +236,11 @@ async def stop_run(run_id: str):
     if not success:
         raise HTTPException(
             status_code=400,
-            detail="Could not stop run. Run may not exist or already stopped."
+            detail="Could not stop run. Run may not exist or already stopped.",
         )
 
     return StopRunResponse(
-        run_id=run_id,
-        status=RunStatus.STOPPED,
-        message="Run stopped successfully"
+        run_id=run_id, status=RunStatus.STOPPED, message="Run stopped successfully"
     )
 
 
@@ -268,19 +262,21 @@ async def close_browser():
 
         if success:
             return CloseBrowserResponse(
-                status="success",
-                message="Chrome browser closed successfully"
+                status="success", message="Chrome browser closed successfully"
             )
         else:
             return CloseBrowserResponse(
                 status="warning",
-                message="No Chrome process was tracked. Browser may have been started externally."
+                message="No Chrome process was tracked. Browser may have been started externally.",
             )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to close browser: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to close browser: {str(e)}"
+        )
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run("bro.api.main:app", host="0.0.0.0", port=8000, reload=True)

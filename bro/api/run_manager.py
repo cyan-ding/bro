@@ -11,7 +11,7 @@ from typing import Dict, Optional
 from pathlib import Path
 
 from agent.agent import Agent
-from .models import RunStatus
+from .models import RunStatus, SendDecisionRequest
 from .run_info import RunInfo
 
 
@@ -37,7 +37,7 @@ class RunManager:
         model: str = "gemini/gemini-2.5-flash-preview-09-2025",
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
-        enable_logging: bool = False,
+        enable_logging: bool = True,
     ) -> RunInfo:
         """
         Create a new agent run.
@@ -116,8 +116,7 @@ class RunManager:
         try:
             run_info.set_status(RunStatus.RUNNING)
             await run_info.add_log_event(
-                "status",
-                {"message": "Agent run started", "user_prompt": run_info.user_prompt}
+                "status", message=f"Agent run started: {run_info.user_prompt}"
             )
 
             # Run the agent
@@ -131,15 +130,13 @@ class RunManager:
 
             run_info.set_status(RunStatus.COMPLETED)
             await run_info.add_log_event(
-                "status",
-                {"message": "Agent run completed successfully"}
+                "status", message="Agent run completed successfully"
             )
 
         except Exception as e:
             run_info.set_status(RunStatus.ERROR, str(e))
             await run_info.add_log_event(
-                "error",
-                {"error": str(e), "message": "Agent run failed"}
+                "error", error=str(e), message="Agent run failed"
             )
 
     async def get_run(self, run_id: str) -> Optional[RunInfo]:
@@ -176,7 +173,7 @@ class RunManager:
             run_info.task.cancel()
 
         run_info.set_status(RunStatus.STOPPED)
-        await run_info.add_log_event("status", {"message": "Agent run stopped by user"})
+        await run_info.add_log_event("status", message="Agent run stopped by user")
 
         return True
 
@@ -199,18 +196,12 @@ class RunManager:
             return False
 
         await run_info.agent.input_manager.message_queue.put(message)
-        await run_info.add_log_event(
-            "user_input",
-            {"message": message}
-        )
+        await run_info.add_log_event("user_input", message=message)
 
         return True
 
     async def send_decision(
-        self,
-        run_id: str,
-        decision: str,
-        additional_instructions: Optional[str] = None
+        self, run_id: str, decision: str, additional_instructions: Optional[str] = None
     ) -> bool:
         """
         Send a decision response to an agent awaiting user decision.
@@ -234,16 +225,20 @@ class RunManager:
         await run_info.agent.input_manager.decision_queue.put(decision)
 
         # If modify with instructions, also send the instructions
-        if decision.lower() in ['m', 'modify'] and additional_instructions:
-            await run_info.agent.input_manager.decision_queue.put(additional_instructions)
+        if decision.lower() in ["m", "modify"] and additional_instructions:
+            await run_info.agent.input_manager.decision_queue.put(
+                additional_instructions
+            )
 
         await run_info.add_log_event(
             "user_decision",
-            {"decision": decision, "additional_instructions": additional_instructions}
+            decision=SendDecisionRequest(
+                decision=decision, additional_instructions=additional_instructions
+            ),
         )
 
         # Update status if done
-        if decision.lower() in ['d', 'done']:
+        if decision.lower() in ["d", "done"]:
             run_info.set_status(RunStatus.COMPLETED)
         else:
             run_info.set_status(RunStatus.RUNNING)
@@ -264,7 +259,9 @@ class RunManager:
         if not run_info:
             return None
 
-        state_dict = run_info.agent.agent_state.to_dict()
+        state_dict = run_info.agent.agent_state.model_dump(
+            mode="json", exclude={"max_action_history", "max_extractions"}
+        )
         state_dict["run_id"] = run_id
 
         return state_dict

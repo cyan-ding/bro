@@ -28,13 +28,16 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
     try:
         while True:
             # Check if run is complete
-            if run_info.status in [RunStatus.COMPLETED, RunStatus.STOPPED, RunStatus.ERROR]:
+            if run_info.status in [
+                RunStatus.COMPLETED,
+                RunStatus.STOPPED,
+                RunStatus.ERROR,
+            ]:
                 # Drain any remaining logs
                 while not run_info.log_queue.empty():
                     try:
                         event = await asyncio.wait_for(
-                            run_info.log_queue.get(),
-                            timeout=0.1
+                            run_info.log_queue.get(), timeout=0.1
                         )
                         yield format_sse(event)
                     except asyncio.TimeoutError:
@@ -42,24 +45,20 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
 
                 # Send final status event
                 final_event = LogEvent(
-                    timestamp=run_info.completed_at.isoformat() if run_info.completed_at else "",
+                    timestamp=run_info.completed_at.isoformat()
+                    if run_info.completed_at
+                    else "",
                     run_id=run_info.run_id,
-                    iteration=None,
+                    iteration=run_info.current_iteration,
                     event_type="final_status",
-                    data={
-                        "status": run_info.status.value,
-                        "message": run_info.error_message or "Run completed"
-                    }
+                    message="Run Complete",
                 )
                 yield format_sse(final_event)
                 break
 
             # Wait for next log event
             try:
-                event = await asyncio.wait_for(
-                    run_info.log_queue.get(),
-                    timeout=1.0
-                )
+                event = await asyncio.wait_for(run_info.log_queue.get(), timeout=1.0)
                 yield format_sse(event)
             except asyncio.TimeoutError:
                 # Send keepalive comment to prevent connection timeout
@@ -73,9 +72,9 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
         error_event = LogEvent(
             timestamp="",
             run_id=run_info.run_id,
-            iteration=None,
+            iteration=run_info.current_iteration,
             event_type="error",
-            data={"error": str(e)}
+            error=str(e),
         )
         yield format_sse(error_event)
 

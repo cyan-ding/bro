@@ -9,6 +9,7 @@ import asyncio
 import uuid
 from datetime import datetime
 from typing import Dict, Optional
+
 from .models import RunStatus
 from .run_info import RunInfo
 
@@ -50,13 +51,13 @@ class MockAgentState:
                     "index": 0,
                     "url": "https://example.com",
                     "title": "Example Domain - Mock Page",
-                    "is_active": True
+                    "is_active": True,
                 }
             ],
             "todo_list": [
                 {"task": "Navigate to website", "completed": True},
                 {"task": "Extract product information", "completed": False},
-                {"task": "Verify checkout process", "completed": False}
+                {"task": "Verify checkout process", "completed": False},
             ],
             "action_history": [
                 {
@@ -70,8 +71,8 @@ class MockAgentState:
                         "thinking": "I need to navigate to the target website first",
                         "evaluation_previous_actions": "No previous actions yet",
                         "memory": "Starting fresh navigation",
-                        "next_goal": "Navigate to https://example.com"
-                    }
+                        "next_goal": "Navigate to https://example.com",
+                    },
                 },
                 {
                     "iteration": 2,
@@ -84,9 +85,9 @@ class MockAgentState:
                         "thinking": "The products button should lead to the product catalog",
                         "evaluation_previous_actions": "Successfully navigated to homepage",
                         "memory": "On homepage, found products button",
-                        "next_goal": "Access product catalog"
-                    }
-                }
+                        "next_goal": "Access product catalog",
+                    },
+                },
             ],
         }
 
@@ -163,9 +164,7 @@ class MockRunManager:
             self._runs[run_id] = run_info
 
         # Start mock agent execution
-        run_info.task = asyncio.create_task(
-            self._simulate_agent_run(run_info, url)
-        )
+        run_info.task = asyncio.create_task(self._simulate_agent_run(run_info, url))
 
         return run_info
 
@@ -184,8 +183,7 @@ class MockRunManager:
         try:
             run_info.set_status(RunStatus.RUNNING)
             await run_info.add_log_event(
-                "status",
-                {"message": "Agent run started", "user_prompt": run_info.user_prompt}
+                "status", message=f"Agent run started: {run_info.user_prompt}"
             )
 
             # Simulate multiple iterations
@@ -195,62 +193,76 @@ class MockRunManager:
                 # Simulate navigation
                 if i == 1:
                     await asyncio.sleep(0.5)
-                    await run_info.add_log_event(
-                        "action",
-                        {
-                            "iteration": i,
-                            "action_name": "navigate",
-                            "arguments": {"url": url or "https://example.com"},
-                            "result": f"Navigating to {url or 'https://example.com'}",
-                            "timestamp": datetime.now().isoformat(),
-                            "description": f"Navigating to {url or 'https://example.com'}",
-                            "structured_output": {
-                                "thinking": "The agent should visit the starting URL.",
-                                "evaluation_previous_actions": "",
-                                "memory": "",
-                                "next_goal": "Arrive at the page and analyze content."
-                            }
-                        }
+                    from agent.models import ActionContext, StructuredOutputContext
+
+                    action_ctx = ActionContext(
+                        iteration=i,
+                        action_name="navigate",
+                        arguments={"url": url or "https://example.com"},
+                        result=f"Navigating to {url or 'https://example.com'}",
+                        description=f"Navigating to {url or 'https://example.com'}",
+                        structured_output=StructuredOutputContext(
+                            thinking="The agent should visit the starting URL.",
+                            evaluation_previous_actions="",
+                            memory="",
+                            next_goal="Arrive at the page and analyze content.",
+                        ),
                     )
+                    await run_info.add_log_event("action", action_context=action_ctx)
 
                 # Simulate thinking
                 await asyncio.sleep(0.8)
-                await run_info.add_log_event(
-                    "thinking",
-                    {
-                        "message": f"Iteration {i}: Analyzing page content and determining next action..."
-                    }
+                thinking_ctx = ActionContext(
+                    iteration=i,
+                    action_name="thinking",
+                    arguments={},
+                    result="",
+                    description="Agent is thinking",
+                    structured_output=StructuredOutputContext(
+                        thinking=f"Iteration {i}: Analyzing page content and determining next action...",
+                        evaluation_previous_actions=f"Completed {i - 1} actions so far",
+                        memory="Processing current page state",
+                        next_goal="Determine the best action to take next",
+                    ),
                 )
+                await run_info.add_log_event("thinking", action_context=thinking_ctx)
 
                 # Simulate various actions with proper ActionData structure
                 actions = [
                     {
                         "iteration": i,
                         "action_name": "click",
-                        "arguments": {"element_id": "submit_btn", "selector": "button.submit"},
+                        "arguments": {
+                            "element_id": "submit_btn",
+                            "selector": "button.submit",
+                        },
                         "result": "Successfully clicked submit button",
                         "timestamp": datetime.now().isoformat(),
                         "description": "Clicking submit button",
                         "structured_output": {
                             "thinking": "Need to submit the form to proceed",
-                            "evaluation_previous_actions": f"Completed {i-1} actions successfully",
+                            "evaluation_previous_actions": f"Completed {i - 1} actions successfully",
                             "memory": "Form filled, ready to submit",
-                            "next_goal": "Submit form and wait for response"
-                        }
+                            "next_goal": "Submit form and wait for response",
+                        },
                     },
                     {
                         "iteration": i,
                         "action_name": "type",
-                        "arguments": {"element_id": "search_input", "selector": "input#search", "text": "test query"},
+                        "arguments": {
+                            "element_id": "search_input",
+                            "selector": "input#search",
+                            "text": "test query",
+                        },
                         "result": "Successfully typed into search field",
                         "timestamp": datetime.now().isoformat(),
                         "description": "Typing into search field",
                         "structured_output": {
                             "thinking": "I should search for the relevant information",
-                            "evaluation_previous_actions": f"Navigation complete at iteration {i-1}",
+                            "evaluation_previous_actions": f"Navigation complete at iteration {i - 1}",
                             "memory": "Located search field on page",
-                            "next_goal": "Execute search query"
-                        }
+                            "next_goal": "Execute search query",
+                        },
                     },
                     {
                         "iteration": i,
@@ -263,8 +275,8 @@ class MockRunManager:
                             "thinking": "Need to scroll to see more content",
                             "evaluation_previous_actions": "Page loaded but content below fold",
                             "memory": "Page has additional content below",
-                            "next_goal": "View content further down the page"
-                        }
+                            "next_goal": "View content further down the page",
+                        },
                     },
                     {
                         "iteration": i,
@@ -277,23 +289,20 @@ class MockRunManager:
                             "thinking": "Found the product information I need to extract",
                             "evaluation_previous_actions": "Successfully navigated to product page",
                             "memory": "Located product details section",
-                            "next_goal": "Extract and store product data"
-                        }
+                            "next_goal": "Extract and store product data",
+                        },
                     },
                 ]
 
-                action_data = actions[i % len(actions)]
+                action_dict = actions[i % len(actions)]
                 await asyncio.sleep(0.6)
-                await run_info.add_log_event("action", {"action_data": action_data})
+                action_ctx = ActionContext(**action_dict)
+                await run_info.add_log_event("action", action_context=action_ctx)
 
                 # Simulate result
                 await asyncio.sleep(0.4)
                 await run_info.add_log_event(
-                    "result",
-                    {
-                        "success": True,
-                        "message": f"Action completed successfully at iteration {i}"
-                    }
+                    "result", message=f"Action completed successfully at iteration {i}"
                 )
 
             # Decision loop - keeps awaiting decisions until user says "done"
@@ -301,60 +310,55 @@ class MockRunManager:
                 # Simulate awaiting decision
                 run_info.set_status(RunStatus.AWAITING_DECISION)
                 await run_info.add_log_event(
-                    "status",
-                    {"message": "Task appears complete. Awaiting user decision."}
+                    "status", message="Task appears complete. Awaiting user decision."
                 )
 
                 # Wait for decision or timeout
                 try:
                     decision = await asyncio.wait_for(
                         run_info.agent.input_manager.decision_queue.get(),
-                        timeout=300.0  # 5 minutes
+                        timeout=300.0,  # 5 minutes
                     )
 
-                    if decision.lower() in ['d', 'done']:
+                    if decision.lower() in ["d", "done"]:
                         run_info.set_status(RunStatus.COMPLETED)
                         await run_info.add_log_event(
-                            "status",
-                            {"message": "Agent run completed successfully"}
+                            "status", message="Agent run completed successfully"
                         )
                         break
-                    elif decision.lower() in ['m', 'modify']:
+                    elif decision.lower() in ["m", "modify"]:
                         # Get additional instructions
                         instructions = await asyncio.wait_for(
                             run_info.agent.input_manager.decision_queue.get(),
-                            timeout=30.0
+                            timeout=30.0,
                         )
                         run_info.set_status(RunStatus.RUNNING)
                         await run_info.add_log_event(
                             "status",
-                            {"message": f"Resuming with modifications: {instructions}"}
+                            message=f"Resuming with modifications: {instructions}",
                         )
                         # Simulate brief work
                         await asyncio.sleep(2)
                         await run_info.add_log_event(
-                            "status",
-                            {"message": "Modifications complete"}
+                            "status", message="Modifications complete"
                         )
                         # Loop back to await decision again
 
                 except asyncio.TimeoutError:
                     run_info.set_status(RunStatus.COMPLETED)
                     await run_info.add_log_event(
-                        "status",
-                        {"message": "Auto-completed after timeout"}
+                        "status", message="Auto-completed after timeout"
                     )
                     break
 
         except asyncio.CancelledError:
             run_info.set_status(RunStatus.STOPPED)
-            await run_info.add_log_event("status", {"message": "Agent run stopped by user"})
+            await run_info.add_log_event("status", message="Agent run stopped by user")
             raise
         except Exception as e:
             run_info.set_status(RunStatus.ERROR, str(e))
             await run_info.add_log_event(
-                "error",
-                {"error": str(e), "message": "Agent run failed"}
+                "error", error=str(e), message="Agent run failed"
             )
 
     async def get_run(self, run_id: str) -> Optional[RunInfo]:
@@ -391,7 +395,7 @@ class MockRunManager:
             run_info.task.cancel()
 
         run_info.set_status(RunStatus.STOPPED)
-        await run_info.add_log_event("status", {"message": "Agent run stopped by user"})
+        await run_info.add_log_event("status", message="Agent run stopped by user")
 
         return True
 
@@ -411,18 +415,12 @@ class MockRunManager:
             return False
 
         await run_info.agent.input_manager.message_queue.put(message)
-        await run_info.add_log_event(
-            "user_input",
-            {"message": message}
-        )
+        await run_info.add_log_event("user_input", message=message)
 
         return True
 
     async def send_decision(
-        self,
-        run_id: str,
-        decision: str,
-        additional_instructions: Optional[str] = None
+        self, run_id: str, decision: str, additional_instructions: Optional[str] = None
     ) -> bool:
         """
         Send mock decision to agent.
@@ -441,15 +439,22 @@ class MockRunManager:
 
         await run_info.agent.input_manager.decision_queue.put(decision)
 
-        if decision.lower() in ['m', 'modify'] and additional_instructions:
-            await run_info.agent.input_manager.decision_queue.put(additional_instructions)
+        if decision.lower() in ["m", "modify"] and additional_instructions:
+            await run_info.agent.input_manager.decision_queue.put(
+                additional_instructions
+            )
+
+        from .models import SendDecisionRequest, DecisionType
 
         await run_info.add_log_event(
             "user_decision",
-            {"decision": decision, "additional_instructions": additional_instructions}
+            decision=SendDecisionRequest(
+                decision=DecisionType(decision),
+                additional_instructions=additional_instructions,
+            ),
         )
 
-        if decision.lower() in ['d', 'done']:
+        if decision.lower() in ["d", "done"]:
             run_info.set_status(RunStatus.COMPLETED)
         else:
             run_info.set_status(RunStatus.RUNNING)
@@ -470,6 +475,7 @@ class MockRunManager:
         if not run_info:
             return None
 
+        # MockAgentState uses to_dict() since it's not a Pydantic model
         state_dict = run_info.agent.agent_state.to_dict()
         state_dict["run_id"] = run_id
 

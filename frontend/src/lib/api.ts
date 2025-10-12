@@ -56,11 +56,11 @@ export interface AgentStateResponse {
     task: string;
     completed: boolean;
   }>;
-  action_history: Array<ActionData>;
+  action_history: Array<ActionContext>;
   last_edited: string;
 }
 
-export interface ActionData {
+export interface ActionContext {
   iteration: number;
   action_name: string;
   arguments: Record<string, unknown>;
@@ -77,17 +77,8 @@ export interface StructuredOutput {
   next_goal: string;
 }
 
-
 export interface SendDecisionRequest {
   decision: 'done' | 'modify' | 'intervene';
-  additional_instructions?: string;
-}
-
-export interface LogEventData {
-  action_data: ActionData;
-  message?: string;
-  error?: string;
-  decision?: string;
   additional_instructions?: string;
 }
 
@@ -96,7 +87,10 @@ export interface LogEvent {
   iteration: number;
   run_id: string;
   event_type: string;
-  data: LogEventData;
+  message?: string;
+  error?: string;  
+  action_context?: ActionContext;
+  decision?: SendDecisionRequest
 }
 
 /**

@@ -2,7 +2,7 @@ import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from utils.use_cdp import use_cdp
 from patchright.async_api import Page, async_playwright
@@ -21,20 +21,21 @@ from utils.credentials import get_credentials
 from utils.dom_utils import take_screenshot_with_bounding_boxes
 from utils.input_manager import InputManager
 
+if TYPE_CHECKING:
+    from api.run_info import RunInfo
 
-from api.run_info import RunInfo
+
 # Clean Pydantic models for LiteLLM response handling
 class LiteLLMFunction(BaseModel):
     name: Optional[str] = None
     arguments: Optional[str] = None
-    
 
 
 class LiteLLMToolCall(BaseModel):
     type: str
     function: LiteLLMFunction
     id: Optional[str] = None
-    
+
     class Config:
         extra = "allow"  # Allow extra fields
 
@@ -44,7 +45,7 @@ class LiteLLMMessage(BaseModel):
     content: Optional[str] = None
     tool_calls: Optional[List[LiteLLMToolCall]] = None
     thinking_content: Optional[str] = None
-    
+
     class Config:
         extra = "allow"  # Allow extra fields
 
@@ -53,7 +54,7 @@ class LiteLLMChoice(BaseModel):
     message: LiteLLMMessage
     index: Optional[int] = None
     finish_reason: Optional[str] = None
-    
+
     class Config:
         extra = "allow"  # Allow extra fields
 
@@ -62,7 +63,7 @@ class LiteLLMResponse(BaseModel):
     choices: List[LiteLLMChoice]
     model: Optional[str] = None
     id: Optional[str] = None
-    
+
     class Config:
         extra = "allow"  # Allow extra fields
 
@@ -88,7 +89,7 @@ class Agent:
         session_id: str = str(uuid.uuid4())[:8],
         user_id: Optional[str] = None,
         model: str = "gpt-5-mini-2025-08-07",
-        run_info: Optional[RunInfo] = None,
+        run_info: Optional["RunInfo"] = None,
     ):
         """
         Initialize the Bro agent.
@@ -107,13 +108,17 @@ class Agent:
         self.input_manager = None
         self.run_info = run_info
         # Initialize agent state with session info
-        self.agent_state = initialize_agent_state(user_id=self.user_id, session_id=self.session_id)
+        self.agent_state = initialize_agent_state(
+            user_id=self.user_id, session_id=self.session_id
+        )
         load_dotenv()
-        print(f"🔧 Initialized agent state (user: {self.user_id}, session: {self.session_id})")
+        print(
+            f"🔧 Initialized agent state (user: {self.user_id}, session: {self.session_id})"
+        )
 
-
-
-    async def _parse_structured_json(self, llm_response: Any) -> Optional[Dict[str, Any]]:
+    async def _parse_structured_json(
+        self, llm_response: Any
+    ) -> Optional[Dict[str, Any]]:
         """Parse the model's structured JSON content into actions and meta fields.
 
         Expects content to be a JSON object with keys: thinking, evaluation_previous_actions,
@@ -126,14 +131,14 @@ class Agent:
             return None
         try:
             # Normalize to dict
-            if hasattr(llm_response, 'model_dump'):
+            if hasattr(llm_response, "model_dump"):
                 response_dict = llm_response.model_dump()
-            elif hasattr(llm_response, 'dict'):
+            elif hasattr(llm_response, "dict"):
                 response_dict = llm_response.dict()
             else:
                 response_dict = llm_response
             response = LiteLLMResponse.model_validate(response_dict)
-            
+
             try:
                 content = response.choices[0].message.content
             except (AttributeError, IndexError) as e:
@@ -149,15 +154,19 @@ class Agent:
             except json.JSONDecodeError as e:
                 print(f"Failed to parse JSON content: {e}")
                 return None
-            
+
             # Validate on structured output
             validated = StructuredOutput.model_validate(obj)
             normalized_actions: List[Dict[str, Any]] = []
             for action in validated.actions:
-                normalized_actions.append({
-                    "name": action.action_name,
-                    "arguments": action.arguments.model_dump() if hasattr(action.arguments, 'model_dump') else action.arguments
-                })
+                normalized_actions.append(
+                    {
+                        "name": action.action_name,
+                        "arguments": action.arguments.model_dump()
+                        if hasattr(action.arguments, "model_dump")
+                        else action.arguments,
+                    }
+                )
             return {
                 "thinking": validated.thinking,
                 "evaluation_previous_actions": validated.evaluation_previous_actions,
@@ -260,8 +269,7 @@ class Agent:
                                 f"🔐 Looking up credentials for placeholder: {placeholder}"
                             )
                             credentials = await get_credentials(
-                                placeholder,
-                                input_manager=self.input_manager
+                                placeholder, input_manager=self.input_manager
                             )
                             if credentials:
                                 input_text_value = credentials
@@ -347,8 +355,6 @@ class Agent:
                         print(f"✅ {success_msg}")
                         results.append(result)
 
-
-
                     case "todo_edit":
                         todo_items = arguments.get("todo_items", [])
                         print(f"📝 Updating todo list with {len(todo_items)} items")
@@ -385,7 +391,9 @@ class Agent:
 
         return results
 
-    async def _handle_user_decision(self, reason: str, input_manager: Optional[InputManager]=None) -> Tuple[str, str]:
+    async def _handle_user_decision(
+        self, reason: str, input_manager: Optional[InputManager] = None
+    ) -> Tuple[str, str]:
         """
         Handle user decision when the agent signals completion.
 
@@ -396,15 +404,15 @@ class Agent:
         Returns:
             Tuple of (decision, user_input) where decision is 'done', 'modify', or 'intervene'
         """
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("🤖 AGENT COMPLETION NOTIFICATION")
-        print("="*80)
+        print("=" * 80)
         print(f"The agent believes the task is complete: {reason}")
         print("\nWhat would you like to do?")
         print("  ✅ [D] DONE - Accept completion and exit")
         print("  🔄 [M] MODIFY - Provide additional instructions to continue")
         print("  🛠️  [I] INTERVENE - Allow manual intervention then continue")
-        print("="*80)
+        print("=" * 80)
 
         while True:
             try:
@@ -415,9 +423,9 @@ class Agent:
                 else:
                     choice = input("\nEnter your choice (D/M/I): ").strip().upper()
 
-                if choice in ['D', 'DONE']:
-                    return 'done', ''
-                elif choice in ['M', 'MODIFY']:
+                if choice in ["D", "DONE"]:
+                    return "done", ""
+                elif choice in ["M", "MODIFY"]:
                     print("\n📝 Please provide additional instructions for the agent:")
                     if input_manager:
                         user_input = await input_manager.get_decision()
@@ -426,29 +434,33 @@ class Agent:
                         user_input = input("> ").strip()
 
                     if user_input:
-                        return 'modify', user_input
+                        return "modify", user_input
                     else:
                         print("❌ Please provide some instructions.")
                         continue
-                elif choice in ['I', 'INTERVENE']:
+                elif choice in ["I", "INTERVENE"]:
                     print("\n🛠️  MANUAL INTERVENTION MODE")
-                    print("The browser will remain open for you to make manual changes.")
-                    print("Press ENTER when you're done with manual changes to continue automation...")
+                    print(
+                        "The browser will remain open for you to make manual changes."
+                    )
+                    print(
+                        "Press ENTER when you're done with manual changes to continue automation..."
+                    )
                     if input_manager:
                         await input_manager.get_decision()
                     else:
                         input()
-                    return 'intervene', ''
+                    return "intervene", ""
                 else:
                     print("❌ Invalid choice. Please enter D, M, or I.")
                     continue
 
             except KeyboardInterrupt:
                 print("\n\n🛑 Exiting on user request...")
-                return 'done', ''
+                return "done", ""
             except EOFError:
                 print("\n\n🛑 EOF detected, exiting...")
-                return 'done', ''
+                return "done", ""
 
     async def run(
         self,
@@ -478,7 +490,6 @@ class Agent:
         if enable_input_queue:
             self.input_manager = InputManager(enable_stdin=False)
             await self.input_manager.start()
-
 
         async with async_playwright() as p:
             # browser_context = await p.chromium.launch_persistent_context(
@@ -516,20 +527,19 @@ class Agent:
             try:
                 print("Starting agentic cycle...")
                 last_signature: Optional[str] = None
-                
-                for iteration in range(start_iteration, max_iterations):
-                    # Log iteration start
-                    if self.run_info:
-                        await self.run_info.add_log_event(
-                            "iteration_start",
-                            {"iteration": iteration},
-                        )
 
+                for iteration in range(start_iteration, max_iterations):
                     # check if current tab index is not the page we are on, if so, switch to it
                     if browser_context.pages:
-                        if (self.agent_state.current_tab_index is not None and
-                            0 <= self.agent_state.current_tab_index < len(browser_context.pages)):
-                            page = browser_context.pages[self.agent_state.current_tab_index]
+                        if (
+                            self.agent_state.current_tab_index is not None
+                            and 0
+                            <= self.agent_state.current_tab_index
+                            < len(browser_context.pages)
+                        ):
+                            page = browser_context.pages[
+                                self.agent_state.current_tab_index
+                            ]
                         else:
                             page = browser_context.pages[0]
 
@@ -557,17 +567,22 @@ class Agent:
                         # Add screenshot error to agent state so agent can react
                         error_msg = f"Failed to take screenshot: {str(e)}. You may need to navigate to a website first using the search tool."
                         print(f"⚠️ Screenshot error: {error_msg}")
-                        self.agent_state.add_action_context(
+                        await self.agent_state.add_action_context(
                             action_name="screenshot_error",
                             arguments={},
                             result=error_msg,
                             iteration=iteration,
-                            print_result=True
+                            print_result=True,
                         )
 
                     if not page_data:
                         # Continue to LLM call without screenshot data
-                        viewport_info = {"pixelsAbove": 0, "pixelsBelow": 0, "documentHeight": 0, "innerHeight": 0}
+                        viewport_info = {
+                            "pixelsAbove": 0,
+                            "pixelsBelow": 0,
+                            "documentHeight": 0,
+                            "innerHeight": 0,
+                        }
                         elements_text = "No page loaded - you may need to use the search tool to navigate to a website."
                         screenshot_text = ""
                     else:
@@ -598,7 +613,9 @@ class Agent:
                     # Append user messages to the prompt if any
                     user_interrupt_text = ""
                     if user_messages:
-                        interrupt_messages = "\n".join([f"- {msg}" for msg in user_messages])
+                        interrupt_messages = "\n".join(
+                            [f"- {msg}" for msg in user_messages]
+                        )
                         user_interrupt_text = f"\n\nUSER INTERRUPTS (New instructions from user):\n{interrupt_messages}\n"
                         print(f"💬 Received {len(user_messages)} user message(s)")
 
@@ -636,45 +653,48 @@ class Agent:
 
                     parsed = await self._parse_structured_json(llm_response)
 
-                    # Log thinking content
-                    if self.run_info and parsed:
-                        await self.run_info.add_log_event(
-                            "thinking",
-                            {
-                                "thinking": parsed.get("thinking", ""),
-                                "evaluation_previous_actions": parsed.get("evaluation_previous_actions", ""),
-                                "memory": parsed.get("memory", ""),
-                                "next_goal": parsed.get("next_goal", "")
-                            },
-                        )
-
                     if not parsed or not parsed.get("actions"):
                         print(f"⚠️  Iteration {iteration}: No actions returned by LLM")
                         print(parsed)
                         # Add no actions result to agent state
-                        self.agent_state.add_action_context(
+                        await self.agent_state.add_action_context(
                             action_name="no_actions",
                             arguments={},
                             result="ERROR: LLM did not return actions - task may be complete, or response invalid",
                             iteration=iteration,
-                            print_result=True
+                            print_result=True,
                         )
                         break
 
                     tool_calls = parsed["actions"]
-                    print(f"🔄 Iteration {iteration}: Executing {len(tool_calls)} action(s)")
+                    print(
+                        f"🔄 Iteration {iteration}: Executing {len(tool_calls)} action(s)"
+                    )
                     # Execute the tool calls
                     result_messages = await self._execute_tool_call(
-                        tool_calls, page, page_data.get("highlighted_elements", []) if page_data else []
+                        tool_calls,
+                        page,
+                        page_data.get("highlighted_elements", []) if page_data else [],
                     )
 
                     # Create structured output context for action history
                     structured_output_context = None
-                    if parsed and any(parsed.get(field) for field in ["thinking", "evaluation_previous_actions", "memory", "next_goal"]):
+                    if parsed and any(
+                        parsed.get(field)
+                        for field in [
+                            "thinking",
+                            "evaluation_previous_actions",
+                            "memory",
+                            "next_goal",
+                        ]
+                    ):
                         from .agent_state import StructuredOutputContext
+
                         structured_output_context = StructuredOutputContext(
                             thinking=parsed.get("thinking", ""),
-                            evaluation_previous_actions=parsed.get("evaluation_previous_actions", ""),
+                            evaluation_previous_actions=parsed.get(
+                                "evaluation_previous_actions", ""
+                            ),
                             memory=parsed.get("memory", ""),
                             next_goal=parsed.get("next_goal", ""),
                         )
@@ -686,26 +706,19 @@ class Agent:
                             if i < len(result_messages)
                             else "No result"
                         )
-
-                        # Log action
-                        if self.run_info:
-                            await self.run_info.add_log_event(
-                                "action",
-                                {
-                                    "action_name": tool_call["name"],
-                                    "arguments": tool_call["arguments"],
-                                    "result": result_message
-                                },
-                            )
-
                         # Add action to agent state context with structured output
-                        self.agent_state.add_action_context(
+                        await self.agent_state.add_action_context(
                             action_name=tool_call["name"],
                             arguments=tool_call["arguments"],
                             result=result_message,
                             iteration=iteration,
-                            highlighted_elements=page_data.get("highlighted_elements", []) if page_data else [],
+                            highlighted_elements=page_data.get(
+                                "highlighted_elements", []
+                            )
+                            if page_data
+                            else [],
                             structured_output=structured_output_context,
+                            logger=self.run_info.add_log_event,
                         )
 
                     # Agent state update at end of iteration
@@ -713,7 +726,10 @@ class Agent:
 
                     # Update iteration in run_info
                     if self.run_info:
-                        self.run_info.update_iteration(iteration, tool_calls[0]["name"] if tool_calls else "no_action")
+                        self.run_info.update_iteration(
+                            iteration,
+                            tool_calls[0]["name"] if tool_calls else "no_action",
+                        )
 
                     # Save agent state to file at end of iteration
                     try:
@@ -724,20 +740,32 @@ class Agent:
                         print(f"⚠️ Failed to save agent state: {e}")
 
                     # Check if the agent signaled task completion via done function
-                    await_decision_messages = [msg for msg in result_messages if msg.startswith("AWAIT_USER_DECISION:")]
+                    await_decision_messages = [
+                        msg
+                        for msg in result_messages
+                        if msg.startswith("AWAIT_USER_DECISION:")
+                    ]
                     if await_decision_messages:
-                        reason = await_decision_messages[0].replace("AWAIT_USER_DECISION: ", "")
-                        decision, user_input = await self._handle_user_decision(reason, self.input_manager)
+                        reason = await_decision_messages[0].replace(
+                            "AWAIT_USER_DECISION: ", ""
+                        )
+                        decision, user_input = await self._handle_user_decision(
+                            reason, self.input_manager
+                        )
 
-                        if decision == 'done':
-                            print("🛑 User accepted task completion, stopping execution.")
+                        if decision == "done":
+                            print(
+                                "🛑 User accepted task completion, stopping execution."
+                            )
                             break
-                        elif decision == 'modify':
+                        elif decision == "modify":
                             # Add user's additional instructions to the original prompt
                             user_prompt = f"{user_prompt}\n\nADDITIONAL INSTRUCTIONS: {user_input}"
-                            print(f"🔄 Continuing with additional instructions: {user_input}")
+                            print(
+                                f"🔄 Continuing with additional instructions: {user_input}"
+                            )
                             # Continue with the loop - the new instructions will be included in the next iteration
-                        elif decision == 'intervene':
+                        elif decision == "intervene":
                             print("🛠️  Continuing after manual intervention...")
                             # Continue with the loop - user made manual changes
 
@@ -769,7 +797,12 @@ async def main():
         Afterwards, output an essay about the material you collected. 
          """,
     ]
-    agent = Agent(system_prompt, session_id="test", user_id="cyan", model="gemini/gemini-2.5-flash-preview-09-2025")
+    agent = Agent(
+        system_prompt,
+        session_id="test",
+        user_id="cyan",
+        model="gemini/gemini-2.5-flash-preview-09-2025",
+    )
     # claude-sonnet-4-20250514
     # gemini/gemini-2.5-flash-preview-09-2025
     # groq/llama-4-scout-17b-16e-instruct
@@ -779,6 +812,7 @@ async def main():
         max_iterations=100,
         take_screenshot=True,
     )
+
 
 if __name__ == "__main__":
     asyncio.run(main())

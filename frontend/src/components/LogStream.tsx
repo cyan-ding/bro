@@ -44,33 +44,33 @@ export default function LogStream({ logs }: LogStreamProps) {
   };
 
   const renderLogData = (event: LogEvent) => {
-    const data = event.data;
+  
     switch (event.event_type) {
       case "thinking":
         return (
           <div className="space-y-2 text-sm">
-            {data.action_data.structured_output?.thinking && (
+            {event.action_context?.structured_output?.thinking && (
               <div>
                 <span className="font-medium">Thinking: </span>
-                <span className="text-muted-foreground">{data.action_data.structured_output?.thinking}</span>
+                <span className="text-muted-foreground">{event.action_context?.structured_output?.thinking}</span>
               </div>
             )}
-            {data.action_data.structured_output?.evaluation_previous_actions && (
+            {event.action_context?.structured_output?.evaluation_previous_actions && (
               <div>
                 <span className="font-medium">Evaluation: </span>
-                <span className="text-muted-foreground">{data.action_data.structured_output?.evaluation_previous_actions}</span>
+                <span className="text-muted-foreground">{event.action_context?.structured_output?.evaluation_previous_actions}</span>
               </div>
             )}
-            {data.action_data.structured_output?.memory && (
+            {event.action_context?.structured_output?.memory && (
               <div>
                 <span className="font-medium">Memory: </span>
-                <span className="text-muted-foreground">{data.action_data.structured_output?.memory}</span>
+                <span className="text-muted-foreground">{event.action_context?.structured_output?.memory}</span>
               </div>
             )}
-            {data.action_data.structured_output?.next_goal && (
+            {event.action_context?.structured_output?.next_goal && (
               <div>
                 <span className="font-medium">Next Goal: </span>
-                <span className="text-muted-foreground">{data.action_data.structured_output?.next_goal}</span>
+                <span className="text-muted-foreground">{event.action_context?.structured_output?.next_goal}</span>
               </div>
             )}
           </div>
@@ -81,20 +81,20 @@ export default function LogStream({ logs }: LogStreamProps) {
           <div className="space-y-1 text-sm">
             <div>
               <span className="font-medium">Action: </span>
-              <code className="bg-muted px-1 py-0.5 rounded">{data.action_data.action_name}</code>
+              <code className="bg-muted px-1 py-0.5 rounded">{event.action_context?.action_name}</code>
             </div>
-            {data.action_data.arguments && Object.keys(data.action_data.arguments).length > 0 && (
+            {event.action_context?.arguments && Object.keys(event.action_context?.arguments).length > 0 && (
               <div>
                 <span className="font-medium">Arguments: </span>
                 <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                  {JSON.stringify(data.action_data.arguments)}
+                  {JSON.stringify(event.action_context?.arguments)}
                 </code>
               </div>
             )}
-            {data.action_data.result && (
+            {event.action_context?.result && (
               <div>
                 <span className="font-medium">Result: </span>
-                <span className="text-muted-foreground">{data.action_data.result}</span>
+                <span className="text-muted-foreground">{event.action_context?.result}</span>
               </div>
             )}
           </div>
@@ -103,15 +103,21 @@ export default function LogStream({ logs }: LogStreamProps) {
       case "status":
         return (
           <div className="text-sm">
-            <span className="text-muted-foreground">{data.message}</span>
+            <span className="text-muted-foreground">{event.message}</span>
           </div>
         );
-
+      
+      case "final_status":
+        return (
+          <div className="text-sm">
+            <span className="text-muted-foreground">Run completed</span>
+          </div>
+        )
       case "error":
         return (
           <div className="text-sm text-destructive">
             <span className="font-medium">Error: </span>
-            <span>{data.error || data.message}</span>
+            <span>{event.error || event.message}</span>
           </div>
         );
 
@@ -119,7 +125,7 @@ export default function LogStream({ logs }: LogStreamProps) {
         return (
           <div className="text-sm">
             <span className="font-medium">User Input: </span>
-            <span className="text-muted-foreground">{data.message}</span>
+            <span className="text-muted-foreground">{event.message}</span>
           </div>
         );
 
@@ -127,30 +133,22 @@ export default function LogStream({ logs }: LogStreamProps) {
         return (
           <div className="text-sm">
             <span className="font-medium">Decision: </span>
-            <span className="text-muted-foreground">{data.decision}</span>
-            {data.additional_instructions && (
+            <span className="text-muted-foreground">{event.decision?.decision}</span>
+            {event.decision?.additional_instructions && (
               <div className="mt-1">
                 <span className="font-medium">Instructions: </span>
-                <span className="text-muted-foreground">{data.additional_instructions}</span>
+                <span className="text-muted-foreground">{event.decision?.additional_instructions}</span>
               </div>
             )}
           </div>
         );
-
-      case "iteration_start":
-        return (
-          <div className="text-sm font-medium">
-            Iteration {data.action_data.iteration}
-          </div>
-        );
-
       default:
-        return (
-          <div className="text-sm text-muted-foreground">
-            {JSON.stringify(data)}
-          </div>
-        );
-    }
+            return (
+              <div className="text-sm text-muted-foreground">
+                {JSON.stringify(event)}
+              </div>
+            );
+        }
   };
 
   return (
