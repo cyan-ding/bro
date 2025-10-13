@@ -10,7 +10,7 @@ from typing import Optional, TYPE_CHECKING
 
 from agent.models import ActionContext
 
-from .models import RunStatus, LogEvent, SendDecisionRequest
+from .models import LogType, RunStatus, LogEvent, SendDecisionRequest
 
 if TYPE_CHECKING:
     from agent.agent import Agent
@@ -88,7 +88,7 @@ class RunInfo:
 
     async def add_log_event(
         self,
-        event_type: str,
+        event_type: LogType,
         action_context: Optional[ActionContext] = None,
         message: Optional[str] = None,
         error: Optional[str] = None,

@@ -81,8 +81,7 @@ export default function AgentState({ state, runStatus }: AgentStateProps) {
           ) : (
             <div className="space-y-2">
               {state.tabs.map((tab) => (
-                <div
-                  key={tab.index}
+                <div key={tab.url + "-" + tab.index}
                   className={`p-3 rounded-lg border ${
                     tab.index === state.current_tab_index ? "border-primary bg-muted" : ""
                   }`}

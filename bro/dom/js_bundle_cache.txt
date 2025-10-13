@@ -1,0 +1,1217 @@
+
+    (() => {
+        /**
+ * @fileoverview
+ * This file provides a factory function `createHighlightUtils` that returns utilities for visually
+ * highlighting elements on the page. It handles the creation of overlays, labels, and the logic
+ * for updating their positions on scroll and resize events.
+ *
+ * This approach encapsulates all highlight-related DOM manipulation.
+ */
+function createHighlightUtils(getXPathTree) {
+
+    const HIGHLIGHT_CONTAINER_ID = "playwright-highlight-container";
+    
+    // Array to track all highlighted elements
+    const highlightedElements = [];
+    
+
+
+    /**
+     * Extracts additional information about an element for tracking purposes.
+     * @param {Element} element The DOM element to extract info from.
+     * @returns {Object} Object containing aria-path, text content, and other relevant info.
+     */
+    function extractElementInfo(element) {
+        const info = {
+            ariaLabel: element.getAttribute('aria-label') || null,
+            ariaLabelledby: element.getAttribute('aria-labelledby') || null,
+            ariaDescribedby: element.getAttribute('aria-describedby') || null,
+            role: element.getAttribute('role') || null,
+            title: element.getAttribute('title') || null,
+            placeholder: element.getAttribute('placeholder') || null,
+            textContent: element.textContent?.trim().substring(0, 100) || null, // Limit to 100 chars
+            id: element.id || null,
+            className: element.className || null,
+            type: element.getAttribute('type') || null,
+            value: element.value || null,
+            href: element.href || null,
+            src: element.src || null,
+            alt: element.getAttribute('alt') || null
+        };
+        
+        // Remove null values to keep the object clean
+        return Object.fromEntries(
+            Object.entries(info).filter(([_, value]) => value !== null)
+        );
+    }
+
+    /**
+     * Highlights a single element with a colored overlay and a numbered label.
+     * Manages the dynamic updates of the highlight's position.
+     * @param {Element} element The DOM element to highlight.
+     * @param {number} index The highlight index number to display.
+     * @param {Element|null} parentIframe The iframe containing the element, if any.
+     */
+    function highlightElement(element, index, parentIframe = null, doHighlightElements = true) {
+        if (!element) return;
+        
+        // Check if element is already highlighted to prevent duplicates
+        const xpath = getXPathTree(element);
+        const isAlreadyHighlighted = highlightedElements.some(el => el.xpath === xpath);
+        if (isAlreadyHighlighted) {
+            return;
+        }
+        
+        // current overlays for the element
+        const overlays = [];
+        let label = null;
+        let labelWidth = 20, labelHeight = 16;
+        let cleanupFn = null;
+
+        try {
+            // Track the highlighted element
+            const elementInfo = {
+                xpath: xpath,
+                tag: element.tagName.toLowerCase(),
+                index: index,
+                info: extractElementInfo(element),
+                rect: element.getBoundingClientRect(),
+                element: element
+            };
+            // Attach iframe xpath context if inside an iframe
+            if (parentIframe) {
+                try {
+                    elementInfo.iframe_xpath = getXPathTree(parentIframe);
+                } catch (_) { /* no-op */ }
+            }
+            highlightedElements.push(elementInfo);
+
+            if (!doHighlightElements) {
+                return;
+            }
+
+            // make a container for all highlights to easily delete them all at once
+            let container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
+            if (!container) {
+                container = document.createElement("div");
+                container.id = HIGHLIGHT_CONTAINER_ID;
+                Object.assign(container.style, { position: "fixed", pointerEvents: "none", top: "0", left: "0", width: "100%", height: "100%", zIndex: "2147483640", backgroundColor: 'transparent' });
+                document.body.appendChild(container);
+            }
+            // early return if no children
+            const rects = element.getClientRects();
+            if (!rects || rects.length === 0) return;
+
+            // determine color of box based on index
+            const colors = ["#FF0000", "#00FF00", "#0000FF", "#FFA500", "#800080", "#008080", "#FF69B4", "#4B0082", "#FF4500", "#2E8B57", "#DC143C", "#4682B4"];
+            const baseColor = colors[index % colors.length];
+            const backgroundColor = baseColor + "1A";
+
+            // get offset of iframe if any
+            let iframeOffset = { x: 0, y: 0 };
+            if (parentIframe) {
+                const iframeRect = parentIframe.getBoundingClientRect();
+                iframeOffset = { x: iframeRect.left, y: iframeRect.top };
+            }
+            // use fragment as a container to allow for one append call (expensive)
+            // start by adding an empty div with color styles for each child in the element
+            const fragment = document.createDocumentFragment();
+            for (const rect of rects) {
+                if (rect.width === 0 || rect.height === 0) continue;
+                const overlay = document.createElement("div");
+                Object.assign(overlay.style, {
+                    position: "fixed", border: `2px solid ${baseColor}`,
+                    backgroundColor, pointerEvents: "none", boxSizing: "border-box",
+                    top: `${rect.top + iframeOffset.y}px`, left: `${rect.left + iframeOffset.x}px`,
+                    width: `${rect.width}px`, height: `${rect.height}px`
+                });
+                fragment.appendChild(overlay);
+                overlays.push({ element: overlay, initialRect: rect });
+            }
+            // only add label to first child
+            const firstRect = rects[0];
+            label = document.createElement("div");
+            // all attributes should scale with overlay size
+
+            // label = box + index number
+            // keeps font size between 8 and 12.
+            Object.assign(label.style, {
+                position: "fixed", background: baseColor, color: "white",
+                padding: "1px 4px", borderRadius: "4px", fontSize: `${Math.min(12, Math.max(8, firstRect.height / 2))}px`
+            });
+            label.textContent = index;
+
+            // calculate label dimensions
+            // if invisible, resort to defaults; width 20, height 16
+            labelWidth = label.offsetWidth > 0 ? label.offsetWidth : labelWidth;
+            labelHeight = label.offsetHeight > 0 ? label.offsetHeight : labelHeight;
+            // calculate paddings for box relative to the bounding rect
+            let labelTop = firstRect.top + iframeOffset.y + 2;
+            let labelLeft = firstRect.left + iframeOffset.x + firstRect.width - labelWidth - 2;
+            // if label is too small, move it above the box
+            if (firstRect.width < labelWidth + 4 || firstRect.height < labelHeight + 4) {
+                labelTop = firstRect.top + iframeOffset.y - labelHeight - 2;
+                labelLeft = firstRect.left + iframeOffset.x + firstRect.width - labelWidth;
+                if (labelLeft < iframeOffset.x) labelLeft = firstRect.left + iframeOffset.x;
+            }
+            // add index label onto div
+            Object.assign(label.style, {
+                top: `${Math.max(0, Math.min(labelTop, window.innerHeight - labelHeight))}px`,
+                left: `${Math.max(0, Math.min(labelLeft, window.innerWidth - labelWidth))}px`
+            });
+            fragment.appendChild(label);
+
+            // hook to update box coords when scrolling
+            const updatePositions = () => {
+                const newRects = element.getClientRects();
+                let newIframeOffset = { x: 0, y: 0 };
+                if (parentIframe) {
+                    const iframeRect = parentIframe.getBoundingClientRect();
+                    newIframeOffset = { x: iframeRect.left, y: iframeRect.top };
+                }
+                // update box coords
+                overlays.forEach((overlayData, i) => {
+                    // find which part of the element is still on the screen (newRects vs overlays)
+                    if (i < newRects.length) {
+                        const newRect = newRects[i];
+                        Object.assign(overlayData.element.style, {
+                            top: `${newRect.top + newIframeOffset.y}px`,
+                            left: `${newRect.left + newIframeOffset.x}px`, width: `${newRect.width}px`,
+                            height: `${newRect.height}px`, display: (newRect.width === 0 || newRect.height === 0)
+                                ? 'none' : 'block'
+                        });
+                    } else {
+                        overlayData.element.style.display = 'none';
+                    }
+                });
+                // hide boxes that are no longer on the screen
+                if (newRects.length < overlays.length) {
+                    for (let i = newRects.length; i < overlays.length; i++) {
+                        overlays[i].element.style.display = 'none';
+                    }
+                }
+                // If the label exists and the element is still visible (has rects), update its position
+                if (label && newRects.length > 0) {
+                    const firstNewRect = newRects[0];
+                    // Default: place label inside the top-right corner of the box, with 2px padding
+                    let newLabelTop = firstNewRect.top + newIframeOffset.y + 2;
+                    let newLabelLeft = firstNewRect.left + newIframeOffset.x + firstNewRect.width - labelWidth - 2;
+                    // If the box is too small to fit the label inside (with 4px margin), move label above the box
+                    if (firstNewRect.width < labelWidth + 4 || firstNewRect.height < labelHeight + 4) {
+                        // Place label above the box, with a 2px gap
+                        newLabelTop = firstNewRect.top + newIframeOffset.y - labelHeight - 2;
+                        // Align label with the right edge of the box
+                        newLabelLeft = firstNewRect.left + newIframeOffset.x + firstNewRect.width - labelWidth;
+                        // If label would go off the left edge, snap it to the left edge of the box
+                        if (newLabelLeft < newIframeOffset.x) newLabelLeft = firstNewRect.left + newIframeOffset.x;
+                    }
+                    // Clamp label position to stay within the viewport
+                    Object.assign(label.style, {
+                        top: `${Math.max(0, Math.min(newLabelTop, window.innerHeight - labelHeight))}px`,
+                        left: `${Math.max(0, Math.min(newLabelLeft, window.innerWidth - labelWidth))}px`,
+                        display: 'block'
+                    });
+                } else if (label) {
+                    // Hide label if element is not visible
+                    label.style.display = 'none';
+                }
+            };
+            // wrapper function to delay function calls
+            const throttleFunction = (func, delay) => {
+                let lastCall = 0;
+                return (...args) => {
+                    const now = performance.now();
+                    if (now - lastCall < delay) return;
+                    lastCall = now;
+                    func(...args);
+                };
+            };
+            // add event listeners to move boxes when scrolling and resizing
+            const throttledUpdatePositions = throttleFunction(updatePositions, 16);
+            window.addEventListener('scroll', throttledUpdatePositions, true);
+            window.addEventListener('resize', throttledUpdatePositions);
+
+            // function to clean up event listeners for the given element
+            cleanupFn = () => {
+                window.removeEventListener('scroll', throttledUpdatePositions, true);
+                window.removeEventListener('resize', throttledUpdatePositions);
+                overlays.forEach(overlay => overlay.element.remove());
+                if (label) label.remove();
+            };
+            // add fragment containing label + colored boxes to container
+            container.appendChild(fragment);
+
+        } finally {
+            if (cleanupFn) {
+                // add to global array of cleanup functions for the given web page
+                (window._highlightCleanupFunctions = window._highlightCleanupFunctions || new Map()).set(element, cleanupFn);
+            }
+        }
+    }
+
+    /**
+     * Highlights interactive elements in the current viewport using pre-indexed positions.
+     * 
+     * @param {Map} interactiveElementsByPosition - Map of grid Y coordinates to arrays of element info
+     * @param {Object} viewportInfo - Viewport information { scrollY, innerHeight }
+     * @param {number} gridSize - Size of the position grid (default: 100)
+     * @returns {number} Number of elements highlighted
+     */
+    function highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize = 100) {
+        const { scrollY, innerHeight } = viewportInfo;
+        // viewport bounds relative to full page
+        const viewportTop = scrollY;
+        const viewportBottom = scrollY + innerHeight;
+        
+        // Calculate which grid sections numbers are in viewport
+        const startGridY = Math.floor(viewportTop / gridSize);
+        const endGridY = Math.floor(viewportBottom / gridSize);
+        
+        const elementsToHighlight = [];
+        
+        // Collect all interactive elements in viewport
+        for (let gridY = startGridY; gridY <= endGridY; gridY++) {
+            const elementsInGrid = interactiveElementsByPosition.get(gridY);
+            if (!elementsInGrid) continue;
+            
+            for (const elementInfo of elementsInGrid) {
+                const { rect } = elementInfo;
+                
+                // Check if element is actually in current viewport
+                if (rect.bottom >= viewportTop && rect.top <= viewportBottom) {
+                    elementsToHighlight.push(elementInfo);
+                }
+            }
+        }
+        
+        // Sort by vertical position for consistent highlighting order
+        elementsToHighlight.sort((a, b) => a.rect.top - b.rect.top);
+        
+        // Get current highlighted elements before clearing
+        const currentHighlightedElements = getHighlightedElements();
+        
+        // Clear existing highlights, preserving sticky elements
+        cleanupHighlights(currentHighlightedElements);
+        
+        // Highlight elements
+        elementsToHighlight.forEach((elementInfo, index) => {
+            const { element, nodeData } = elementInfo;
+            highlightElement(element, nodeData.highlightIndex || index);
+        });
+        
+        return elementsToHighlight.length;
+    }
+
+    /**
+     * Creates a throttled scroll handler for efficient viewport highlighting.
+     * 
+     * @param {Map} interactiveElementsByPosition - Map of grid Y coordinates to arrays of element info
+     * @param {number} gridSize - Size of the position grid (default: 100)
+     * @returns {Function} Throttled scroll handler function
+     */
+    function createScrollHandler(interactiveElementsByPosition, gridSize = 100) {
+        let lastScrollY = window.scrollY;
+        let lastCall = 0;
+        const throttleDelay = 16; // 60fps throttle
+        
+        return function handleScroll() {
+            const now = performance.now();
+            if (now - lastCall < throttleDelay) return;
+            lastCall = now;
+            
+            const currentScrollY = window.scrollY;
+            
+            // Only re-highlight if scroll position changed significantly
+            if (Math.abs(currentScrollY - lastScrollY) < 20) return;
+            
+            // Highlight elements in new viewport
+            const viewportInfo = {
+                scrollY: currentScrollY,
+                innerHeight: window.innerHeight
+            };
+            
+            highlightElementsInViewport(interactiveElementsByPosition, viewportInfo, gridSize);
+            
+            lastScrollY = currentScrollY;
+        };
+    }
+
+    /**
+     * Removes all highlight overlays and their associated event listeners from the page.
+     * Preserves sticky elements that haven't moved from their previous positions.
+     * 
+     * @param {Array} currentHighlightedElements - Array of currently highlighted element objects
+     */
+    function cleanupHighlights(currentHighlightedElements = []) {
+        // If no current elements provided, do full cleanup
+        if (!currentHighlightedElements || currentHighlightedElements.length === 0) {
+            if (window._highlightCleanupFunctions) {
+                window._highlightCleanupFunctions.forEach((fn, _) => fn());
+                window._highlightCleanupFunctions = new Map();
+            }
+            const container = document.getElementById(HIGHLIGHT_CONTAINER_ID);
+            if (container) container.remove();
+            
+            // Clear the tracking array
+            highlightedElements.length = 0;
+            return;
+        }
+        
+        // Compare current highlights with their previous positions
+        const elementsToKeep = [];
+        const elementsToRemove = [];
+        
+        for (const elementInfo of highlightedElements) {
+            const { rect, element } = elementInfo;
+            const currentRect = element.getBoundingClientRect();
+            const isSticky =
+                currentRect.top === rect.top &&
+                currentRect.left === rect.left;
+
+            if (isSticky) {
+                elementsToKeep.push(elementInfo);
+            } else {
+                elementsToRemove.push(elementInfo);
+            }
+        }
+        
+        // Remove non-sticky elements and their overlays
+        if (elementsToRemove.length > 0) {
+            if (window._highlightCleanupFunctions) {
+                elementsToRemove.forEach(elementInfo => {
+                    const { element } = elementInfo;
+                    const cleanupFn = window._highlightCleanupFunctions.get(element);
+                    if (cleanupFn) cleanupFn();
+                    window._highlightCleanupFunctions.delete(element);
+                });
+            }
+        }
+        
+        // Update the tracking array to only include sticky elements
+        highlightedElements.length = 0;
+        highlightedElements.push(...elementsToKeep);
+    }
+
+    /**
+     * Gets the array of currently highlighted elements.
+     * @returns {Array} Array of highlighted element objects.
+     */
+    function getHighlightedElements() {
+        return [...highlightedElements];
+    }
+
+
+
+    return { 
+        highlightElement, 
+        cleanupHighlights, 
+        getHighlightedElements,
+        highlightElementsInViewport,
+        createScrollHandler
+    };
+} /**
+ * @fileoverview
+ * This file provides a factory function `createDomUtils` that returns a suite of DOM utility functions.
+ * These helpers are responsible for caching, DOM traversal (like XPath), visibility checks, and complex
+ * interactivity assessments.
+ *
+ * By using a factory pattern, we can encapsulate stateful operations without polluting the global scope.
+ */
+function createDomUtils() {
+
+    /**
+     * Caches DOM properties to avoid expensive re-calculations.
+     */
+    const DOM_CACHE = {
+        boundingRects: new WeakMap(),
+        clientRects: new WeakMap(),
+        computedStyles: new WeakMap(),
+        clearCache: () => {
+            DOM_CACHE.boundingRects = new WeakMap();
+            DOM_CACHE.clientRects = new WeakMap();
+            DOM_CACHE.computedStyles = new WeakMap();
+        }
+    };
+
+    /**
+     * Retrieves an element's bounding rectangle, using a cache to improve performance.
+     */
+    function getCachedBoundingRect(element) {
+        if (!element) return null;
+        // early return with cache hit
+        if (DOM_CACHE.boundingRects.has(element)) {
+            return DOM_CACHE.boundingRects.get(element);
+        }
+        // get bounding box normally
+        let rect = element.getBoundingClientRect();
+        if (rect) DOM_CACHE.boundingRects.set(element, rect);
+        return rect;
+    }
+
+    /**
+     * Retrieves an element's computed style, using a cache.
+     */
+    function getCachedComputedStyle(element) {
+        if (!element) return null;
+        if (DOM_CACHE.computedStyles.has(element)) {
+            return DOM_CACHE.computedStyles.get(element);
+        }
+        let style = window.getComputedStyle(element);
+        if (style) DOM_CACHE.computedStyles.set(element, style);
+        return style;
+    }
+
+    /**
+     * Retrieves an element's client rectangles, using a cache. Used for multi-line elements that can result in multiple client rects. 
+     */
+    function getCachedClientRects(element) {
+        if (!element) return null;
+        if (DOM_CACHE.clientRects.has(element)) {
+            return DOM_CACHE.clientRects.get(element);
+        }
+        const rects = element.getClientRects();
+        if (rects) DOM_CACHE.clientRects.set(element, rects);
+        return rects;
+    }
+
+    // --- XPath ---
+
+    /**
+     * Calculates the 1-based index of an element among its siblings of the same tag.
+     * Not used standalone, used in @getXPathTree
+     */
+    const xpathCache = new WeakMap();
+    function getElementPosition(currentElement) {
+        if (!currentElement.parentElement) return 0;
+        const tagName = currentElement.nodeName.toLowerCase();
+        const siblings = Array.from(currentElement.parentElement.children).filter((sib) => sib.nodeName.toLowerCase() === tagName);
+        if (siblings.length === 1) return 0;
+        return siblings.indexOf(currentElement) + 1;
+    }
+
+    /**
+     * Generates a unique XPath for a given element.
+     */
+    function getXPathTree(element, stopAtBoundary = true) {
+        // early return if cache hit
+        if (xpathCache.has(element)) return xpathCache.get(element);
+        const segments = [];
+        let currentElement = element;
+        while (currentElement && currentElement.nodeType === Node.ELEMENT_NODE) {
+            if (stopAtBoundary && (currentElement.parentNode instanceof ShadowRoot || currentElement.parentNode instanceof HTMLIFrameElement)) {
+                break;
+            }
+            const position = getElementPosition(currentElement);
+            const tagName = currentElement.nodeName.toLowerCase();
+            const xpathIndex = position > 0 ? `[${position}]` : "";
+            segments.unshift(`${tagName}${xpathIndex}`);
+            currentElement = currentElement.parentNode;
+        }
+        const result = segments.join("/");
+        xpathCache.set(element, result);
+        return result;
+    }
+
+    // --- Position-based indexing ---
+
+    /**
+     * Indexes an interactive element by its vertical position for efficient viewport lookup.
+     * 
+     * @param {Element} element - The DOM element to index.
+     * @param {Object} nodeData - The processed node data.
+     * @param {Map} interactiveElementsByPosition - Map to store indexed elements.
+     * @param {number} gridSize - Size of the position grid (default: 100).
+     */
+    function indexElementByPosition(element, nodeData, interactiveElementsByPosition, gridSize = 100) {
+        if (!nodeData.isInteractive) return;
+        
+        const rect = getCachedBoundingRect(element);
+        if (!rect) return;
+        
+        // Group by vertical position (every gridSize pixels) 
+        const gridY = Math.floor(rect.top / gridSize);
+        if (!interactiveElementsByPosition.has(gridY)) {
+            interactiveElementsByPosition.set(gridY, []);
+        }
+        
+        interactiveElementsByPosition.get(gridY).push({
+            element: element,
+            nodeData: nodeData,
+            rect: rect,
+            highlightIndex: nodeData.highlightIndex
+        });
+    }
+
+    // --- Visibility and Acceptance ---
+
+    /**
+     * Checks if an element is of a type that should be included in the DOM tree.
+     * Filters out non-essential elements like <script> and <style>.
+     */
+    function isElementAccepted(element) {
+        if (element.shadowRoot || element instanceof ShadowRoot) return true;
+        if (!element || !element.tagName) return false;
+        const alwaysAccept = new Set(["body", "div", "main", "article", "section", "nav", "header", "footer", "iframe"]);
+        if (alwaysAccept.has(element.tagName.toLowerCase())) return true;
+        const alwaysDeny = new Set(["svg", "script", "style", "link", "meta", "noscript", "template"]);
+        return !alwaysDeny.has(element.tagName.toLowerCase());
+    }
+
+    /**
+     * Checks if an element is visually rendered on the page (has non-zero dimensions and is not hidden).
+     */
+    function isElementVisible(element) {
+    	// Filter common hidden patterns
+    	return !(
+    		element.closest('[aria-hidden="true"]') ||
+    		element.hasAttribute('hidden') ||
+    		element.getAttribute('type') === 'hidden' ||
+    		(() => {
+    			try {
+    				if (typeof element.checkVisibility === 'function') {
+    					if (!element.checkVisibility()) return true;
+    				}
+    			} catch (_) {}
+    			return false;
+    		})() ||
+    		(() => {
+    			const style = getCachedComputedStyle(element);
+    			return (
+    				!style ||
+    				style.visibility === 'hidden' ||
+    				style.display === 'none' ||
+    				style.pointerEvents === 'none' ||
+    				parseFloat(style.opacity) === 0
+    			);
+    		})() ||
+    		(() => {
+    			const rects = element.getClientRects();
+    			return !rects || rects.length === 0;
+    		})() ||
+    		element.offsetWidth <= 0 ||
+    		element.offsetHeight <= 0
+    	);
+    }
+
+    /**
+     * Checks if an element is sufficiently visible in the viewport for highlighting.
+     * Uses a more lenient threshold that allows partial visibility.
+     * 
+     * @param {Element} element - The element to check
+     * @param {number} minVisibleRatio - Minimum ratio of element that must be visible (default: 0.3 = 30%)
+     * @returns {boolean} True if element is sufficiently visible for highlighting
+     */
+    function isSufficientlyVisibleInViewport(element, minVisibleRatio = 0.3) {
+        const rect = element.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        
+        // Calculate visible dimensions
+        const visibleTop = Math.max(0, rect.top);
+        const visibleBottom = Math.min(viewportHeight, rect.bottom);
+        const visibleLeft = Math.max(0, rect.left);
+        const visibleRight = Math.min(viewportWidth, rect.right);
+        
+        // Check if any part is visible
+        if (visibleBottom <= visibleTop || visibleRight <= visibleLeft) {
+            return false;
+        }
+        // calculate visible area
+        const visibleHeight = visibleBottom - visibleTop;
+        const visibleWidth = visibleRight - visibleLeft;
+        const elementHeight = rect.height;
+        const elementWidth = rect.width;
+        
+        // Calculate visible ratio
+        const visibleArea = visibleHeight * visibleWidth;
+        const totalArea = elementHeight * elementWidth;
+        const visibleRatio = visibleArea / totalArea;
+        
+        return visibleRatio >= minVisibleRatio;
+    }
+
+    /**
+     * Checks if a text node is visible in the viewport.
+     */
+    function isTextNodeVisible(textNode) {
+        try {
+            // get client rects if text wraps to multiple lines.
+            const range = document.createRange();
+            range.selectNodeContents(textNode);
+            const rects = range.getClientRects();
+
+            if (!rects || rects.length === 0) return false;
+            for (const rect of rects) {
+                if (rect.width > 0 && rect.height > 0) {
+                    const parentElement = textNode.parentElement;
+                    if (!parentElement) return false;
+                    try {
+                        return parentElement.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+                    } catch (e) {
+                        const style = window.getComputedStyle(parentElement);
+                        return style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity) !== 0;
+                    }
+                }
+            }
+            return false;
+        } catch (e) {
+            console.warn('Error checking text node visibility:', e);
+            return false;
+        }
+    }
+
+    // --- Interactivity ---
+
+    /**
+     * A fast, preliminary check to see if an element might be interactive.
+     */
+    function isInteractiveCandidate(element) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+        const tagName = element.tagName.toLowerCase();
+        const interactiveElements = new Set(["a", "button", "input", "select", "textarea", "details", "summary", "label"]);
+        if (interactiveElements.has(tagName)) return true;
+        return element.hasAttribute("onclick") || element.hasAttribute("role") || element.hasAttribute("tabindex")
+            || element.hasAttribute("aria-") || element.hasAttribute("data-action")
+            || element.getAttribute("contenteditable") === "true";
+    }
+
+    /**
+     * A comprehensive check to determine if an element is interactive, considering its tag,
+     * style (cursor), attributes, and event listeners.
+     */
+    function isInteractiveElement(element) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+        const tagName = element.tagName.toLowerCase();
+        const style = getCachedComputedStyle(element);
+        // check cursor
+        const interactiveCursors = new Set(['pointer', 'move', 'grab', 'grabbing', 'cell',
+            'copy', 'alias', 'all-scroll', 'col-resize', 'context-menu', 'crosshair', 'e-resize',
+            'ew-resize', 'help', 'n-resize', 'ne-resize', 'nesw-resize', 'ns-resize', 'nw-resize',
+            'nwse-resize', 'row-resize', 's-resize', 'se-resize', 'sw-resize', 'vertical-text', 'text',
+            'w-resize', 'zoom-in', 'zoom-out']);
+        if (interactiveCursors.has(style.cursor)) return true;
+        const nonInteractiveCursors = new Set(['not-allowed', 'no-drop', 'wait', 'progress',
+            'initial', 'inherit']);
+        // check pointer-events - if it's set to 'none', the element can't receive pointer events
+        if (style.pointerEvents === 'none') return false;
+        // check typical tags
+        const interactiveTags = new Set(["a", "button", "input", "select", "textarea", "details",
+            "summary", "label", "option", "optgroup", "fieldset", "legend"]);
+        if (interactiveTags.has(tagName)) {
+            if (nonInteractiveCursors.has(style.cursor)) return false;
+            if (element.hasAttribute('disabled') || element.getAttribute('disabled') === 'true'
+                || element.getAttribute('disabled') === '') return false;
+            if (element.hasAttribute('readonly')) return false;
+            if (element.disabled || element.readOnly || element.inert) return false;
+            return true;
+        }
+        // check for content editable divs
+        if (element.getAttribute("contenteditable") === "true" || element.isContentEditable) return true;
+        if (element.classList && (element.classList.contains("button") ||
+            element.classList.contains('dropdown-toggle') || element.getAttribute('data-index')
+            || element.getAttribute('data-toggle') === 'dropdown' ||
+            element.getAttribute('aria-haspopup') === 'true')) return true;
+        // check roles
+        const role = element.getAttribute("role");
+        const ariaRole = element.getAttribute("aria-role");
+        const interactiveRoles = new Set(['button', 'menuitemradio', 'menuitemcheckbox', 'radio', 'checkbox', 'tab', 
+            'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox', 'option', 'scrollbar']);
+        if (interactiveRoles.has(role) || interactiveRoles.has(ariaRole)) return true;
+        // check for event listeners (currently nonfunctional)
+        try {
+            if (typeof getEventListeners === 'function') {
+                const listeners = getEventListeners(element);
+                const mouseEvents = ['click', 'mousedown', 'mouseup', 'dblclick'];
+                for (const eventType of mouseEvents) {
+                    if (listeners[eventType] && listeners[eventType].length > 0) return true;
+                }
+            }
+            // check for common mouse attributes
+            const commonMouseAttrs = ['onclick', 'onmousedown', 'onmouseup', 'ondblclick'];
+            for (const attr of commonMouseAttrs) {
+                if (element.hasAttribute(attr) || typeof element[attr] === 'function') return true;
+            }
+        } catch (e) { }
+        return false;
+    }
+
+    /**
+     * Additional checks outside of cursors, tags, roles, event listeners, content editable, data attributes, and common mouse attributes
+     * aka those NOT checked in @isInteractiveElement
+     * used in @isElementDistinctInteraction
+     * uses @isInteractiveElement 
+     */
+    function isHeuristicallyInteractive(element) {
+        if (!isElementVisible(element)) return false;
+
+        // Only consider elements that have explicit interactive properties
+        const hasInteractiveAttributes = element.hasAttribute('role') || element.hasAttribute('tabindex')
+            || element.hasAttribute('onclick') || typeof element.onclick === 'function';
+        const hasInteractiveClass = /\b(btn|clickable|menu|item|entry|link)\b/i.test(element.className || '');
+
+        // Check if element is inside a known interactive container
+        const isInKnownContainer = Boolean(element.closest('button,a,[role="button"],.menu,.dropdown,.list,.toolbar'));
+
+        // Only consider it distinct if it has explicit interactive properties
+        // AND is not just a container div with children
+        return hasInteractiveAttributes && hasInteractiveClass && isInKnownContainer;
+    }
+
+    const DISTINCT_INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary',
+        'details', 'label', 'option']);
+    const INTERACTIVE_ROLES = new Set(['button', 'link', 'menuitem', 'menuitemradio', 'menuitemcheckbox',
+        'radio', 'checkbox', 'tab', 'switch', 'slider', 'spinbutton', 'combobox', 'searchbox', 'textbox',
+        'listbox', 'option', 'scrollbar']);
+
+    /**
+     * Determines if an element represents a distinct interaction from its parent,
+     * which is crucial for handling nested interactive elements. 
+     * Should only be called for elements with children.
+     * -- this function might be the problem that is causing overlapping highlights...
+     * -- i need to check if the parent element is highlighted. 
+     */
+    function isElementDistinctInteraction(element) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+
+        const tagName = element.tagName.toLowerCase();
+        const role = element.getAttribute('role');
+        if (tagName === 'iframe') return true;
+        // check tags and roles
+        if (DISTINCT_INTERACTIVE_TAGS.has(tagName) || (role && INTERACTIVE_ROLES.has(role))) return true;
+        // check content editable, data attributes, event listeners.
+        if (element.isContentEditable || element.getAttribute('contenteditable') === 'true') return true;
+        if (element.hasAttribute('data-testid') || element.hasAttribute('data-cy') || element.hasAttribute('data-test')) return true;
+        if (element.hasAttribute('onclick') || typeof element.onclick === 'function') return true;
+        if (isHeuristicallyInteractive(element)) return true;
+        return false;
+    }
+
+    return {
+        DOM_CACHE,
+        getCachedBoundingRect,
+        getCachedComputedStyle,
+        getCachedClientRects,
+        getXPathTree,
+        isElementAccepted,
+        isElementVisible,
+        isTextNodeVisible,
+        isInteractiveCandidate,
+        isInteractiveElement,
+        isElementDistinctInteraction,
+        isSufficientlyVisibleInViewport,
+        indexElementByPosition
+    };
+} /**
+ * @fileoverview
+ * This is the main entry point for the DOM tree analysis script.
+ *
+ * It orchestrates the entire process by:
+ * 1. Importing factory functions from the other modules (`dom_utils`, `highlight`).
+ * 2. Instantiating the helpers, creating a shared context for stateful operations.
+ * 3. Executing the recursive DOM tree traversal (`buildTreeRecursive`).
+ * 4. Returning the result.
+ *
+ * This modular design improves readability and maintainability by separating concerns into distinct files.
+ */
+
+
+
+/**
+ * Builds a DOM tree representation starting from the document body.
+ *
+ * This function serves as the main entry point for DOM analysis. It initializes
+ * all required utilities (DOM helpers, highlighting), manages shared state,
+ * and recursively traverses the DOM to construct a tree structure. The result includes
+ * a mapping of node IDs to their data.
+ *
+ * @param {Object} args - Configuration options for the DOM tree builder.
+ * @param {boolean} args.doHighlightElements - Whether to visually highlight interactive elements.
+ * @param {number} args.overlapThreshold - Threshold for area overlap detection (0.7 = 70%)
+ * @param {boolean} args.indexByPosition - Whether to index interactive elements by position for efficient viewport highlighting.
+ *
+ * @returns {Object} An object containing the root node ID, a map of all node data.
+ *
+ * @example
+ * const result = buildDomTree({ doHighlightElements: true });
+ * // result: { rootId: "0", map: { "0": {...}, ... } }
+ */
+function buildDomTree(args = {
+    doHighlightElements: true,
+    overlapThreshold: 0.7, // Threshold for area overlap detection (0.7 = 70%)
+    indexByPosition: true, // Whether to index interactive elements by position
+}) {
+    // mark that dom tree has been injnected
+    window.domTreeInjected = true;
+
+    const { doHighlightElements, overlapThreshold, indexByPosition } = args;
+
+    // --- Instantiate helpers with shared state ---
+    const domUtils = createDomUtils();
+    const { highlightElement, cleanupHighlights, getHighlightedElements, createScrollHandler } =
+        createHighlightUtils(domUtils.getXPathTree);
+
+    // --- Main state ---
+    let highlightIndex = 0;
+    const DOM_HASH_MAP = {};
+    const ID = { current: 0 };
+
+    // --- Position-based indexing for efficient viewport highlighting ---
+    const INTERACTIVE_ELEMENTS_BY_POSITION = new Map(); // y-coordinate -> array of elements
+    const POSITION_GRID_SIZE = 100; // Group elements by 100px vertical sections
+
+    // --- Core Logic ---
+    /**
+     * Handles the highlighting logic for interactive elements, including area overlap detection.
+     * 
+     * @param {Object} nodeData - The data object for the current node.
+     * @param {Element} node - The DOM element to potentially highlight.
+     * @param {Element|null} parentIframe - The parent iframe element if inside an iframe.
+     * @param {boolean} highlightedAncestor - If the element has a highlighted ancestor, null if no ancestor.
+     * @returns {Element|null} The element if it was highlighted, null otherwise.   
+     */
+    function handleHighlighting(nodeData, node, parentIframe, highlightedAncestor = null) {
+        if (!nodeData.isInteractive) return highlightedAncestor;
+
+        // only highlight if no highlighted ancestor or if its distinct
+        if (!highlightedAncestor || domUtils.isElementDistinctInteraction(node)) {
+            // Additional safeguard: if parent is highlighted, require stronger evidence of distinctness
+            if (highlightedAncestor) {
+                const tagName = node.tagName.toLowerCase();
+                const isWrapperTag = ['div', 'span', 'section', 'article'].includes(tagName);
+
+                // For wrapper tags, require explicit interactive properties
+                if (isWrapperTag) {
+                    const hasExplicitInteractivity = node.hasAttribute('onclick') || node.hasAttribute('role') ||
+                        node.hasAttribute('tabindex') || /\b(btn|clickable)\b/i.test(node.className || '');
+                    if (!hasExplicitInteractivity) return highlightedAncestor;
+                }
+
+                // Area overlap check: prevent highlighting if element overlaps significantly with highlighted ancestor
+                const nodeRect = domUtils.getCachedBoundingRect(node);
+                if (nodeRect) {
+                    const parentRect = domUtils.getCachedBoundingRect(highlightedAncestor);
+                    if (parentRect) {
+                        const xOverlap = Math.max(0, Math.min(nodeRect.right, parentRect.right) - Math.max(nodeRect.left, parentRect.left));
+                        const yOverlap = Math.max(0, Math.min(nodeRect.bottom, parentRect.bottom) - Math.max(nodeRect.top, parentRect.top));
+                        const overlapArea = xOverlap * yOverlap;
+                        const overlapRatio = overlapArea / Math.max(nodeRect.width * nodeRect.height, parentRect.width * parentRect.height);
+                        if (overlapRatio > overlapThreshold) {
+                            return highlightedAncestor;
+                        }
+                    }
+                }
+            }
+
+            nodeData.highlightIndex = highlightIndex++;
+            if (doHighlightElements) {
+                highlightElement(node, nodeData.highlightIndex, parentIframe);
+                // return element if successful highlight -- this is to signal that children should not be highlighted.
+                return node;
+            }
+        }
+        return highlightedAncestor;
+    }
+
+    /**
+     * Recursively traverses the DOM tree and builds a serializable representation of each node.
+     * Handles element filtering, visibility, highlighting, and special cases such as iframes, shadow DOM, and text nodes.
+     *
+     * @param {Node} node - The current DOM node to process.
+     * @param {Element|null} [parentIframe=null] - The parent iframe element if inside an iframe, otherwise null.
+     * @param {Element|null} [highlightedAncestor=null] - The parent node that was highlighted, to avoid redundant highlights.
+     * @returns {string|null} The unique ID of the processed node in the DOM_HASH_MAP, or null if the node is skipped.
+     *
+     * @remarks
+     * - Skips nodes that are not elements or text, or are not visible/accepted.
+     * - Handles text nodes, shadow DOM, and content-editable regions.
+     * - Applies highlighting logic if enabled.
+     */
+    function buildTreeRecursive(node, parentIframe = null, highlightedAncestor = null, isInViewport = false, highlightDepth = 0) {
+        if (
+            !node ||
+            node.id === 'playwright-highlight-container' ||
+            ![Node.ELEMENT_NODE, Node.TEXT_NODE, Node.DOCUMENT_FRAGMENT_NODE].includes(node.nodeType)
+        ) {
+            return null;
+        }
+        // process body node
+        if (node === document.body) {
+            const nodeData = { tagName: 'body', attributes: {}, xpath: '/body', children: [] };
+            for (const child of node.childNodes) {
+                const domElement = buildTreeRecursive(child, parentIframe, highlightedAncestor, isInViewport, highlightDepth);
+                if (domElement) nodeData.children.push(domElement);
+            }
+            const id = `${ID.current++}`;
+            DOM_HASH_MAP[id] = nodeData;
+            return id;
+        }
+        // process text node (text content inside of another element)
+        if (node.nodeType === Node.TEXT_NODE) {
+            const textContent = node.textContent.trim();
+            // skip nodes with empty text
+            if (!textContent) {
+                return null;
+            }
+
+            const id = `${ID.current++}`;
+            DOM_HASH_MAP[id] = { type: "TEXT_NODE", text: textContent, isVisible: domUtils.isTextNodeVisible(node) };
+            return id;
+        }
+        // check whether element is of accepted type
+        if (!domUtils.isElementAccepted(node)) {
+            return null;
+        }
+        // tagname will be null for shadow nodes, so don't call .toLowerCase()
+        const nodeData = {
+            tagName: node.tagName ? node.tagName.toLowerCase() : null,
+            attributes: {},
+            xpath: node.tagName ? domUtils.getXPathTree(node, true) : null,
+            children: [],
+            // other potential node data to populate conditionally
+            // isInteractive: false,
+            // isVisible: false,
+            // highlightIndex: -1,
+            // shadowRoot: false,
+        };
+        // only populate attributes if element is interactive
+        if (domUtils.isInteractiveCandidate(node) || nodeData.tagName === 'iframe') {
+            const attributeNames = node.getAttributeNames?.() || [];
+            for (const name of attributeNames) {
+                nodeData.attributes[name] = node.getAttribute(name);
+            }
+        }
+        // populate isVisible, isInteractive attributes of nodeData
+        let newHighlightedAncestor = null;
+        nodeData.isVisible = domUtils.isElementVisible(node); // this is the only visibility check
+
+        // Compute isInteractive only once if needed, and avoid redundant domUtils.isInteractiveElement calls
+        
+        if (nodeData.isVisible) {
+            nodeData.isInteractive = domUtils.isInteractiveElement(node);
+            // mark element to be highlighted (so that children are not highlighted)
+            if (domUtils.isSufficientlyVisibleInViewport(node)) {
+                newHighlightedAncestor = handleHighlighting(nodeData, node, parentIframe, highlightedAncestor);
+                if (nodeData.highlightIndex !== undefined) {
+                    nodeData.highlightDepth = highlightDepth;
+                }
+            }
+            if (indexByPosition) {
+                domUtils.indexElementByPosition(node, nodeData, INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
+            }
+        }
+        // Check for special types of nodes with internal structures, recurse through those
+        const tagName = nodeData.tagName;
+        // for iframes
+        if (tagName === "iframe") {
+            try {
+                const iframeDoc = node.contentDocument || node.contentWindow?.document;
+                if (iframeDoc) {
+                    for (const child of iframeDoc.childNodes) {
+                        const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                        const domElement = buildTreeRecursive(child, node, newHighlightedAncestor, false, nextDepth);
+                        if (domElement) nodeData.children.push(domElement);
+                    }
+                }
+            } catch (e) { console.warn("Unable to access iframe:", e); }
+        } else if (node.shadowRoot) {
+            // for shadow DOM elements that have internal structure
+            nodeData.shadowRoot = true;
+            for (const child of node.shadowRoot.childNodes) {
+                const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor, false, nextDepth);
+                if (domElement) nodeData.children.push(domElement);
+            }
+            for (const child of node.childNodes) {
+                const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor, false, nextDepth);
+                if (domElement) nodeData.children.push(domElement);
+            }
+        } else {
+            // for all other nodes, recurse through children
+            for (const child of node.childNodes) {
+                const nextDepth = nodeData.highlightIndex !== undefined ? highlightDepth + 1 : highlightDepth;
+                const domElement = buildTreeRecursive(child, parentIframe, newHighlightedAncestor, false, nextDepth);
+                if (domElement) nodeData.children.push(domElement);
+            }
+        }
+    
+        // Skip empty anchor tags only if they have no dimensions and no children 
+        // -- Many websites include empty <a> tags for layout, tracking, or JS hooks.
+        if (tagName === 'a' && nodeData.children.length === 0 && !nodeData.attributes.href) {
+            const rect = domUtils.getCachedBoundingRect(node);
+            // skip if anchor has no size
+            const hasSize = (rect && rect.width > 0 && rect.height > 0) || (node.offsetWidth > 0 || node.offsetHeight > 0);
+            if (!hasSize) {
+                return null;
+            }
+        }
+
+        const id = `${ID.current++}`;
+        DOM_HASH_MAP[id] = nodeData;
+        return id;
+    }
+
+    // --- Execution ---
+    domUtils.DOM_CACHE.clearCache();
+    if (window._highlightCleanupFunctions) cleanupHighlights();
+    if (window._scrollHandler) {
+        // remove scroll handler after every buildDomTree call; this happens by default on opening new pages, but needs to be done manually for SPAs
+        window.removeEventListener('scroll', window._scrollHandler, true);
+        window._scrollHandler = null;
+    }
+
+    const rootId = buildTreeRecursive(document.body);
+    
+    // --- Post-processing: conservative attributes, text, newness, and serialization ---
+    function capText(value, maxLen = 25) {
+        if (value == null) return '';
+        const s = String(value);
+        return s.length <= maxLen ? s : s.slice(0, maxLen);
+    }
+
+    function normalizeWhitespace(str) {
+        if (!str) return '';
+        return String(str).replace(/\s+/g, ' ').trim();
+    }
+
+    function collectTextFor(nodeId, highlightedIdSet, selfId) {
+        const node = DOM_HASH_MAP[nodeId];
+        if (!node) return '';
+        if (node.highlightIndex != null && nodeId !== selfId) return '';
+        if (node.type === 'TEXT_NODE') {
+            return node.isVisible ? node.text : '';
+        }
+        let out = '';
+        const kids = node.children || [];
+        for (const childId of kids) {
+            if (highlightedIdSet.has(childId) && childId !== selfId) continue;
+            const part = collectTextFor(childId, highlightedIdSet, selfId);
+            if (part) out += (out ? ' ' : '') + part;
+        }
+        return normalizeWhitespace(out);
+    }
+
+    function pruneAttributes(tagName, attrs, elementText) {
+        const allowed = [
+            'title', 'type', 'checked', 'name', 'role', 'value', 'placeholder',
+            'data-date-format', 'alt', 'aria-label', 'aria-expanded', 'data-state',
+            'aria-checked', 'href', 'src'
+        ];
+        const out = {};
+        const seenByValue = new Map();
+        const textLower = (elementText || '').trim().toLowerCase();
+        for (const key of allowed) {
+            if (!attrs || !Object.prototype.hasOwnProperty.call(attrs, key)) continue;
+            let val = attrs[key];
+            if (val == null || val === '') continue;
+
+            if (key === 'value' && (attrs['type'] || '').toLowerCase() === 'password') {
+                continue;
+            }
+            if (key === 'role' && String(val).toLowerCase() === String(tagName).toLowerCase()) {
+                continue;
+            }
+            if ((key === 'aria-label' || key === 'placeholder' || key === 'title') && textLower) {
+                if (String(val).trim().toLowerCase() === textLower) continue;
+            }
+            const valStr = String(val);
+            if (valStr.length > 5) {
+                if (seenByValue.has(valStr)) continue;
+                seenByValue.set(valStr, key);
+            }
+            out[key] = capText(valStr, 30);
+        }
+        return out;
+    }
+
+    function buildIdentityKey(tagName, xpath, attrs) {
+        const stableKeys = ['name', 'type', 'aria-label', 'title', 'placeholder'];
+        const parts = [String(tagName || ''), String(xpath || '')];
+        for (const k of stableKeys) {
+            if (attrs && Object.prototype.hasOwnProperty.call(attrs, k)) {
+                parts.push(`${k}=${attrs[k]}`);
+            }
+        }
+        return parts.join('|');
+    }
+
+    function serializeHighlightedElements() {
+        const items = [];
+        const highlightedIds = Object.keys(DOM_HASH_MAP).filter(id => {
+            const n = DOM_HASH_MAP[id];
+            return n && n.highlightIndex != null;
+        });
+        const highlightedIdSet = new Set(highlightedIds);
+        const seen = (window._highlightSeen = window._highlightSeen || new Set());
+
+        // Build a fallback map of raw textContent by highlight index from the visual highlighter
+        const rawHighlighted = getHighlightedElements();
+        const rawTextByIndex = new Map();
+        const iframeByIndex = new Map();
+        for (const el of rawHighlighted || []) {
+            try {
+                const idx = el && typeof el.index === 'number' ? el.index : undefined;
+                if (idx !== undefined) {
+                    const t = el.info && el.info.textContent ? normalizeWhitespace(el.info.textContent) : '';
+                    if (t) rawTextByIndex.set(idx, t);
+                    const iframeXPath = el.iframe_xpath || null;
+                    if (iframeXPath) iframeByIndex.set(idx, iframeXPath);
+                }
+            } catch (_) { /* no-op */ }
+        }
+
+        const nodes = highlightedIds
+            .map(id => ({ id, node: DOM_HASH_MAP[id] }))
+            .sort((a, b) => (a.node.highlightIndex || 0) - (b.node.highlightIndex || 0));
+
+        for (const { id, node } of nodes) {
+            const tag = node.tagName || 'unknown';
+            const xpath = node.xpath || '';
+            const depth = node.highlightDepth || 0;
+            const index = node.highlightIndex;
+            const textRaw = collectTextFor(id, highlightedIdSet, id);
+            let text = capText(textRaw, 100);
+            // Fallback to raw highlight's element.textContent if tree-derived text is empty
+            if (!text) {
+                const fallback = rawTextByIndex.get(index) || '';
+                if (fallback) text = capText(fallback, 100);
+            }
+            const attrs = pruneAttributes(tag, node.attributes || {}, textRaw);
+            const identityKey = buildIdentityKey(tag, xpath, attrs);
+            const isNew = !seen.has(identityKey);
+            seen.add(identityKey);
+
+            const info = {
+                placeholder: attrs['placeholder'],
+                role: attrs['role'],
+                ariaLabel: attrs['aria-label'],
+                type: attrs['type'],
+                textContent: text
+            };
+            const hrefTop = attrs['href'] || undefined;
+
+            const iframe_xpath = iframeByIndex.get(index) || null;
+            items.push({ index, tag, xpath, attrs, text, isNew, depth, href: hrefTop, info, iframe_xpath });
+        }
+        return items;
+    }
+    
+    // Set up scroll handler if position indexing is enabled
+    if (indexByPosition) {
+        const scrollHandler = createScrollHandler(INTERACTIVE_ELEMENTS_BY_POSITION, POSITION_GRID_SIZE);
+        window.addEventListener('scroll', scrollHandler, true);
+        window._scrollHandler = scrollHandler;
+    }
+    
+    return {
+    	rootId,
+    	map: DOM_HASH_MAP,
+	    highlightedElements: getHighlightedElements(),
+	    highlightedElementsSerialized: serializeHighlightedElements(),
+    	interactiveElementsByPosition: indexByPosition ? INTERACTIVE_ELEMENTS_BY_POSITION : undefined
+    };
+} 
+        window.buildDomTree = buildDomTree;
+    })();
+    

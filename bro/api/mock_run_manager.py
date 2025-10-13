@@ -10,86 +10,88 @@ import uuid
 from datetime import datetime
 from typing import Dict, Optional
 
-from .models import RunStatus
+from agent.agent_state import AgentState
+from agent.models import ActionContext, StructuredOutputContext
+
+from .models import DecisionType, LogType, RunStatus, SendDecisionRequest
 from .run_info import RunInfo
 
 
 class MockAgent:
     """Mock agent that simulates agent state without real execution."""
 
-    def __init__(self):
-        """Initialize mock agent with simulated state."""
-        self.agent_state = MockAgentState()
+    def __init__(self, user_id: str = "test_user", session_id: str = "test_session"):
+        """
+        Initialize mock agent with simulated state.
+
+        Args:
+            user_id: User identifier
+            session_id: Session identifier
+        """
+        self.agent_state = AgentState(user_id=user_id, session_id=session_id)
         self.input_manager = MockInputManager()
 
+        # Populate with mock data
+        self._initialize_mock_state()
 
-class MockAgentState:
-    """Mock agent state with simulated data."""
+    def _initialize_mock_state(self) -> None:
+        """Initialize the agent state with realistic mock data."""
+        # Add mock extraction
+        self.agent_state.add_extraction(
+            content="Mock extraction: Found product price $29.99",
+            source_url="https://example.com",
+            source_title="Example Domain - Mock Page",
+        )
 
-    def to_dict(self) -> Dict:
-        """
-        Convert mock agent state to dictionary.
+        # Add mock tab
+        self.agent_state.add_tab_state(
+            url="https://example.com",
+            title="Example Domain - Mock Page",
+            is_active=True,
+        )
 
-        Returns:
-            Dictionary representation of mock agent state matching frontend expectations
-        """
-        return {
-            "user_id": "test_user",
-            "session_id": "test_session",
-            "last_edited": datetime.now().isoformat(),
-            "current_tab_index": 0,
-            "extractions": [
-                {
-                    "content": "Mock extraction: Found product price $29.99",
-                    "source_url": "https://example.com",
-                    "source_title": "Example Domain - Mock Page",
-                    "content_length": 44,
-                }
-            ],
-            "tabs": [
-                {
-                    "index": 0,
-                    "url": "https://example.com",
-                    "title": "Example Domain - Mock Page",
-                    "is_active": True,
-                }
-            ],
-            "todo_list": [
+        # Add mock todo items
+        self.agent_state.update_todo_list(
+            [
                 {"task": "Navigate to website", "completed": True},
                 {"task": "Extract product information", "completed": False},
                 {"task": "Verify checkout process", "completed": False},
-            ],
-            "action_history": [
-                {
-                    "iteration": 1,
-                    "action_name": "navigate",
-                    "arguments": {"url": "https://example.com"},
-                    "result": "Successfully navigated to https://example.com",
-                    "timestamp": datetime.now().isoformat(),
-                    "description": "Navigating to initial URL",
-                    "structured_output": {
-                        "thinking": "I need to navigate to the target website first",
-                        "evaluation_previous_actions": "No previous actions yet",
-                        "memory": "Starting fresh navigation",
-                        "next_goal": "Navigate to https://example.com",
-                    },
-                },
-                {
-                    "iteration": 2,
-                    "action_name": "click",
-                    "arguments": {"element_id": "123", "selector": "button.products"},
-                    "result": "Clicked on 'Products' link",
-                    "timestamp": datetime.now().isoformat(),
-                    "description": "Clicking products button",
-                    "structured_output": {
-                        "thinking": "The products button should lead to the product catalog",
-                        "evaluation_previous_actions": "Successfully navigated to homepage",
-                        "memory": "On homepage, found products button",
-                        "next_goal": "Access product catalog",
-                    },
-                },
-            ],
-        }
+            ]
+        )
+
+        # Add mock action history
+        self.agent_state.action_history.append(
+            ActionContext(
+                iteration=1,
+                action_name="navigate",
+                arguments={"url": "https://example.com"},
+                result="Successfully navigated to https://example.com",
+                timestamp=datetime.now().isoformat(),
+                description="Navigating to initial URL",
+                structured_output=StructuredOutputContext(
+                    thinking="I need to navigate to the target website first",
+                    evaluation_previous_actions="No previous actions yet",
+                    memory="Starting fresh navigation",
+                    next_goal="Navigate to https://example.com",
+                ),
+            )
+        )
+        self.agent_state.action_history.append(
+            ActionContext(
+                iteration=2,
+                action_name="click",
+                arguments={"element_id": "123", "selector": "button.products"},
+                result="Clicked on 'Products' link",
+                timestamp=datetime.now().isoformat(),
+                description="Clicking products button",
+                structured_output=StructuredOutputContext(
+                    thinking="The products button should lead to the product catalog",
+                    evaluation_previous_actions="Successfully navigated to homepage",
+                    memory="On homepage, found products button",
+                    next_goal="Access product catalog",
+                ),
+            )
+        )
 
 
 class MockInputManager:
@@ -147,8 +149,8 @@ class MockRunManager:
         if not user_id:
             user_id = "test_user"
 
-        # Create mock agent
-        agent = MockAgent()
+        # Create mock agent with user_id and session_id
+        agent = MockAgent(user_id=user_id, session_id=session_id)
 
         # Create run info
         run_info = RunInfo(
@@ -183,7 +185,7 @@ class MockRunManager:
         try:
             run_info.set_status(RunStatus.RUNNING)
             await run_info.add_log_event(
-                "status", message=f"Agent run started: {run_info.user_prompt}"
+                LogType.STATUS, message=f"Agent run started: {run_info.user_prompt}"
             )
 
             # Simulate multiple iterations
@@ -193,8 +195,6 @@ class MockRunManager:
                 # Simulate navigation
                 if i == 1:
                     await asyncio.sleep(0.5)
-                    from agent.models import ActionContext, StructuredOutputContext
-
                     action_ctx = ActionContext(
                         iteration=i,
                         action_name="navigate",
@@ -208,9 +208,9 @@ class MockRunManager:
                             next_goal="Arrive at the page and analyze content.",
                         ),
                     )
-                    await run_info.add_log_event("action", action_context=action_ctx)
+                    await run_info.add_log_event(LogType.ACTION, action_context=action_ctx)
 
-                # Simulate thinking
+                # Simulate thinking action
                 await asyncio.sleep(0.8)
                 thinking_ctx = ActionContext(
                     iteration=i,
@@ -225,92 +225,85 @@ class MockRunManager:
                         next_goal="Determine the best action to take next",
                     ),
                 )
-                await run_info.add_log_event("thinking", action_context=thinking_ctx)
+                await run_info.add_log_event(LogType.ACTION, action_context=thinking_ctx)
 
-                # Simulate various actions with proper ActionData structure
+                # Simulate various actions with proper ActionContext structure
                 actions = [
-                    {
-                        "iteration": i,
-                        "action_name": "click",
-                        "arguments": {
+                    ActionContext(
+                        iteration=i,
+                        action_name="click",
+                        arguments={
                             "element_id": "submit_btn",
                             "selector": "button.submit",
                         },
-                        "result": "Successfully clicked submit button",
-                        "timestamp": datetime.now().isoformat(),
-                        "description": "Clicking submit button",
-                        "structured_output": {
-                            "thinking": "Need to submit the form to proceed",
-                            "evaluation_previous_actions": f"Completed {i - 1} actions successfully",
-                            "memory": "Form filled, ready to submit",
-                            "next_goal": "Submit form and wait for response",
-                        },
-                    },
-                    {
-                        "iteration": i,
-                        "action_name": "type",
-                        "arguments": {
+                        result="Successfully clicked submit button",
+                        timestamp=datetime.now().isoformat(),
+                        description="Clicking submit button",
+                        structured_output=StructuredOutputContext(
+                            thinking="Need to submit the form to proceed",
+                            evaluation_previous_actions=f"Completed {i - 1} actions successfully",
+                            memory="Form filled, ready to submit",
+                            next_goal="Submit form and wait for response",
+                        ),
+                    ),
+                    ActionContext(
+                        iteration=i,
+                        action_name="input_text",
+                        arguments={
                             "element_id": "search_input",
                             "selector": "input#search",
                             "text": "test query",
                         },
-                        "result": "Successfully typed into search field",
-                        "timestamp": datetime.now().isoformat(),
-                        "description": "Typing into search field",
-                        "structured_output": {
-                            "thinking": "I should search for the relevant information",
-                            "evaluation_previous_actions": f"Navigation complete at iteration {i - 1}",
-                            "memory": "Located search field on page",
-                            "next_goal": "Execute search query",
-                        },
-                    },
-                    {
-                        "iteration": i,
-                        "action_name": "scroll",
-                        "arguments": {"direction": "down", "amount": 500},
-                        "result": "Scrolled down 500 pixels",
-                        "timestamp": datetime.now().isoformat(),
-                        "description": "Scrolling down page",
-                        "structured_output": {
-                            "thinking": "Need to scroll to see more content",
-                            "evaluation_previous_actions": "Page loaded but content below fold",
-                            "memory": "Page has additional content below",
-                            "next_goal": "View content further down the page",
-                        },
-                    },
-                    {
-                        "iteration": i,
-                        "action_name": "extract",
-                        "arguments": {"selector": "div.product-info", "field": "text"},
-                        "result": "Extracted: Product: Widget, Price: $29.99",
-                        "timestamp": datetime.now().isoformat(),
-                        "description": "Extracting product information",
-                        "structured_output": {
-                            "thinking": "Found the product information I need to extract",
-                            "evaluation_previous_actions": "Successfully navigated to product page",
-                            "memory": "Located product details section",
-                            "next_goal": "Extract and store product data",
-                        },
-                    },
+                        result="Successfully typed into search field",
+                        timestamp=datetime.now().isoformat(),
+                        description="Typing into search field",
+                        structured_output=StructuredOutputContext(
+                            thinking="I should search for the relevant information",
+                            evaluation_previous_actions=f"Navigation complete at iteration {i - 1}",
+                            memory="Located search field on page",
+                            next_goal="Execute search query",
+                        ),
+                    ),
+                    ActionContext(
+                        iteration=i,
+                        action_name="scroll",
+                        arguments={"direction": "down", "amount": 500},
+                        result="Scrolled down 500 pixels",
+                        timestamp=datetime.now().isoformat(),
+                        description="Scrolling down page",
+                        structured_output=StructuredOutputContext(
+                            thinking="Need to scroll to see more content",
+                            evaluation_previous_actions="Page loaded but content below fold",
+                            memory="Page has additional content below",
+                            next_goal="View content further down the page",
+                        ),
+                    ),
+                    ActionContext(
+                        iteration=i,
+                        action_name="extract",
+                        arguments={"selector": "div.product-info", "field": "text"},
+                        result="Extracted: Product: Widget, Price: $29.99",
+                        timestamp=datetime.now().isoformat(),
+                        description="Extracting product information",
+                        structured_output=StructuredOutputContext(
+                            thinking="Found the product information I need to extract",
+                            evaluation_previous_actions="Successfully navigated to product page",
+                            memory="Located product details section",
+                            next_goal="Extract and store product data",
+                        ),
+                    ),
                 ]
 
-                action_dict = actions[i % len(actions)]
+                action_ctx = actions[i % len(actions)]
                 await asyncio.sleep(0.6)
-                action_ctx = ActionContext(**action_dict)
-                await run_info.add_log_event("action", action_context=action_ctx)
-
-                # Simulate result
-                await asyncio.sleep(0.4)
-                await run_info.add_log_event(
-                    "result", message=f"Action completed successfully at iteration {i}"
-                )
+                await run_info.add_log_event(LogType.ACTION, action_context=action_ctx)
 
             # Decision loop - keeps awaiting decisions until user says "done"
             while True:
                 # Simulate awaiting decision
                 run_info.set_status(RunStatus.AWAITING_DECISION)
                 await run_info.add_log_event(
-                    "status", message="Task appears complete. Awaiting user decision."
+                    LogType.STATUS, message="Task appears complete. Awaiting user decision."
                 )
 
                 # Wait for decision or timeout
@@ -323,7 +316,7 @@ class MockRunManager:
                     if decision.lower() in ["d", "done"]:
                         run_info.set_status(RunStatus.COMPLETED)
                         await run_info.add_log_event(
-                            "status", message="Agent run completed successfully"
+                            LogType.STATUS, message="Agent run completed successfully"
                         )
                         break
                     elif decision.lower() in ["m", "modify"]:
@@ -334,31 +327,31 @@ class MockRunManager:
                         )
                         run_info.set_status(RunStatus.RUNNING)
                         await run_info.add_log_event(
-                            "status",
+                            LogType.STATUS,
                             message=f"Resuming with modifications: {instructions}",
                         )
                         # Simulate brief work
                         await asyncio.sleep(2)
                         await run_info.add_log_event(
-                            "status", message="Modifications complete"
+                            LogType.STATUS, message="Modifications complete"
                         )
                         # Loop back to await decision again
 
                 except asyncio.TimeoutError:
                     run_info.set_status(RunStatus.COMPLETED)
                     await run_info.add_log_event(
-                        "status", message="Auto-completed after timeout"
+                        LogType.STATUS, message="Auto-completed after timeout"
                     )
                     break
 
         except asyncio.CancelledError:
             run_info.set_status(RunStatus.STOPPED)
-            await run_info.add_log_event("status", message="Agent run stopped by user")
+            await run_info.add_log_event(LogType.STATUS, message="Agent run stopped by user")
             raise
         except Exception as e:
             run_info.set_status(RunStatus.ERROR, str(e))
             await run_info.add_log_event(
-                "error", error=str(e), message="Agent run failed"
+                LogType.ERROR, error=str(e), message="Agent run failed"
             )
 
     async def get_run(self, run_id: str) -> Optional[RunInfo]:
@@ -395,7 +388,7 @@ class MockRunManager:
             run_info.task.cancel()
 
         run_info.set_status(RunStatus.STOPPED)
-        await run_info.add_log_event("status", message="Agent run stopped by user")
+        await run_info.add_log_event(LogType.STATUS, message="Agent run stopped by user")
 
         return True
 
@@ -415,7 +408,7 @@ class MockRunManager:
             return False
 
         await run_info.agent.input_manager.message_queue.put(message)
-        await run_info.add_log_event("user_input", message=message)
+        await run_info.add_log_event(LogType.USER_INPUT, message=message)
 
         return True
 
@@ -444,10 +437,8 @@ class MockRunManager:
                 additional_instructions
             )
 
-        from .models import SendDecisionRequest, DecisionType
-
         await run_info.add_log_event(
-            "user_decision",
+            LogType.USER_DECISION,
             decision=SendDecisionRequest(
                 decision=DecisionType(decision),
                 additional_instructions=additional_instructions,
@@ -475,8 +466,8 @@ class MockRunManager:
         if not run_info:
             return None
 
-        # MockAgentState uses to_dict() since it's not a Pydantic model
-        state_dict = run_info.agent.agent_state.to_dict()
+        # Use Pydantic's model_dump to convert to dictionary
+        state_dict = run_info.agent.agent_state.model_dump(mode="json")
         state_dict["run_id"] = run_id
 
         return state_dict

@@ -64,6 +64,4 @@ class ActionContext(BaseModel):
     result: str
     iteration: int
     description: Optional[str] = None  # Human-readable description of the action
-    structured_output: Optional[StructuredOutputContext] = (
-        None  # Associated structured output
-    )
+    structured_output: Optional[StructuredOutputContext] = None
