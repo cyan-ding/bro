@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { LogEvent } from "@/lib/api";
@@ -152,12 +151,12 @@ export default function LogStream({ logs }: LogStreamProps) {
   };
 
   return (
-    <Card>
+    <Card className="h-[calc(100vh-12rem)]">
       <CardHeader>
         <CardTitle>Agent Logs</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-full w-full pr-4" ref={scrollRef}>
+      <CardContent className="h-[calc(100%-5rem)]">
+        <div className="h-full overflow-auto pr-4" ref={scrollRef}>
           {logs.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               No logs yet. Start an agent to see activity.
@@ -184,7 +183,7 @@ export default function LogStream({ logs }: LogStreamProps) {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );

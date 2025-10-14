@@ -36,9 +36,13 @@ export default function AgentState({ state, runStatus }: AgentStateProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Status Overview */}
-      <Card>
+    <Card className="h-[calc(100vh-12rem)]">
+      <CardHeader>
+        <CardTitle>Agent State</CardTitle>
+      </CardHeader>
+      <CardContent className="h-[calc(100%-5rem)] overflow-auto space-y-4">
+        {/* Status Overview */}
+        <Card>
         <CardHeader>
           <CardTitle>Status Overview</CardTitle>
         </CardHeader>
@@ -225,6 +229,7 @@ export default function AgentState({ state, runStatus }: AgentStateProps) {
           )}
         </CardContent>
       </Card>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
