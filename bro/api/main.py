@@ -5,9 +5,11 @@ Provides HTTP endpoints for managing agent runs, streaming logs,
 and interacting with running agents.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
+from typing import Dict
+from utils.screencast import ScreencastClient
 
 from .models import (
     CreateRunRequest,
@@ -28,7 +30,7 @@ from .log_streamer import stream_logs
 
 
 # Set to True to use mock data for frontend testing
-USE_MOCK = True
+USE_MOCK = False
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -48,6 +50,10 @@ app.add_middleware(
 
 # Global run manager instance (mock or real based on USE_MOCK)
 run_manager = MockRunManager() if USE_MOCK else RunManager()
+
+# Global registry for screencast clients per run_id
+_screencast_clients: Dict[str, ScreencastClient] = {}
+_screencast_websockets: Dict[str, list[WebSocket]] = {}
 
 
 @app.get("/")
@@ -256,7 +262,7 @@ async def close_browser():
         Confirmation of browser closure
     """
     try:
-        from utils.use_cdp import close_chrome
+        from bro.utils.use_cdp import close_chrome
 
         success = close_chrome()
 
@@ -274,6 +280,108 @@ async def close_browser():
         raise HTTPException(
             status_code=500, detail=f"Failed to close browser: {str(e)}"
         )
+
+
+@app.websocket("/ws/screencast/{run_id}")
+async def websocket_screencast(websocket: WebSocket, run_id: str):
+    """
+    WebSocket endpoint for streaming CDP screencast frames.
+
+    Connects to Chrome via CDP and streams base64-encoded JPEG frames
+    to the frontend at ~10 FPS.
+
+    Args:
+        websocket: WebSocket connection
+        run_id: Run identifier (currently unused, for future multi-agent support)
+    """
+    await websocket.accept()
+    print(f"🎥 WebSocket client connected for screencast (run_id: {run_id})")
+
+    # Register this websocket for the run_id
+    if run_id not in _screencast_websockets:
+        _screencast_websockets[run_id] = []
+    _screencast_websockets[run_id].append(websocket)
+
+    try:
+        # Check if screencast client already exists for this run
+        if run_id not in _screencast_clients:
+            try:
+
+                print(f"📡 Creating CDP screencast client for run_id: {run_id}")
+
+                # Create and connect CDP client
+                client = ScreencastClient()
+                await client.connect()
+
+                # Define frame callback that broadcasts to all connected websockets
+                async def broadcast_frame(frame_data: Dict):
+                    """Broadcast frame to all connected WebSocket clients for this run."""
+                    disconnected = []
+                    for ws in _screencast_websockets.get(run_id, []):
+                        try:
+                            await ws.send_json({
+                                "type": "frame",
+                                "data": frame_data["data"],  # Base64-encoded JPEG
+                                "metadata": frame_data.get("metadata", {})
+                            })
+                        except Exception as e:
+                            print(f"❌ Error sending frame to websocket: {e}")
+                            disconnected.append(ws)
+
+                    # Remove disconnected websockets
+                    for ws in disconnected:
+                        if run_id in _screencast_websockets:
+                            _screencast_websockets[run_id].remove(ws)
+
+                # Start screencast with 10 FPS (every 6th frame at 60Hz)
+                await client.start_screencast(
+                    frame_callback=broadcast_frame,
+                    quality=80,
+                    every_nth_frame=6,
+                    max_width=1280,
+                    max_height=720
+                )
+
+                _screencast_clients[run_id] = client
+                print(f"✅ Screencast client started for run_id: {run_id}")
+
+            except Exception as e:
+                error_msg = f"Failed to initialize CDP screencast: {str(e)}"
+                print(f"❌ {error_msg}")
+                import traceback
+                traceback.print_exc()
+                await websocket.close(code=1011, reason=error_msg[:100])
+                return
+
+        # Keep websocket alive
+        while True:
+            try:
+                # Wait for ping/pong or client messages
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+
+    except WebSocketDisconnect:
+        print(f"🎥 WebSocket client disconnected (run_id: {run_id})")
+    except Exception as e:
+        print(f"❌ WebSocket error: {e}")
+        await websocket.close(code=1011, reason=str(e))
+    finally:
+        # Cleanup
+        if run_id in _screencast_websockets:
+            if websocket in _screencast_websockets[run_id]:
+                _screencast_websockets[run_id].remove(websocket)
+
+            # If no more websockets, stop and cleanup the screencast client
+            if not _screencast_websockets[run_id]:
+                del _screencast_websockets[run_id]
+
+                if run_id in _screencast_clients:
+                    client = _screencast_clients[run_id]
+                    await client.stop_screencast()
+                    await client.close()
+                    del _screencast_clients[run_id]
+                    print(f"✅ Screencast client stopped for run_id: {run_id}")
 
 
 if __name__ == "__main__":
