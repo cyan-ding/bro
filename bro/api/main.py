@@ -5,6 +5,7 @@ Provides HTTP endpoints for managing agent runs, streaming logs,
 and interacting with running agents.
 """
 
+import json
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -353,11 +354,46 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                 await websocket.close(code=1011, reason=error_msg[:100])
                 return
 
-        # Keep websocket alive
+        # Keep websocket alive and handle incoming input messages
         while True:
             try:
-                # Wait for ping/pong or client messages
-                await websocket.receive_text()
+                # Receive messages from frontend
+                message = await websocket.receive_text()
+
+                # Parse incoming messages for user input
+                try:
+                    data = json.loads(message)
+
+                    if data.get("type") == "input":
+                        client = _screencast_clients.get(run_id)
+                        if not client:
+                            continue
+
+                        action = data.get("action")
+
+                        if action == "click":
+                            x = data.get("x")
+                            y = data.get("y")
+                            button = data.get("button", "left")
+                            if x is not None and y is not None:
+                                await client.dispatch_mouse_click(x, y, button)
+
+                        elif action == "keypress":
+                            key = data.get("key")
+                            text = data.get("text", "")
+                            if key:
+                                await client.dispatch_key_event(key, text)
+
+                        elif action == "scroll":
+                            x = data.get("x", 0)
+                            y = data.get("y", 0)
+                            delta_y = data.get("deltaY", 0)
+                            await client.dispatch_scroll(x, y, delta_y)
+
+                except json.JSONDecodeError:
+                    # Ignore non-JSON messages (ping/pong)
+                    pass
+
             except WebSocketDisconnect:
                 break
 

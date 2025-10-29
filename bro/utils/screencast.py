@@ -163,6 +163,86 @@ class ScreencastClient:
         await self._send_command("Page.stopScreencast")
         print("✅ Screencast stopped")
 
+    async def dispatch_mouse_click(self, x: int, y: int, button: str = "left") -> None:
+        """
+        Dispatch a mouse click at the specified coordinates.
+
+        Args:
+            x: X coordinate in viewport
+            y: Y coordinate in viewport
+            button: Mouse button ("left", "right", "middle")
+        """
+        if not self.ws:
+            raise Exception("WebSocket not connected")
+
+        # Send mousePressed event
+        await self._send_command("Input.dispatchMouseEvent", {
+            "type": "mousePressed",
+            "x": x,
+            "y": y,
+            "button": button,
+            "clickCount": 1
+        })
+
+        # Send mouseReleased event
+        await self._send_command("Input.dispatchMouseEvent", {
+            "type": "mouseReleased",
+            "x": x,
+            "y": y,
+            "button": button,
+            "clickCount": 1
+        })
+
+        print(f"🖱️  Mouse click dispatched at ({x}, {y}) with {button} button")
+
+    async def dispatch_key_event(self, key: str, text: str = "") -> None:
+        """
+        Dispatch a keyboard event.
+
+        Args:
+            key: Key identifier (e.g., "Enter", "a", "Backspace")
+            text: Text to insert (for character keys)
+        """
+        if not self.ws:
+            raise Exception("WebSocket not connected")
+
+        # Send keyDown
+        await self._send_command("Input.dispatchKeyEvent", {
+            "type": "keyDown",
+            "key": key,
+            "text": text
+        })
+
+        # Send keyUp
+        await self._send_command("Input.dispatchKeyEvent", {
+            "type": "keyUp",
+            "key": key,
+            "text": text
+        })
+
+        print(f"⌨️  Key event dispatched: {key}")
+
+    async def dispatch_scroll(self, x: int, y: int, delta_y: int) -> None:
+        """
+        Dispatch a scroll gesture.
+
+        Args:
+            x: X coordinate to scroll from
+            y: Y coordinate to scroll from
+            delta_y: Vertical scroll distance (negative = scroll down)
+        """
+        if not self.ws:
+            raise Exception("WebSocket not connected")
+
+        await self._send_command("Input.synthesizeScrollGesture", {
+            "x": x,
+            "y": y,
+            "xDistance": 0,
+            "yDistance": delta_y
+        })
+
+        print(f"📜 Scroll dispatched at ({x}, {y}) with delta {delta_y}")
+
     async def close(self) -> None:
         """
         Close the WebSocket connection and session.
