@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
-export default function ScreencastPage() {
-  const searchParams = useSearchParams();
-  const runId = searchParams.get("runId") || "default";
+interface ScreencastViewerProps {
+  runId: string;
+}
 
+/**
+ * Embedded screencast viewer component for displaying live browser view.
+ *
+ * Shows Chrome screencast at ~10 FPS with optional manual intervention controls.
+ */
+export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -16,44 +21,61 @@ export default function ScreencastPage() {
   const frameCountRef = useRef(0);
   const [viewportDimensions, setViewportDimensions] = useState({ width: 1280, height: 720 });
   const [manualInterventionEnabled, setManualInterventionEnabled] = useState(false);
+  const chromeClosedRef = useRef(false);
 
   useEffect(() => {
+    if (!runId) {
+      return;
+    }
+
+    // Reset chromeClosed flag when runId changes (new run)
+    chromeClosedRef.current = false;
+    setError(null);
+
     const wsUrl = `ws://localhost:8000/ws/screencast/${runId}`;
-    console.log("Attempting to connect to:", wsUrl);
 
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+    let reconnectTimeout: NodeJS.Timeout;
 
-      ws.onopen = () => {
-        console.log("WebSocket connected successfully");
-        setIsConnected(true);
-        setError(null);
-      };
+    const connect = () => {
+      // Don't reconnect if Chrome was intentionally closed
+      if (chromeClosedRef.current) {
+        return;
+      }
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
-      ws.onmessage = (event) => {
+        ws.onopen = () => {
+          setIsConnected(true);
+          setError(null);
+        };
+
+        ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
 
+          // Check if Chrome was intentionally closed
+          if (data.type === "chrome_closed") {
+            chromeClosedRef.current = true;
+            setIsConnected(false);
+            setError("Chrome browser has been closed");
+            return;
+          }
+
           if (data.type === "frame" && data.data) {
-            // Decode base64 JPEG and render to canvas
             const img = new Image();
             img.onload = () => {
               const canvas = canvasRef.current;
               if (canvas) {
                 const ctx = canvas.getContext("2d");
                 if (ctx) {
-                  // Set canvas size to match image
                   canvas.width = img.width;
                   canvas.height = img.height;
 
-                  // Update viewport dimensions for coordinate mapping
                   setViewportDimensions({ width: img.width, height: img.height });
 
-                  // Draw image
                   ctx.drawImage(img, 0, 0);
 
-                  // Calculate FPS
                   frameCountRef.current++;
                   const now = Date.now();
                   const elapsed = now - lastFrameTimeRef.current;
@@ -71,33 +93,42 @@ export default function ScreencastPage() {
               console.error("Failed to load frame image");
             };
 
-            // Set base64 data as image source
             img.src = `data:image/jpeg;base64,${data.data}`;
           }
         } catch (err) {
           console.error("Error processing frame:", err);
-          setError("Error processing frame");
         }
       };
 
-      ws.onerror = (event) => {
-        console.error("WebSocket error:", event);
-        setError(`WebSocket connection error. Make sure backend is running on port 8000 and Chrome CDP is active.`);
-        setIsConnected(false);
-      };
+        ws.onerror = () => {
+          setError("WebSocket connection error. Is Chrome running with CDP?");
+          setIsConnected(false);
+        };
 
-      ws.onclose = (event) => {
-        console.log("WebSocket disconnected. Code:", event.code, "Reason:", event.reason);
-        setError(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason || "Unknown"}`);
-        setIsConnected(false);
-      };
+        ws.onclose = (event) => {
+          setIsConnected(false);
+          // Only reconnect if it wasn't a clean close and Chrome wasn't intentionally closed
+          if (event.code !== 1000 && !chromeClosedRef.current) {
+            setError(`Connection lost. Retrying in 2s...`);
+            reconnectTimeout = setTimeout(() => {
+              connect();
+            }, 2000);
+          } else if (chromeClosedRef.current) {
+            setError("Chrome browser has been closed");
+          }
+        };
+      } catch (err) {
+        console.error("Failed to create WebSocket:", err);
+        setError("Failed to connect to screencast stream");
+      }
+    };
 
-    } catch (err) {
-      console.error("Failed to create WebSocket:", err);
-      setError("Failed to connect to screencast stream");
-    }
+    connect();
 
     return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
       if (wsRef.current) {
         wsRef.current.close();
       }
@@ -130,18 +161,14 @@ export default function ScreencastPage() {
       return;
     }
 
-    // Get canvas click position
     const rect = canvas.getBoundingClientRect();
     const canvasX = event.clientX - rect.left;
     const canvasY = event.clientY - rect.top;
 
-    // Map to viewport coordinates
     const { x: viewportX, y: viewportY } = canvasToViewportCoords(canvasX, canvasY);
 
-    // Determine which button was clicked
     const button = event.button === 0 ? "left" : event.button === 2 ? "right" : "middle";
 
-    // Send click event to backend
     ws.send(
       JSON.stringify({
         type: "input",
@@ -154,7 +181,6 @@ export default function ScreencastPage() {
   };
 
   const handleCanvasContextMenu = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    // Prevent default context menu, but still allow right-click to be sent to browser
     event.preventDefault();
   };
 
@@ -169,16 +195,14 @@ export default function ScreencastPage() {
       return;
     }
 
-    // Prevent default browser behavior for keys
     event.preventDefault();
 
-    // Send key event to backend
     ws.send(
       JSON.stringify({
         type: "input",
         action: "keypress",
         key: event.key,
-        text: event.key.length === 1 ? event.key : "", // Only send text for printable characters
+        text: event.key.length === 1 ? event.key : "",
       })
     );
   };
@@ -195,93 +219,75 @@ export default function ScreencastPage() {
       return;
     }
 
-    // Prevent default scroll behavior
     event.preventDefault();
 
-    // Get mouse position for scroll origin
     const rect = canvas.getBoundingClientRect();
     const canvasX = event.clientX - rect.left;
     const canvasY = event.clientY - rect.top;
 
-    // Map to viewport coordinates
     const { x: viewportX, y: viewportY } = canvasToViewportCoords(canvasX, canvasY);
 
-    // Send scroll event to backend
     ws.send(
       JSON.stringify({
         type: "input",
         action: "scroll",
         x: viewportX,
         y: viewportY,
-        deltaY: -event.deltaY, // Invert to match CDP expectations
+        deltaY: event.deltaY,
       })
     );
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold">Agent Screencast</h1>
-            <button
-              onClick={() => setManualInterventionEnabled(!manualInterventionEnabled)}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                manualInterventionEnabled
-                  ? "bg-green-600 hover:bg-green-700 text-white"
-                  : "bg-gray-600 hover:bg-gray-700 text-gray-300"
+    <div className="bg-card rounded-lg border shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">Browser View</h2>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div
+              className={`w-2 h-2 rounded-full ${
+                isConnected ? "bg-green-500" : "bg-red-500"
               }`}
-            >
-              {manualInterventionEnabled ? "Manual Control: ON" : "Manual Control: OFF"}
-            </button>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  isConnected ? "bg-green-500" : "bg-red-500"
-                }`}
-              />
-              <span>{isConnected ? "Connected" : "Disconnected"}</span>
-            </div>
-            <div>Run ID: {runId}</div>
-            <div>FPS: {fps}</div>
+            />
+            <span>{fps} FPS</span>
           </div>
         </div>
-
-        {error && (
-          <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
-
-        <div className="bg-gray-800 rounded-lg p-4 shadow-xl">
-          <canvas
-            ref={canvasRef}
-            className="w-full h-auto bg-black rounded cursor-pointer"
-            style={{ maxWidth: "100%", maxHeight: "calc(100vh - 250px)" }}
-            onClick={handleCanvasClick}
-            onContextMenu={handleCanvasContextMenu}
-            onKeyDown={handleKeyDown}
-            onWheel={handleWheel}
-            tabIndex={0}
-          />
-        </div>
-
-        <div className="mt-4 text-sm text-gray-400">
-          <p>
-            This page shows a live view of the agent&apos;s browser at approximately 10
-            FPS.
-          </p>
-          <p className="mt-2">
-            <strong>Manual Control:</strong> Toggle the button above to enable manual intervention.
-            When enabled, you can click, type, and scroll to interact with the browser in real-time.
-          </p>
-          <p className="mt-1 text-xs">
-            Note: Click the canvas first to focus it for keyboard input.
-          </p>
-        </div>
+        <button
+          onClick={() => setManualInterventionEnabled(!manualInterventionEnabled)}
+          className={`px-3 py-1 text-sm rounded-md font-medium transition-colors ${
+            manualInterventionEnabled
+              ? "bg-green-600 hover:bg-green-700 text-white"
+              : "bg-secondary hover:bg-secondary/80"
+          }`}
+        >
+          {manualInterventionEnabled ? "Manual: ON" : "Manual: OFF"}
+        </button>
       </div>
+
+      {error && (
+        <div className="mb-3 p-3 bg-destructive/10 border border-destructive rounded text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      <div className="bg-black rounded overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          className="w-full h-auto cursor-pointer"
+          style={{ maxHeight: "500px" }}
+          onClick={handleCanvasClick}
+          onContextMenu={handleCanvasContextMenu}
+          onKeyDown={handleKeyDown}
+          onWheel={handleWheel}
+          tabIndex={0}
+        />
+      </div>
+
+      {manualInterventionEnabled && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Manual control enabled. Click canvas to focus, then click, type, or scroll to interact.
+        </p>
+      )}
     </div>
   );
 }

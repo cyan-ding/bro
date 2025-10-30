@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from utils.use_cdp import use_cdp
+from bro.utils.use_cdp import use_cdp
 from patchright.async_api import Page, async_playwright
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -13,13 +13,13 @@ from .build_llm_prompt import build_llm_prompt
 from .schemas import StructuredOutput
 
 # Import utility functions
-from utils.action_utils import format_elements_text
+from bro.utils.action_utils import format_elements_text
 from .actions import click, done, extract, input_text, scroll, search, todo_edit
 from .agent_state import initialize_agent_state
 from .ai import ai
-from utils.credentials import get_credentials
-from utils.dom_utils import take_screenshot_with_bounding_boxes
-from utils.input_manager import InputManager
+from bro.utils.credentials import get_credentials
+from bro.utils.dom_utils import take_screenshot_with_bounding_boxes
+from bro.utils.input_manager import InputManager
 
 if TYPE_CHECKING:
     from api.run_info import RunInfo

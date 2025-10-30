@@ -24,7 +24,7 @@
 
 * **Never add `console.log` logs in any `js` files**
 
-* **Never create extra testing or summary files in any circumstances**
+* **Never create extra testing or summary .MD files in any circumstances**
 
 * **Before making any edits, outline what changes you will be making**
 

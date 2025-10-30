@@ -75,8 +75,8 @@ class ScreencastClient:
     async def start_screencast(
         self,
         frame_callback: Callable[[Dict[str, Any]], None],
-        quality: int = 80,
-        every_nth_frame: int = 6,
+        quality: int = 100,
+        every_nth_frame: int = 1,
         max_width: int = 1280,
         max_height: int = 720
     ) -> None:
@@ -224,7 +224,7 @@ class ScreencastClient:
 
     async def dispatch_scroll(self, x: int, y: int, delta_y: int) -> None:
         """
-        Dispatch a scroll gesture.
+        Dispatch a scroll event using mouseWheel.
 
         Args:
             x: X coordinate to scroll from
@@ -234,11 +234,13 @@ class ScreencastClient:
         if not self.ws:
             raise Exception("WebSocket not connected")
 
-        await self._send_command("Input.synthesizeScrollGesture", {
+        # Use Input.dispatchMouseEvent with type "mouseWheel" for more responsive scrolling
+        await self._send_command("Input.dispatchMouseEvent", {
+            "type": "mouseWheel",
             "x": x,
             "y": y,
-            "xDistance": 0,
-            "yDistance": delta_y
+            "deltaX": 0,
+            "deltaY": delta_y
         })
 
         print(f"📜 Scroll dispatched at ({x}, {y}) with delta {delta_y}")

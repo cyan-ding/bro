@@ -55,6 +55,7 @@ run_manager = MockRunManager() if USE_MOCK else RunManager()
 # Global registry for screencast clients per run_id
 _screencast_clients: Dict[str, ScreencastClient] = {}
 _screencast_websockets: Dict[str, list[WebSocket]] = {}
+_chrome_intentionally_closed: bool = False
 
 
 @app.get("/")
@@ -88,7 +89,12 @@ async def create_run(request: CreateRunRequest):
     Returns:
         Run information including run_id for tracking
     """
+    global _chrome_intentionally_closed
+
     try:
+        # Reset the Chrome closed flag when starting a new run
+        _chrome_intentionally_closed = False
+
         run_info = await run_manager.create_run(
             user_prompt=request.user_prompt,
             url=request.url,
@@ -262,8 +268,33 @@ async def close_browser():
     Returns:
         Confirmation of browser closure
     """
+    global _chrome_intentionally_closed
+
     try:
         from bro.utils.use_cdp import close_chrome
+
+        # Set flag to stop screencast reconnection attempts
+        _chrome_intentionally_closed = True
+
+        # Close all active screencast clients
+        for run_id in list(_screencast_clients.keys()):
+            client = _screencast_clients[run_id]
+            await client.stop_screencast()
+            await client.close()
+            del _screencast_clients[run_id]
+
+        # Close all WebSocket connections with a special message
+        for run_id in list(_screencast_websockets.keys()):
+            for ws in _screencast_websockets[run_id]:
+                try:
+                    await ws.send_json({
+                        "type": "chrome_closed",
+                        "message": "Chrome browser has been closed"
+                    })
+                    await ws.close(code=1000, reason="Chrome closed")
+                except Exception:
+                    pass
+            del _screencast_websockets[run_id]
 
         success = close_chrome()
 
@@ -295,8 +326,19 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
         websocket: WebSocket connection
         run_id: Run identifier (currently unused, for future multi-agent support)
     """
+    global _chrome_intentionally_closed
+
     await websocket.accept()
     print(f"🎥 WebSocket client connected for screencast (run_id: {run_id})")
+
+    # Check if Chrome was intentionally closed
+    if _chrome_intentionally_closed:
+        await websocket.send_json({
+            "type": "chrome_closed",
+            "message": "Chrome browser has been closed"
+        })
+        await websocket.close(code=1000, reason="Chrome closed")
+        return
 
     # Register this websocket for the run_id
     if run_id not in _screencast_websockets:
