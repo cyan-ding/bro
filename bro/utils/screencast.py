@@ -245,6 +245,33 @@ class ScreencastClient:
 
         print(f"📜 Scroll dispatched at ({x}, {y}) with delta {delta_y}")
 
+    async def navigate_back(self) -> None:
+        """
+        Navigate back in browser history.
+        """
+        if not self.ws:
+            raise Exception("WebSocket not connected")
+
+        # Use Page.navigate with javascript:history.back() or Runtime.evaluate
+        await self._send_command("Runtime.evaluate", {
+            "expression": "window.history.back()"
+        })
+
+        print("⬅️  Navigated back")
+
+    async def reload_page(self) -> None:
+        """
+        Reload the current page.
+        """
+        if not self.ws:
+            raise Exception("WebSocket not connected")
+
+        await self._send_command("Page.reload", {
+            "ignoreCache": False
+        })
+
+        print("🔄 Page reloaded")
+
     async def close(self) -> None:
         """
         Close the WebSocket connection and session.

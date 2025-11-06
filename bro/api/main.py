@@ -31,7 +31,7 @@ from .log_streamer import stream_logs
 
 
 # Set to True to use mock data for frontend testing
-USE_MOCK = False
+USE_MOCK = True
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -406,11 +406,11 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                 try:
                     data = json.loads(message)
 
-                    if data.get("type") == "input":
-                        client = _screencast_clients.get(run_id)
-                        if not client:
-                            continue
+                    client = _screencast_clients.get(run_id)
+                    if not client:
+                        continue
 
+                    if data.get("type") == "input":
                         action = data.get("action")
 
                         if action == "click":
@@ -432,6 +432,14 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                             delta_y = data.get("deltaY", 0)
                             await client.dispatch_scroll(x, y, delta_y)
 
+                    elif data.get("type") == "navigation":
+                        action = data.get("action")
+
+                        if action == "back":
+                            await client.navigate_back()
+                        elif action == "reload":
+                            await client.reload_page()
+
                 except json.JSONDecodeError:
                     # Ignore non-JSON messages (ping/pong)
                     pass
@@ -450,16 +458,11 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
             if websocket in _screencast_websockets[run_id]:
                 _screencast_websockets[run_id].remove(websocket)
 
-            # If no more websockets, stop and cleanup the screencast client
+            # Clean up empty websocket list, but keep screencast client running
+            # The screencast client will be cleaned up when the run ends or browser closes
             if not _screencast_websockets[run_id]:
                 del _screencast_websockets[run_id]
-
-                if run_id in _screencast_clients:
-                    client = _screencast_clients[run_id]
-                    await client.stop_screencast()
-                    await client.close()
-                    del _screencast_clients[run_id]
-                    print(f"✅ Screencast client stopped for run_id: {run_id}")
+                print(f"📡 All websockets disconnected for run_id: {run_id}, but keeping screencast client alive")
 
 
 if __name__ == "__main__":

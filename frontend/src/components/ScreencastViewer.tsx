@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 interface ScreencastViewerProps {
-  runId: string;
+  runId: string | null;
+  currentUrl?: string;
+  isRunning?: boolean;
 }
 
 /**
@@ -11,7 +13,7 @@ interface ScreencastViewerProps {
  *
  * Shows Chrome screencast at ~10 FPS with optional manual intervention controls.
  */
-export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
+export default function ScreencastViewer({ runId, currentUrl: externalUrl, isRunning = false }: ScreencastViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -22,6 +24,10 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
   const [viewportDimensions, setViewportDimensions] = useState({ width: 1280, height: 720 });
   const [manualInterventionEnabled, setManualInterventionEnabled] = useState(false);
   const chromeClosedRef = useRef(false);
+  const [internalUrl, setInternalUrl] = useState<string>("");
+
+  // Use external URL from agent state if available, otherwise use internal state
+  const currentUrl = externalUrl || internalUrl;
 
   useEffect(() => {
     if (!runId) {
@@ -30,17 +36,31 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
 
     // Reset chromeClosed flag when runId changes (new run)
     chromeClosedRef.current = false;
-    setError(null);
 
     const wsUrl = `ws://localhost:8000/ws/screencast/${runId}`;
 
     let reconnectTimeout: NodeJS.Timeout;
+    let hasConnectedOnce = false;
 
     const connect = () => {
-      // Don't reconnect if Chrome was intentionally closed
+      // Don't connect/reconnect if Chrome was intentionally closed
       if (chromeClosedRef.current) {
         return;
       }
+
+      // Only wait for isRunning on the first connection attempt
+      if (!hasConnectedOnce && !isRunning) {
+        setError("Waiting for run to start...");
+        setIsConnected(false);
+        // Try again in 1 second
+        reconnectTimeout = setTimeout(() => {
+          connect();
+        }, 1000);
+        return;
+      }
+
+      hasConnectedOnce = true;
+      setError(null);
       try {
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
@@ -63,6 +83,11 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
           }
 
           if (data.type === "frame" && data.data) {
+            // Update URL from metadata if available (fallback if not passed from parent)
+            if (data.metadata?.url) {
+              setInternalUrl(data.metadata.url);
+            }
+
             const img = new Image();
             img.onload = () => {
               const canvas = canvasRef.current;
@@ -100,8 +125,9 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
         }
       };
 
-        ws.onerror = () => {
-          setError("WebSocket connection error. Is Chrome running with CDP?");
+        ws.onerror = (err) => {
+          console.error("[Screencast] WebSocket error:", err);
+          setError("WebSocket connection error. Chrome may not be running or the run may have ended.");
           setIsConnected(false);
         };
 
@@ -133,7 +159,7 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
         wsRef.current.close();
       }
     };
-  }, [runId]);
+  }, [runId, isRunning]);
 
   const canvasToViewportCoords = (canvasX: number, canvasY: number) => {
     const canvas = canvasRef.current;
@@ -239,8 +265,8 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
   };
 
   return (
-    <div className="bg-card rounded-lg border shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-card rounded-lg border shadow-sm p-4 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Browser View</h2>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -265,16 +291,90 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
       </div>
 
       {error && (
-        <div className="mb-3 p-3 bg-destructive/10 border border-destructive rounded text-sm text-destructive">
+        <div className={`mb-3 p-3 rounded text-sm flex-shrink-0 ${
+          error.includes("Waiting")
+            ? "bg-blue-500/10 border border-blue-500 text-blue-700 dark:text-blue-300"
+            : "bg-destructive/10 border border-destructive text-destructive"
+        }`}>
           {error}
         </div>
       )}
 
-      <div className="bg-black rounded overflow-hidden">
+      {/* URL Bar */}
+      <div className="mb-2 px-3 py-2 bg-secondary rounded flex items-center gap-2 text-sm flex-shrink-0">
+          {/* Back Button */}
+          <button
+            onClick={() => {
+              const ws = wsRef.current;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "navigation", action: "back" }));
+              }
+            }}
+            className="p-1.5 hover:bg-accent rounded transition-colors"
+            title="Go back"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+
+          {/* Reload Button */}
+          <button
+            onClick={() => {
+              const ws = wsRef.current;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "navigation", action: "reload" }));
+              }
+            }}
+            className="p-1.5 hover:bg-accent rounded transition-colors"
+            title="Reload"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+
+        {/* Lock Icon + URL */}
+        <div className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1 bg-background rounded">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4 text-muted-foreground flex-shrink-0"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span className="text-muted-foreground truncate">{currentUrl || "Connecting..."}</span>
+        </div>
+      </div>
+          
+      { /* Screencast */}
+      <div className="bg-black rounded overflow-hidden flex-1 flex items-center justify-center">
         <canvas
           ref={canvasRef}
-          className="w-full h-auto cursor-pointer"
-          style={{ maxHeight: "500px" }}
+          className="max-w-full max-h-full cursor-pointer object-contain"
           onClick={handleCanvasClick}
           onContextMenu={handleCanvasContextMenu}
           onKeyDown={handleKeyDown}
@@ -284,7 +384,7 @@ export default function ScreencastViewer({ runId }: ScreencastViewerProps) {
       </div>
 
       {manualInterventionEnabled && (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground flex-shrink-0">
           Manual control enabled. Click canvas to focus, then click, type, or scroll to interact.
         </p>
       )}

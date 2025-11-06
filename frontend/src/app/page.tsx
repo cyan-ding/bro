@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import AgentControls from "@/components/AgentControls";
-import LogStream from "@/components/LogStream";
-import AgentState from "@/components/AgentState";
+import { useEffect, useCallback } from "react";
+import AgentChat from "@/components/AgentChat";
 import ScreencastViewer from "@/components/ScreencastViewer";
 import {
   createRun,
@@ -13,22 +11,28 @@ import {
   sendDecision,
   stopRun,
   closeBrowser,
-  createLogStream,
-  type LogEvent,
-  type RunStatusResponse,
-  type AgentStateResponse,
 } from "@/lib/api";
+import { useAgentStore } from "@/store/useAgentStore";
 
 /**
  * Main dashboard page for controlling and monitoring the Bro agent.
  */
 export default function Dashboard() {
-  const [runId, setRunId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<LogEvent[]>([]);
-  const [runStatus, setRunStatus] = useState<RunStatusResponse | null>(null);
-  const [agentState, setAgentState] = useState<AgentStateResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  const {
+    runId,
+    logs,
+    runStatus,
+    agentState,
+    error,
+    setRunId,
+    setLogs,
+    setRunStatus,
+    setAgentState,
+    setError,
+  } = useAgentStore();
+
+  const isRunning = runStatus?.status === "running";
+  const isAwaitingDecision = runStatus?.status === "awaiting_decision";
 
   // Fetch run status periodically
   useEffect(() => {
@@ -39,7 +43,7 @@ export default function Dashboard() {
         const status = await getRunStatus(runId);
         setRunStatus(status);
 
-        // Stop polling if run is complete
+        // Stop polling and optionally clear runId if run is complete
         if (status.status === "completed" || status.status === "stopped" || status.status === "error") {
           clearInterval(interval);
         }
@@ -51,11 +55,11 @@ export default function Dashboard() {
     fetchStatus();
     const interval = setInterval(fetchStatus, 2000);
     return () => clearInterval(interval);
-  }, [runId]);
+  }, [runId, isRunning, setRunStatus]);
 
   // Fetch agent state periodically
   useEffect(() => {
-    if (!runId) return;
+    if (!runId || !isRunning) return;
 
     // Don't poll if run is complete
     if (runStatus?.status === "completed" || runStatus?.status === "stopped" || runStatus?.status === "error") {
@@ -74,47 +78,24 @@ export default function Dashboard() {
     fetchState();
     const interval = setInterval(fetchState, 3000);
     return () => clearInterval(interval);
-  }, [runId, runStatus]);
+  }, [runId, isRunning, runStatus, setAgentState]);
 
-  // Set up log streaming
+  // Set up log streaming using Zustand store
   useEffect(() => {
-    if (!runId) return;
+    if (!runId || !isRunning) {
+      useAgentStore.getState().closeEventSource();
+      return;
+    }
 
-    const newEventSource = createLogStream(runId);
-    setEventSource(newEventSource);
+    // Start log streaming via Zustand store
+    useAgentStore.getState().startLogStreaming(runId);
 
-    newEventSource.onmessage = (event) => {
-      try {
-        // Skip empty or keepalive messages
-        if (!event.data || event.data.trim() === "") {
-          return;
-        }
-
-        const logEvent: LogEvent = JSON.parse(event.data);
-        console.log(logEvent)
-        setLogs((prev) => [...prev, logEvent]);
-
-        // Close event source when run ends
-        if (logEvent.event_type === "final_status") {
-          newEventSource.close();
-          setEventSource(null);
-        }
-      } catch (err) {
-        console.error("Failed to parse log event:", err, "Data:", event.data);
-      }
-    };
-
-    newEventSource.onerror = (err) => {
-      console.error("EventSource error:", err);
-      newEventSource.close();
-      setEventSource(null);
-    };
-
+    // Cleanup on unmount or runId change
     return () => {
-      newEventSource.close();
-      setEventSource(null);
+      // Don't close when component unmounts - let the store manage it
+      // This allows streaming to continue when navigating between pages
     };
-  }, [runId]);
+  }, [runId, isRunning]);
 
   const handleStart = useCallback(async (prompt: string, url?: string) => {
     try {
@@ -125,7 +106,7 @@ export default function Dashboard() {
 
       const response = await createRun({
         user_prompt: prompt,
-        url,
+        url: url || "", // Keep URL in code but use empty string as default
         max_iterations: 100,
         take_screenshot: true,
         enable_logging: true,
@@ -135,24 +116,23 @@ export default function Dashboard() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start agent");
     }
-  }, []);
+  }, [setRunId, setLogs, setAgentState, setRunStatus, setError]);
 
   const handleStop = useCallback(async () => {
     if (!runId) return;
 
     try {
       await stopRun(runId);
-      setRunStatus((prev) => prev ? { ...prev, status: "stopped" } : null);
+      if (runStatus) {
+        setRunStatus({ ...runStatus, status: "stopped" });
+      }
 
       // Close event source when stopping
-      if (eventSource) {
-        eventSource.close();
-        setEventSource(null);
-      }
+      useAgentStore.getState().closeEventSource();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop agent");
     }
-  }, [runId, eventSource]);
+  }, [runId, runStatus, setRunStatus, setError]);
 
   const handleCloseBrowser = useCallback(async () => {
     try {
@@ -160,7 +140,7 @@ export default function Dashboard() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to close browser");
     }
-  }, []);
+  }, [setError]);
 
   const handleSendInput = useCallback(async (message: string) => {
     if (!runId) return;
@@ -170,7 +150,7 @@ export default function Dashboard() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send input");
     }
-  }, [runId]);
+  }, [runId, setError]);
 
   const handleSendDecision = useCallback(
     async (decision: "done" | "modify" | "intervene", instructions?: string) => {
@@ -182,20 +162,14 @@ export default function Dashboard() {
         setError(err instanceof Error ? err.message : "Failed to send decision");
       }
     },
-    [runId]
+    [runId, setError]
   );
-
-  const isRunning = runStatus?.status === "running";
-  const isAwaitingDecision = runStatus?.status === "awaiting_decision";
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto py-8 px-4">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Bro Agent Dashboard</h1>
-          <p className="text-muted-foreground">
-            Control and monitor your web automation agent
-          </p>
+          <h1 className="text-4xl font-bold mb-2">Bro</h1>
         </div>
 
         {error && (
@@ -204,10 +178,10 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left column: Controls + Logs */}
-          <div className="lg:col-span-1 space-y-6">
-            <AgentControls
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 grid-rows-1" style={{ height: "calc(100vh - 150px)" }}>
+          {/* Left column: Chat Interface */}
+          <div className="lg:col-span-1">
+            <AgentChat
               onStart={handleStart}
               onStop={handleStop}
               onCloseBrowser={handleCloseBrowser}
@@ -215,32 +189,19 @@ export default function Dashboard() {
               onSendDecision={handleSendDecision}
               isRunning={isRunning}
               isAwaitingDecision={isAwaitingDecision}
+              logs={logs}
+              runId={runId}
+              agentState={agentState}
             />
-            <LogStream logs={logs} />
           </div>
 
-          {/* Middle column: Screencast */}
-          <div className="lg:col-span-1">
-            {runId ? (
-              <ScreencastViewer runId={runId} />
-            ) : (
-              <div className="bg-card rounded-lg border shadow-sm p-8 text-center text-muted-foreground">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-16 w-16 mx-auto mb-4 opacity-20"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                </svg>
-                <p>Start an agent run to view browser screencast</p>
-              </div>
-            )}
-          </div>
-
-          {/* Right column: Agent State */}
-          <div className="lg:col-span-1">
-            <AgentState state={agentState} runStatus={runStatus} />
+          {/* Middle + Right columns: Screencast (expanded) */}
+          <div className="lg:col-span-2">
+            <ScreencastViewer
+              runId={runId}
+              currentUrl={agentState?.tabs?.[agentState.current_tab_index ?? 0]?.url}
+              isRunning={isRunning}
+            />
           </div>
         </div>
       </div>

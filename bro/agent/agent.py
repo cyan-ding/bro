@@ -646,9 +646,6 @@ class Agent:
                         screenshot=page_data.get("screenshot") if page_data else None,
                     )
 
-                    # TODO get rid of this before open source
-                    with open("agent-state-observable", "w", encoding="utf-8") as f:
-                        f.write(enhanced_prompt)
                     llm_response = await ai(params)
 
                     parsed = await self._parse_structured_json(llm_response)

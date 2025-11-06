@@ -69,6 +69,3 @@ metrics/
 temp/
 tmp/
 *.tmp
-
-# Bro specific files
-agent-state-observable
