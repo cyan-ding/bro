@@ -13,7 +13,7 @@ interface ScreencastViewerProps {
  *
  * Shows Chrome screencast at ~10 FPS with optional manual intervention controls.
  */
-export default function ScreencastViewer({ runId, currentUrl: externalUrl, isRunning = false }: ScreencastViewerProps) {
+export default function ScreencastViewer({ runId, currentUrl, isRunning = false }: ScreencastViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -24,10 +24,6 @@ export default function ScreencastViewer({ runId, currentUrl: externalUrl, isRun
   const [viewportDimensions, setViewportDimensions] = useState({ width: 1280, height: 720 });
   const [manualInterventionEnabled, setManualInterventionEnabled] = useState(false);
   const chromeClosedRef = useRef(false);
-  const [internalUrl, setInternalUrl] = useState<string>("");
-
-  // Use external URL from agent state if available, otherwise use internal state
-  const currentUrl = externalUrl || internalUrl;
 
   useEffect(() => {
     if (!runId) {
@@ -83,11 +79,6 @@ export default function ScreencastViewer({ runId, currentUrl: externalUrl, isRun
           }
 
           if (data.type === "frame" && data.data) {
-            // Update URL from metadata if available (fallback if not passed from parent)
-            if (data.metadata?.url) {
-              setInternalUrl(data.metadata.url);
-            }
-
             const img = new Image();
             img.onload = () => {
               const canvas = canvasRef.current;
@@ -366,7 +357,7 @@ export default function ScreencastViewer({ runId, currentUrl: externalUrl, isRun
               clipRule="evenodd"
             />
           </svg>
-          <span className="text-muted-foreground truncate">{currentUrl || "Connecting..."}</span>
+          <input className="text-muted-foreground truncate outline-none border-none" value={currentUrl || "Connecting..."}/>
         </div>
       </div>
           

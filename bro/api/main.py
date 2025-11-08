@@ -320,7 +320,7 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
     WebSocket endpoint for streaming CDP screencast frames.
 
     Connects to Chrome via CDP and streams base64-encoded JPEG frames
-    to the frontend at ~10 FPS.
+    to the frontend at ~60 FPS.
 
     Args:
         websocket: WebSocket connection
@@ -380,7 +380,7 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                 await client.start_screencast(
                     frame_callback=broadcast_frame,
                     quality=80,
-                    every_nth_frame=6,
+                    every_nth_frame=1,
                     max_width=1280,
                     max_height=720
                 )

@@ -86,7 +86,7 @@ class ScreencastClient:
         Args:
             frame_callback: Async callback function to receive frame data
             quality: JPEG quality (0-100)
-            every_nth_frame: Capture every Nth frame (6 = ~10 FPS at 60Hz)
+            every_nth_frame: Capture every Nth frame (~60 FPS at 60Hz)
             max_width: Maximum frame width in pixels
             max_height: Maximum frame height in pixels
         """

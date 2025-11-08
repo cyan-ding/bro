@@ -124,11 +124,7 @@ def generate_action_description(
         target = arguments.get("target", "unknown")
         element_desc = _get_element_desc(target)
         text = arguments.get("input_text", "")
-        login = arguments.get("login")
-        if login:
-            return f"You entered login credentials '{login}' into {element_desc}"
-        else:
-            return f"You typed '{text}' into {element_desc}"
+        return f"You typed '{text}' into {element_desc}"
     elif action_name == "scroll":
         how_much = arguments.get("how_much", "")
         return f"You scrolled by {how_much} pixels"

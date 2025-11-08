@@ -12,7 +12,6 @@ class InputTextArgs(BaseModel):
 
     target: int
     input_text: str
-    login: Optional[str] = None
 
 class ScrollArgs(BaseModel):
     """Arguments for the scroll action."""

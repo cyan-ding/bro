@@ -17,7 +17,6 @@ from bro.utils.action_utils import format_elements_text
 from .actions import click, done, extract, input_text, scroll, search, todo_edit
 from .agent_state import initialize_agent_state
 from .ai import ai
-from bro.utils.credentials import get_credentials
 from bro.utils.dom_utils import take_screenshot_with_bounding_boxes
 from bro.utils.input_manager import InputManager
 
@@ -79,8 +78,7 @@ class Agent:
     4. Maps indices to XPath selectors and executes the tool call
     5. Repeats until task completion
 
-    The agent uses element indices for targeting and automatically handles credential
-    lookup for login functionality.
+    The agent uses element indices for targeting.
     """
 
     def __init__(
@@ -248,7 +246,6 @@ class Agent:
                     case "input_text":
                         target_index = arguments.get("target")
                         input_text_value = arguments.get("input_text")
-                        placeholder = arguments.get("login")
 
                         if target_index is None:
                             error_msg = "Error: target is required for text_input"
@@ -262,25 +259,6 @@ class Agent:
                             print(f"❌ {error_msg}")
                             results.append(error_msg)
                             continue
-
-                        # Handle login credentials if provided
-                        if placeholder:
-                            print(
-                                f"🔐 Looking up credentials for placeholder: {placeholder}"
-                            )
-                            credentials = await get_credentials(
-                                placeholder, input_manager=self.input_manager
-                            )
-                            if credentials:
-                                input_text_value = credentials
-                                print(f"🔐 Found credentials for {placeholder}")
-                            else:
-                                # If missing and retry requested, get_credentials already prompted and may have updated file
-                                # When still None, we just report that credential is unavailable and allow agent to continue.
-                                msg = f"Credential '{placeholder}' is unavailable."
-                                print(msg)
-                                results.append(msg)
-                                continue
 
                         if not input_text_value:
                             error_msg = "Error: input_text is required for text_input"
