@@ -1,13 +1,3 @@
-"""
-Agent State Management for Bro
-
-This module provides centralized state management for the Bro agent, tracking context
-that should be included in LLM calls including file operations,
-open tabs, and other relevant information that persists across iterations.
-
-@file purpose: Manages persistent agent state for context in LLM calls
-"""
-
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
@@ -23,15 +13,7 @@ from agent.models import (
 
 
 class AgentState(BaseModel):
-    """
-    Centralized state management for the Bro agent.
-
-    This class maintains all context that should be included in LLM calls,
-    including file states, browser tabs, and action history.
-    The state is designed to be serializable and provides formatted output
-    for inclusion in LLM prompts.
-    """
-
+   
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     user_id: str = "default"
@@ -44,6 +26,7 @@ class AgentState(BaseModel):
     max_extractions: int = 50
     current_tab_index: Optional[int] = None
     last_edited: str = Field(default_factory=lambda: datetime.now().isoformat())
+    max_iterations: int = 10
 
     def add_extraction(
         self,
@@ -51,15 +34,7 @@ class AgentState(BaseModel):
         source_url: str,
         source_title: str,
     ) -> None:
-        """
-        Add extracted content to the state.
-
-        Args:
-            content: The extracted content
-            source_url: URL of the source page
-            source_title: Title of the source page
-        """
-
+        
         extraction = Extraction(
             content=content,
             source_url=source_url,
@@ -74,14 +49,7 @@ class AgentState(BaseModel):
             self.extractions = self.extractions[-self.max_extractions :]
 
     def add_tab_state(self, url: str, title: str, is_active: bool = False) -> None:
-        """
-        Append a browser tab state to the ordered list. Allows duplicates.
-
-        Args:
-            url: URL of the tab
-            title: Title of the tab
-            is_active: Whether this is the currently active tab
-        """
+        
         # If marking active, first clear active flags
         if is_active:
             for tab in self.tabs:
@@ -93,9 +61,10 @@ class AgentState(BaseModel):
         if is_active:
             self.current_tab_index = len(self.tabs) - 1
 
-    async def update_tab_state(self, page: Page) -> None:
+    async def update_tab_state(self, page: Optional[Page] = None, update_url: Optional[str] = None) -> None:
         """
         Assuming that the page variable in @agent is the active page, update agent tab state.
+        In theory this should be able to take all current open URLs and update internal state based on that. 
         """
 
         context = page.context
@@ -103,32 +72,27 @@ class AgentState(BaseModel):
 
         try:
             # Compare the number of browser pages with the number of tracked tabs
-            if len(pages) > len(self.tabs):
-                # Find the index where new tabs start
-                start_idx = len(self.tabs)
-                for i in range(start_idx, len(pages)):
-                    new_url = pages[i].url
-                    new_title = await pages[i].title()
-                    # Add the new tab as inactive for now
-                    self.tabs.append(
-                        TabState(url=new_url, title=new_title, is_active=False)
-                    )
-                    self.set_current_tab_index(len(self.tabs) - 1)
+            if update_url:
+                self.tabs[self.current_tab_index].url = update_url
+            else: 
+                if len(pages) > len(self.tabs):
+                    # Find the index where new tabs start
+                    start_idx = len(self.tabs)
+                    for i in range(start_idx, len(pages)):
+                        new_url = pages[i].url
+                        new_title = await pages[i].title()
+                        # Add the new tab as inactive for now
+                        self.tabs.append(
+                            TabState(url=new_url, title=new_title, is_active=False)
+                        )
+                        self.set_current_tab_index(len(self.tabs) - 1)
 
             # if no new tabs/agent just switched tabs, that should be covered in the search tool already
         except Exception as e:
             print(f"⚠️ Failed to update page state: {e}")
 
     def update_todo_list(self, todo_items: List[Dict[str, Any]]) -> str:
-        """
-        Update the entire todo list with a structured list of todo items.
-
-        Args:
-            todo_items: List of dictionaries with 'task' and 'completed' keys
-
-        Returns:
-            Success message with todo count
-        """
+        
         # Clear existing todo list
         self.todo_list.clear()
 
@@ -154,20 +118,7 @@ class AgentState(BaseModel):
         print_result: bool = True,
         logger: Optional[Callable[[str, ActionContext], Awaitable[None]]] = None,
     ) -> None:
-        """
-        Add action context to history and optionally print it.
 
-        Args:
-            action_name: Name of the action that was performed
-            arguments: Arguments passed to the action
-            result: Result of the action
-            iteration: Iteration number when action was performed
-            description: Optional human-readable description of the action
-            highlighted_elements: Optional list of highlighted elements for detailed descriptions
-            structured_output: Optional content about thinking, memory, etc.
-            print_result: Whether to print the action result to console
-            logger: Optional async callback for logging events
-        """
         # Generate description if not provided
         if description is None:
             description = generate_action_description(
@@ -210,15 +161,7 @@ class AgentState(BaseModel):
             self.action_history = self.action_history[-self.max_action_history :]
 
     def get_context_for_llm(self) -> str:
-        """
-        Generate formatted context string for inclusion in LLM prompts.
-
-        Args:
-            include_full_files: Whether to include full file contents or just summaries
-
-        Returns:
-            Formatted context string ready for LLM consumption
-        """
+        
         context_parts = []
 
         # Session information
@@ -302,29 +245,13 @@ class AgentState(BaseModel):
         return "\n".join(context_parts)
 
     def get_tab_by_index(self, index: int) -> Optional[TabState]:
-        """
-        Get a tab by its zero-based index in the tabs list.
-
-        Args:
-            index: Zero-based index of the tab
-
-        Returns:
-            TabState object if index is valid, None otherwise
-        """
+        
         if 0 <= index < len(self.tabs):
             return self.tabs[index]
         return None
 
     def set_current_tab_index(self, index: int):
-        """
-        Set the current tab by index.
-
-        Args:
-            index: Zero-based index of the tab to set as current
-
-        Returns:
-            True if successful, False if index is invalid
-        """
+        
         if 0 <= index < len(self.tabs):
             # Mark all tabs as inactive
             for tab in self.tabs:
@@ -334,12 +261,7 @@ class AgentState(BaseModel):
             self.current_tab_index = index
 
     def get_tabs_summary(self) -> Dict[str, Any]:
-        """
-        Get a summary of tracked tabs for debugging/monitoring.
-
-        Returns:
-            Dictionary with tab summary information
-        """
+        
         return {
             "total_tabs": len(self.tabs),
             "active_tab_index": self.current_tab_index,
@@ -402,36 +324,7 @@ _agent_state: Optional[AgentState] = None
 def initialize_agent_state(
     user_id: str = "default", session_id: str = "default"
 ) -> AgentState:
-    """
-    Initialize the global agent state manager.
-
-    Args:
-        user_id: User identifier for session-based file management
-        session_id: Session identifier for session-based file management
-
-    Returns:
-        Initialized AgentState instance
-    """
+    
     global _agent_state
     _agent_state = AgentState(user_id=user_id, session_id=session_id)
     return _agent_state
-
-
-def get_agent_state() -> Optional[AgentState]:
-    """
-    Get the current agent state manager.
-
-    Returns:
-        Current AgentState instance or None if not initialized
-    """
-    return _agent_state
-
-
-def clear_agent_state() -> None:
-    """
-    Clear the global agent state (useful for testing or cleanup).
-    """
-    global _agent_state
-    if _agent_state:
-        _agent_state.clear_state()
-    _agent_state = None

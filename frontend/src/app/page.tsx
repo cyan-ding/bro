@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import AgentChat from "@/components/AgentChat";
 import ScreencastViewer from "@/components/ScreencastViewer";
 import {
@@ -31,12 +31,12 @@ export default function Dashboard() {
     setError,
   } = useAgentStore();
 
-  const isRunning = runStatus?.status === "running";
-  const isAwaitingDecision = runStatus?.status === "awaiting_decision";
+  const [isRunning, setRunning] = useState(false)
+  const isAwaitingDecision = runStatus === "awaiting_decision";
 
-  // Fetch run status periodically
+  // Fetch run status periodically, only when it started
   useEffect(() => {
-    if (!runId) return;
+    if (!runId || !isRunning) return;
 
     const fetchStatus = async () => {
       try {
@@ -44,7 +44,7 @@ export default function Dashboard() {
         setRunStatus(status);
 
         // Stop polling and optionally clear runId if run is complete
-        if (status.status === "completed" || status.status === "stopped" || status.status === "error") {
+        if (status === "completed" || status === "stopped" || status === "error") {
           clearInterval(interval);
         }
       } catch (err) {
@@ -60,11 +60,6 @@ export default function Dashboard() {
   // Fetch agent state periodically
   useEffect(() => {
     if (!runId || !isRunning) return;
-
-    // Don't poll if run is complete
-    if (runStatus?.status === "completed" || runStatus?.status === "stopped" || runStatus?.status === "error") {
-      return;
-    }
 
     const fetchState = async () => {
       try {
@@ -102,6 +97,7 @@ export default function Dashboard() {
       setError(null);
       setLogs([]);
       setAgentState(null);
+      setRunning(true);
       setRunStatus(null);
 
       const response = await createRun({
@@ -123,9 +119,8 @@ export default function Dashboard() {
 
     try {
       await stopRun(runId);
-      if (runStatus) {
-        setRunStatus({ ...runStatus, status: "stopped" });
-      }
+      setRunStatus("stopped");
+      setRunning(false);
 
       // Close event source when stopping
       useAgentStore.getState().closeEventSource();

@@ -31,10 +31,6 @@ class ExtractArgs(BaseModel):
     # Dummy field to satisfy Vertex AI schema requirements (no empty objects allowed)
     dummy: Optional[bool] = None
 
-
-
-
-
 class TodoItem(BaseModel):
     """A single todo item."""
 

@@ -47,19 +47,6 @@ class CreateRunResponse(BaseModel):
     message: str = Field(..., description="Human-readable status message")
 
 
-class RunStatusResponse(BaseModel):
-    """Response for run status queries."""
-
-    run_id: str
-    session_id: str
-    user_id: str
-    status: RunStatus
-    current_iteration: int = Field(..., description="Current iteration number")
-    max_iterations: int
-    last_action: Optional[str] = Field(None, description="Last action taken by agent")
-    message: Optional[str] = Field(None, description="Additional status information")
-
-
 class AgentStateResponse(BaseModel):
     """Response containing full agent state."""
 
@@ -72,6 +59,7 @@ class AgentStateResponse(BaseModel):
     todo_list: List[TodoItem]
     action_history: List[ActionContext]
     last_edited: str
+    max_iterations: int
 
 
 class SendInputRequest(BaseModel):

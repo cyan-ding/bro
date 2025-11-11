@@ -17,23 +17,20 @@ export interface CreateRunRequest {
   enable_logging?: boolean;
 }
 
+export type RunStatus =
+  | "pending"
+  | "running"
+  | "awaiting_decision"
+  | "completed"
+  | "stopped"
+  | "error";
+
 export interface CreateRunResponse {
   run_id: string;
   session_id: string;
   user_id: string;
   status: string;
   message: string;
-}
-
-export interface RunStatusResponse {
-  run_id: string;
-  session_id: string;
-  user_id: string;
-  status: string;
-  current_iteration: number;
-  max_iterations: number;
-  last_action: string | null;
-  message?: string;
 }
 
 export interface AgentStateResponse {
@@ -58,6 +55,7 @@ export interface AgentStateResponse {
   }>;
   action_history: Array<ActionContext>;
   last_edited: string;
+  max_iterations: number;
 }
 
 export interface ActionContext {
@@ -88,7 +86,7 @@ export interface LogEvent {
   run_id: string;
   event_type: string;
   message?: string;
-  error?: string;  
+  error?: string;
   action_context?: ActionContext;
   decision?: SendDecisionRequest
 }
@@ -113,7 +111,7 @@ export async function createRun(request: CreateRunRequest): Promise<CreateRunRes
 /**
  * Get the current status of a run.
  */
-export async function getRunStatus(runId: string): Promise<RunStatusResponse> {
+export async function getRunStatus(runId: string): Promise<RunStatus> {
   const response = await fetch(`${API_BASE_URL}/runs/${runId}`);
 
   if (!response.ok) {

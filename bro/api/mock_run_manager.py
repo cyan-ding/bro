@@ -190,7 +190,7 @@ class MockRunManager:
 
             # Simulate multiple iterations
             for i in range(1, 6):
-                run_info.update_iteration(i, f"mock_action_{i}")
+                run_info.update_iteration()
 
                 # Simulate navigation
                 if i == 1:

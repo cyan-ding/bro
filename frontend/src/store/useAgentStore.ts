@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { LogEvent, RunStatusResponse, AgentStateResponse } from '@/lib/api';
+import type { LogEvent, RunStatus, AgentStateResponse } from '@/lib/api';
 import { createLogStream } from '@/lib/api';
 
 export interface ChatMessage {
@@ -14,7 +14,7 @@ interface AgentStore {
   // State
   runId: string | null;
   logs: LogEvent[];
-  runStatus: RunStatusResponse | null;
+  runStatus: RunStatus | null;
   agentState: AgentStateResponse | null;
   error: string | null;
   eventSource: EventSource | null;
@@ -24,7 +24,7 @@ interface AgentStore {
   setRunId: (runId: string | null) => void;
   setLogs: (logs: LogEvent[]) => void;
   addLog: (log: LogEvent) => void;
-  setRunStatus: (status: RunStatusResponse | null) => void;
+  setRunStatus: (status: RunStatus | null) => void;
   setAgentState: (state: AgentStateResponse | null) => void;
   setError: (error: string | null) => void;
   setEventSource: (eventSource: EventSource | null) => void;

@@ -39,22 +39,7 @@ class RunManager:
         session_id: Optional[str] = None,
         enable_logging: bool = True,
     ) -> RunInfo:
-        """
-        Create a new agent run.
-
-        Args:
-            user_prompt: The task for the agent to complete
-            url: Optional starting URL
-            max_iterations: Maximum number of iterations
-            take_screenshot: Whether to take screenshots
-            model: LLM model to use
-            user_id: User identifier
-            session_id: Session identifier (auto-generated if not provided)
-            enable_logging: Whether to enable log streaming
-
-        Returns:
-            RunInfo object for the created run
-        """
+       
         run_id = str(uuid.uuid4())
         if not session_id:
             session_id = str(uuid.uuid4())[:8]
@@ -140,15 +125,6 @@ class RunManager:
             )
 
     async def get_run(self, run_id: str) -> Optional[RunInfo]:
-        """
-        Get run information by ID.
-
-        Args:
-            run_id: Run identifier
-
-        Returns:
-            RunInfo object or None if not found
-        """
         async with self._lock:
             return self._runs.get(run_id)
 
@@ -203,17 +179,7 @@ class RunManager:
     async def send_decision(
         self, run_id: str, decision: str, additional_instructions: Optional[str] = None
     ) -> bool:
-        """
-        Send a decision response to an agent awaiting user decision.
-
-        Args:
-            run_id: Run identifier
-            decision: Decision type (done/modify/intervene)
-            additional_instructions: Optional additional instructions for 'modify'
-
-        Returns:
-            True if sent successfully, False if run not found
-        """
+        
         run_info = await self.get_run(run_id)
         if not run_info:
             return False
@@ -246,15 +212,7 @@ class RunManager:
         return True
 
     async def get_agent_state(self, run_id: str) -> Optional[Dict]:
-        """
-        Get the full agent state for a run.
-
-        Args:
-            run_id: Run identifier
-
-        Returns:
-            Agent state dictionary or None if not found
-        """
+       
         run_info = await self.get_run(run_id)
         if not run_info:
             return None

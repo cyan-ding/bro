@@ -14,15 +14,6 @@ alwaysApply: true
 
 * **Always add type annotations and return types and ensure all lint errors are resolved**
 
-* **Always add a docstring for all python functions that you make**
-  Make sure to include these aspects if appropriate: 
-
-  `Args`: (for function parameters)
-
-  `Returns`: (output types and descriptions)
-
-  Write for **people**, not for **computers**. Avoid over-explaining, and skip jargon that is unclear to most users. For trivial functions, a one-liner is often sufficient; for complex ones, provide additional context, arguments, return values, and exceptions. 
-
 * **Do not do any more than asked. Keep code minimal, simple, and readible.** 
 
 * **Never add `console.log` logs in any `js` files**

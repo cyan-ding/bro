@@ -50,7 +50,6 @@ class RunInfo:
         self.user_prompt = user_prompt
         self.status = RunStatus.PENDING
         self.current_iteration = 0
-        self.last_action: Optional[str] = None
         self.error_message: Optional[str] = None
         self.created_at = datetime.now()
         self.completed_at: Optional[datetime] = None
@@ -61,16 +60,11 @@ class RunInfo:
         # Log events for streaming
         self.log_queue: asyncio.Queue[LogEvent] = asyncio.Queue()
 
-    def update_iteration(self, iteration: int, action: str) -> None:
+    def update_iteration(self) -> None:
         """
-        Update the current iteration and last action.
-
-        Args:
-            iteration: Current iteration number
-            action: Name of the last action taken
+        Update the current iteration 
         """
-        self.current_iteration = iteration
-        self.last_action = action
+        self.current_iteration += 1
 
     def set_status(self, status: RunStatus, message: Optional[str] = None) -> None:
         """

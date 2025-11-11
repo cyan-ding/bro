@@ -271,6 +271,12 @@ class ScreencastClient:
         })
 
         print("🔄 Page reloaded")
+    
+    async def update_url(self, url) -> None:
+         if not self.ws:
+            raise Exception("WebSocket not connected")
+        
+         await self._send_command("Page.navigate", {"url": url})
 
     async def close(self) -> None:
         """

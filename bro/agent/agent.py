@@ -701,10 +701,7 @@ class Agent:
 
                     # Update iteration in run_info
                     if self.run_info:
-                        self.run_info.update_iteration(
-                            iteration,
-                            tool_calls[0]["name"] if tool_calls else "no_action",
-                        )
+                        self.run_info.update_iteration()
 
                     # Save agent state to file at end of iteration
                     try:

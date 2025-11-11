@@ -15,7 +15,6 @@ from utils.screencast import ScreencastClient
 from .models import (
     CreateRunRequest,
     CreateRunResponse,
-    RunStatusResponse,
     AgentStateResponse,
     SendInputRequest,
     SendInputResponse,
@@ -31,7 +30,7 @@ from .log_streamer import stream_logs
 
 
 # Set to True to use mock data for frontend testing
-USE_MOCK = True
+USE_MOCK = False
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -118,7 +117,7 @@ async def create_run(request: CreateRunRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/runs/{run_id}", response_model=RunStatusResponse)
+@app.get("/runs/{run_id}", response_model=RunStatus)
 async def get_run_status(run_id: str):
     """
     Get the current status of an agent run.
@@ -129,20 +128,12 @@ async def get_run_status(run_id: str):
     Returns:
         Current run status and progress information
     """
+
     run_info = await run_manager.get_run(run_id)
     if not run_info:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    return RunStatusResponse(
-        run_id=run_info.run_id,
-        session_id=run_info.session_id,
-        user_id=run_info.user_id,
-        status=run_info.status,
-        current_iteration=run_info.current_iteration,
-        max_iterations=run_info.max_iterations,
-        last_action=run_info.last_action,
-        message=run_info.error_message if run_info.status == RunStatus.ERROR else None,
-    )
+    return run_info.status
 
 
 @app.get("/runs/{run_id}/logs")
@@ -410,36 +401,43 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                     if not client:
                         continue
 
-                    if data.get("type") == "input":
-                        action = data.get("action")
-
-                        if action == "click":
-                            x = data.get("x")
-                            y = data.get("y")
-                            button = data.get("button", "left")
-                            if x is not None and y is not None:
-                                await client.dispatch_mouse_click(x, y, button)
-
-                        elif action == "keypress":
-                            key = data.get("key")
-                            text = data.get("text", "")
-                            if key:
-                                await client.dispatch_key_event(key, text)
-
-                        elif action == "scroll":
-                            x = data.get("x", 0)
-                            y = data.get("y", 0)
-                            delta_y = data.get("deltaY", 0)
-                            await client.dispatch_scroll(x, y, delta_y)
-
-                    elif data.get("type") == "navigation":
-                        action = data.get("action")
-
-                        if action == "back":
-                            await client.navigate_back()
-                        elif action == "reload":
-                            await client.reload_page()
-
+                    match data.get("type"):
+                        case "input":
+                            action = data.get("action")
+                            match action:
+                                case "click":
+                                    x = data.get("x")
+                                    y = data.get("y")
+                                    button = data.get("button", "left")
+                                    if x is not None and y is not None:
+                                        await client.dispatch_mouse_click(x, y, button)
+                                case "keypress":
+                                    key = data.get("key")
+                                    text = data.get("text", "")
+                                    if key:
+                                        await client.dispatch_key_event(key, text)
+                                case "scroll":
+                                    x = data.get("x", 0)
+                                    y = data.get("y", 0)
+                                    delta_y = data.get("deltaY", 0)
+                                    await client.dispatch_scroll(x, y, delta_y)
+                                case _:
+                                    pass
+                        case "navigation":
+                            action = data.get("action")
+                            match action:
+                                case "back":
+                                    await client.navigate_back()
+                                case "reload":
+                                    await client.reload_page()
+                                case "url": # update url
+                                    # update agent state, then update the current url. DO
+                                    run_info = await run_manager.get_run(run_id=run_id)
+                                    url = action.get("url", "")
+                                    await client.update_url(url)
+                                    await run_info.agent.agent_state.update_tab_state(url)
+                                    
+                                    
                 except json.JSONDecodeError:
                     # Ignore non-JSON messages (ping/pong)
                     pass
