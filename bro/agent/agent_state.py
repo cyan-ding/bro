@@ -13,7 +13,6 @@ from agent.models import (
 
 
 class AgentState(BaseModel):
-   
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     user_id: str = "default"
@@ -34,7 +33,6 @@ class AgentState(BaseModel):
         source_url: str,
         source_title: str,
     ) -> None:
-        
         extraction = Extraction(
             content=content,
             source_url=source_url,
@@ -49,7 +47,6 @@ class AgentState(BaseModel):
             self.extractions = self.extractions[-self.max_extractions :]
 
     def add_tab_state(self, url: str, title: str, is_active: bool = False) -> None:
-        
         # If marking active, first clear active flags
         if is_active:
             for tab in self.tabs:
@@ -61,10 +58,12 @@ class AgentState(BaseModel):
         if is_active:
             self.current_tab_index = len(self.tabs) - 1
 
-    async def update_tab_state(self, page: Optional[Page] = None, update_url: Optional[str] = None) -> None:
+    async def update_tab_state(
+        self, page: Optional[Page] = None, update_url: Optional[str] = None
+    ) -> None:
         """
         Assuming that the page variable in @agent is the active page, update agent tab state.
-        In theory this should be able to take all current open URLs and update internal state based on that. 
+        In theory this should be able to take all current open URLs and update internal state based on that.
         """
 
         context = page.context
@@ -74,7 +73,7 @@ class AgentState(BaseModel):
             # Compare the number of browser pages with the number of tracked tabs
             if update_url:
                 self.tabs[self.current_tab_index].url = update_url
-            else: 
+            else:
                 if len(pages) > len(self.tabs):
                     # Find the index where new tabs start
                     start_idx = len(self.tabs)
@@ -92,7 +91,6 @@ class AgentState(BaseModel):
             print(f"⚠️ Failed to update page state: {e}")
 
     def update_todo_list(self, todo_items: List[Dict[str, Any]]) -> str:
-        
         # Clear existing todo list
         self.todo_list.clear()
 
@@ -118,7 +116,6 @@ class AgentState(BaseModel):
         print_result: bool = True,
         logger: Optional[Callable[[str, ActionContext], Awaitable[None]]] = None,
     ) -> None:
-
         # Generate description if not provided
         if description is None:
             description = generate_action_description(
@@ -161,7 +158,6 @@ class AgentState(BaseModel):
             self.action_history = self.action_history[-self.max_action_history :]
 
     def get_context_for_llm(self) -> str:
-        
         context_parts = []
 
         # Session information
@@ -245,13 +241,11 @@ class AgentState(BaseModel):
         return "\n".join(context_parts)
 
     def get_tab_by_index(self, index: int) -> Optional[TabState]:
-        
         if 0 <= index < len(self.tabs):
             return self.tabs[index]
         return None
 
     def set_current_tab_index(self, index: int):
-        
         if 0 <= index < len(self.tabs):
             # Mark all tabs as inactive
             for tab in self.tabs:
@@ -261,7 +255,6 @@ class AgentState(BaseModel):
             self.current_tab_index = index
 
     def get_tabs_summary(self) -> Dict[str, Any]:
-        
         return {
             "total_tabs": len(self.tabs),
             "active_tab_index": self.current_tab_index,
@@ -324,7 +317,6 @@ _agent_state: Optional[AgentState] = None
 def initialize_agent_state(
     user_id: str = "default", session_id: str = "default"
 ) -> AgentState:
-    
     global _agent_state
     _agent_state = AgentState(user_id=user_id, session_id=session_id)
     return _agent_state

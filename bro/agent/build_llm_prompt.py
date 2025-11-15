@@ -9,7 +9,6 @@ def build_llm_prompt(
     model: str = "gpt-5-mini-2025-08-07",
     screenshot: Optional[str] = None,
 ) -> Dict[str, Any]:
-    
     messages = [
         {"role": "system", "content": system_prompt},
     ]
@@ -35,10 +34,10 @@ def build_llm_prompt(
         "model": model,
         "messages": messages,
     }
-    
+
     supported_params = get_supported_openai_params(model=model)
     if supported_params and "response_format" in supported_params:
         base_config["response_format"] = StructuredOutput
-    
+
     # TODO add support for models that allow json_schema
     return base_config

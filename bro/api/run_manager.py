@@ -39,7 +39,6 @@ class RunManager:
         session_id: Optional[str] = None,
         enable_logging: bool = True,
     ) -> RunInfo:
-       
         run_id = str(uuid.uuid4())
         if not session_id:
             session_id = str(uuid.uuid4())[:8]
@@ -179,7 +178,6 @@ class RunManager:
     async def send_decision(
         self, run_id: str, decision: str, additional_instructions: Optional[str] = None
     ) -> bool:
-        
         run_info = await self.get_run(run_id)
         if not run_info:
             return False
@@ -212,7 +210,6 @@ class RunManager:
         return True
 
     async def get_agent_state(self, run_id: str) -> Optional[Dict]:
-       
         run_info = await self.get_run(run_id)
         if not run_info:
             return None

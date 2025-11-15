@@ -71,6 +71,7 @@ def get_element_description(
     line += " />"
     return line
 
+
 async def format_elements_text(highlighted_elements: List[Dict]) -> str:
     """
     Format the highlighted elements into readable text for the LLM.
@@ -95,27 +96,28 @@ async def format_elements_text(highlighted_elements: List[Dict]) -> str:
 
 
 def generate_action_description(
-    action_name: str, 
-    arguments: Dict[str, Any], 
-    highlighted_elements: Optional[List[Dict[str, Any]]] = None
+    action_name: str,
+    arguments: Dict[str, Any],
+    highlighted_elements: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     Generate a human-readable description of an action with optional element context.
-    
+
     Args:
         action_name: Name of the action
         arguments: Arguments passed to the action
         highlighted_elements: Optional list of highlighted elements for detailed descriptions
-        
+
     Returns:
         Human-readable description of the action
     """
+
     def _get_element_desc(index):
         """Helper to get element description with fallback."""
         if highlighted_elements and get_element_description:
             return get_element_description(index, highlighted_elements)
         return f"element at index {index}"
-    
+
     if action_name == "click":
         target = arguments.get("target", "unknown")
         element_desc = _get_element_desc(target)
@@ -142,7 +144,9 @@ def generate_action_description(
         if use_rag:
             return f"You extracted content using RAG processing ('{description}')"
         else:
-            return f"You extracted content and saved it to '{file_name}' ('{description}')"
+            return (
+                f"You extracted content and saved it to '{file_name}' ('{description}')"
+            )
     elif action_name == "file_system":
         action_type = arguments.get("action", "")
         filename = arguments.get("filename", "")
@@ -163,4 +167,3 @@ def generate_action_description(
         return f"You marked the task as done with reason: '{reason}'"
     else:
         return f"You executed '{action_name}'"
-

@@ -62,7 +62,7 @@ class RunInfo:
 
     def update_iteration(self) -> None:
         """
-        Update the current iteration 
+        Update the current iteration
         """
         self.current_iteration += 1
 

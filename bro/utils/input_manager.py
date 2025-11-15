@@ -20,6 +20,7 @@ class InputState:
     Only one flag should be True at a time, indicating where the next
     input should be routed.
     """
+
     waiting_for_decision: bool = False  # True if waiting for done() decision
 
 
@@ -56,7 +57,9 @@ class InputManager:
         # Only start stdin listener if enabled (disabled for API/web server mode)
         if self._enable_stdin:
             self._listener_task = asyncio.create_task(self._input_listener())
-            print("🎤 Input listener started. You can send messages to the agent anytime.")
+            print(
+                "🎤 Input listener started. You can send messages to the agent anytime."
+            )
 
     async def stop(self) -> None:
         """Stop the input listener background task."""
@@ -93,7 +96,6 @@ class InputManager:
                 break
             except Exception as e:
                 print(f"⚠️ Input listener error: {e}")
-
 
     def clear_waiting(self) -> None:
         """Clear all waiting flags, returning to default message routing."""

@@ -48,7 +48,9 @@ class ScreencastClient:
         self.ws = await self.session.ws_connect(ws_url)
         print(f"✅ Connected to CDP WebSocket: {ws_url}")
 
-    async def _send_command(self, method: str, params: Optional[Dict[str, Any]] = None) -> int:
+    async def _send_command(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> int:
         """
         Send a CDP command via WebSocket.
 
@@ -63,11 +65,7 @@ class ScreencastClient:
             raise Exception("WebSocket not connected")
 
         self.message_id += 1
-        message = {
-            "id": self.message_id,
-            "method": method,
-            "params": params or {}
-        }
+        message = {"id": self.message_id, "method": method, "params": params or {}}
 
         await self.ws.send_json(message)
         return self.message_id
@@ -78,7 +76,7 @@ class ScreencastClient:
         quality: int = 100,
         every_nth_frame: int = 1,
         max_width: int = 1280,
-        max_height: int = 720
+        max_height: int = 720,
     ) -> None:
         """
         Start capturing screencast frames from Chrome.
@@ -97,15 +95,20 @@ class ScreencastClient:
         self.running = True
 
         # Start screencast
-        await self._send_command("Page.startScreencast", {
-            "format": "jpeg",
-            "quality": quality,
-            "everyNthFrame": every_nth_frame,
-            "maxWidth": max_width,
-            "maxHeight": max_height
-        })
+        await self._send_command(
+            "Page.startScreencast",
+            {
+                "format": "jpeg",
+                "quality": quality,
+                "everyNthFrame": every_nth_frame,
+                "maxWidth": max_width,
+                "maxHeight": max_height,
+            },
+        )
 
-        print(f"✅ Screencast started (quality={quality}, every {every_nth_frame}th frame)")
+        print(
+            f"✅ Screencast started (quality={quality}, every {every_nth_frame}th frame)"
+        )
 
         # Start listening for frames
         asyncio.create_task(self._listen_for_frames())
@@ -132,16 +135,18 @@ class ScreencastClient:
 
                         if frame_data and self.frame_callback:
                             # Call the callback with frame data
-                            await self.frame_callback({
-                                "data": frame_data,
-                                "metadata": params.get("metadata", {})
-                            })
+                            await self.frame_callback(
+                                {
+                                    "data": frame_data,
+                                    "metadata": params.get("metadata", {}),
+                                }
+                            )
 
                         # Acknowledge the frame so Chrome sends the next one
                         if session_id:
-                            await self._send_command("Page.screencastFrameAck", {
-                                "sessionId": session_id
-                            })
+                            await self._send_command(
+                                "Page.screencastFrameAck", {"sessionId": session_id}
+                            )
 
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     print(f"❌ WebSocket error: {msg.data}")
@@ -176,22 +181,22 @@ class ScreencastClient:
             raise Exception("WebSocket not connected")
 
         # Send mousePressed event
-        await self._send_command("Input.dispatchMouseEvent", {
-            "type": "mousePressed",
-            "x": x,
-            "y": y,
-            "button": button,
-            "clickCount": 1
-        })
+        await self._send_command(
+            "Input.dispatchMouseEvent",
+            {"type": "mousePressed", "x": x, "y": y, "button": button, "clickCount": 1},
+        )
 
         # Send mouseReleased event
-        await self._send_command("Input.dispatchMouseEvent", {
-            "type": "mouseReleased",
-            "x": x,
-            "y": y,
-            "button": button,
-            "clickCount": 1
-        })
+        await self._send_command(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseReleased",
+                "x": x,
+                "y": y,
+                "button": button,
+                "clickCount": 1,
+            },
+        )
 
         print(f"🖱️  Mouse click dispatched at ({x}, {y}) with {button} button")
 
@@ -207,18 +212,14 @@ class ScreencastClient:
             raise Exception("WebSocket not connected")
 
         # Send keyDown
-        await self._send_command("Input.dispatchKeyEvent", {
-            "type": "keyDown",
-            "key": key,
-            "text": text
-        })
+        await self._send_command(
+            "Input.dispatchKeyEvent", {"type": "keyDown", "key": key, "text": text}
+        )
 
         # Send keyUp
-        await self._send_command("Input.dispatchKeyEvent", {
-            "type": "keyUp",
-            "key": key,
-            "text": text
-        })
+        await self._send_command(
+            "Input.dispatchKeyEvent", {"type": "keyUp", "key": key, "text": text}
+        )
 
         print(f"⌨️  Key event dispatched: {key}")
 
@@ -235,13 +236,10 @@ class ScreencastClient:
             raise Exception("WebSocket not connected")
 
         # Use Input.dispatchMouseEvent with type "mouseWheel" for more responsive scrolling
-        await self._send_command("Input.dispatchMouseEvent", {
-            "type": "mouseWheel",
-            "x": x,
-            "y": y,
-            "deltaX": 0,
-            "deltaY": delta_y
-        })
+        await self._send_command(
+            "Input.dispatchMouseEvent",
+            {"type": "mouseWheel", "x": x, "y": y, "deltaX": 0, "deltaY": delta_y},
+        )
 
         print(f"📜 Scroll dispatched at ({x}, {y}) with delta {delta_y}")
 
@@ -253,9 +251,9 @@ class ScreencastClient:
             raise Exception("WebSocket not connected")
 
         # Use Page.navigate with javascript:history.back() or Runtime.evaluate
-        await self._send_command("Runtime.evaluate", {
-            "expression": "window.history.back()"
-        })
+        await self._send_command(
+            "Runtime.evaluate", {"expression": "window.history.back()"}
+        )
 
         print("⬅️  Navigated back")
 
@@ -266,17 +264,15 @@ class ScreencastClient:
         if not self.ws:
             raise Exception("WebSocket not connected")
 
-        await self._send_command("Page.reload", {
-            "ignoreCache": False
-        })
+        await self._send_command("Page.reload", {"ignoreCache": False})
 
         print("🔄 Page reloaded")
-    
+
     async def update_url(self, url) -> None:
-         if not self.ws:
+        if not self.ws:
             raise Exception("WebSocket not connected")
-        
-         await self._send_command("Page.navigate", {"url": url})
+
+        await self._send_command("Page.navigate", {"url": url})
 
     async def close(self) -> None:
         """

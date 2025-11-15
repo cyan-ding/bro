@@ -98,7 +98,6 @@ async def input_text(
         if await strategy():
             print(f"Successfully entered text using {strategy.__name__}")
 
-
             return
 
     raise Exception("All text input strategies failed")
@@ -303,8 +302,6 @@ def _html_to_markdown(html: str) -> str:
     return _remove_unwanted_sections(normalized_html)
 
 
-
-
 async def extract(
     page: Page,
     agent_state: Optional[AgentState] = None,
@@ -331,7 +328,9 @@ async def extract(
         try:
             extracted_content = _html_to_markdown(html_content)
         except Exception as e:
-            extracted_content = f"Error extracting content, defaulting to whole page content: {str(e)}"
+            extracted_content = (
+                f"Error extracting content, defaulting to whole page content: {str(e)}"
+            )
             extracted_content = await page.evaluate("""
                 () => {
                     const body = document.body;
@@ -349,7 +348,7 @@ async def extract(
             agent_state.add_extraction(
                 content=extracted_content,
                 source_url=page_url[:30],
-                source_title=page_title or "Unknown Page"
+                source_title=page_title or "Unknown Page",
             )
 
         # Return the extracted content directly
@@ -366,6 +365,7 @@ async def extract(
         error_msg = f"Error during content extraction: {str(e)}"
         print(f"❌ {error_msg}")
         return error_msg
+
 
 async def search(
     page: Page,
@@ -392,7 +392,9 @@ async def search(
     if tab_index is not None:
         target_tab = agent_state.get_tab_by_index(tab_index)
         if not target_tab:
-            print(f"⚠️ No tab found at index {tab_index}, cannot switch to non-existent tab")
+            print(
+                f"⚠️ No tab found at index {tab_index}, cannot switch to non-existent tab"
+            )
             return
         target_page = next((p for p in context.pages if p.url == target_tab.url), None)
         if target_page:
@@ -400,7 +402,9 @@ async def search(
             await agent_state.set_current_tab_index(tab_index)
             return
         else:
-            print(f"⚠️ Tab {tab_index} not found in browser context, cannot switch to tab")
+            print(
+                f"⚠️ Tab {tab_index} not found in browser context, cannot switch to tab"
+            )
             return
     if new_tab:
         try:
@@ -418,15 +422,13 @@ async def search(
 
     if new_tab:
         try:
-            agent_state.add_tab_state(page_to_use.url, await page_to_use.title(), is_active=True)
+            agent_state.add_tab_state(
+                page_to_use.url, await page_to_use.title(), is_active=True
+            )
             await page_to_use.bring_to_front()
             await agent_state.set_current_tab_index(len(agent_state.tabs) - 1)
         except Exception as e:
             print(f"⚠️ Failed to update agent state for new tab: {e}")
-
-
-
-
 
 
 async def todo_edit(todo_items: list, agent_state: Optional[AgentState] = None) -> str:
@@ -445,7 +447,7 @@ async def todo_edit(todo_items: list, agent_state: Optional[AgentState] = None) 
 
     try:
         # Convert TodoItem objects to dictionaries if needed
-        if todo_items and hasattr(todo_items[0], 'model_dump'):
+        if todo_items and hasattr(todo_items[0], "model_dump"):
             todo_items_dict = [item.model_dump() for item in todo_items]
         else:
             todo_items_dict = todo_items

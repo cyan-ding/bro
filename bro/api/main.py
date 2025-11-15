@@ -278,10 +278,12 @@ async def close_browser():
         for run_id in list(_screencast_websockets.keys()):
             for ws in _screencast_websockets[run_id]:
                 try:
-                    await ws.send_json({
-                        "type": "chrome_closed",
-                        "message": "Chrome browser has been closed"
-                    })
+                    await ws.send_json(
+                        {
+                            "type": "chrome_closed",
+                            "message": "Chrome browser has been closed",
+                        }
+                    )
                     await ws.close(code=1000, reason="Chrome closed")
                 except Exception:
                     pass
@@ -324,10 +326,9 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
 
     # Check if Chrome was intentionally closed
     if _chrome_intentionally_closed:
-        await websocket.send_json({
-            "type": "chrome_closed",
-            "message": "Chrome browser has been closed"
-        })
+        await websocket.send_json(
+            {"type": "chrome_closed", "message": "Chrome browser has been closed"}
+        )
         await websocket.close(code=1000, reason="Chrome closed")
         return
 
@@ -340,7 +341,6 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
         # Check if screencast client already exists for this run
         if run_id not in _screencast_clients:
             try:
-
                 print(f"📡 Creating CDP screencast client for run_id: {run_id}")
 
                 # Create and connect CDP client
@@ -353,11 +353,13 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                     disconnected = []
                     for ws in _screencast_websockets.get(run_id, []):
                         try:
-                            await ws.send_json({
-                                "type": "frame",
-                                "data": frame_data["data"],  # Base64-encoded JPEG
-                                "metadata": frame_data.get("metadata", {})
-                            })
+                            await ws.send_json(
+                                {
+                                    "type": "frame",
+                                    "data": frame_data["data"],  # Base64-encoded JPEG
+                                    "metadata": frame_data.get("metadata", {}),
+                                }
+                            )
                         except Exception as e:
                             print(f"❌ Error sending frame to websocket: {e}")
                             disconnected.append(ws)
@@ -373,7 +375,7 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                     quality=80,
                     every_nth_frame=1,
                     max_width=1280,
-                    max_height=720
+                    max_height=720,
                 )
 
                 _screencast_clients[run_id] = client
@@ -383,6 +385,7 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                 error_msg = f"Failed to initialize CDP screencast: {str(e)}"
                 print(f"❌ {error_msg}")
                 import traceback
+
                 traceback.print_exc()
                 await websocket.close(code=1011, reason=error_msg[:100])
                 return
@@ -430,14 +433,15 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
                                     await client.navigate_back()
                                 case "reload":
                                     await client.reload_page()
-                                case "url": # update url
+                                case "url":  # update url
                                     # update agent state, then update the current url. DO
                                     run_info = await run_manager.get_run(run_id=run_id)
                                     url = action.get("url", "")
                                     await client.update_url(url)
-                                    await run_info.agent.agent_state.update_tab_state(url)
-                                    
-                                    
+                                    await run_info.agent.agent_state.update_tab_state(
+                                        url
+                                    )
+
                 except json.JSONDecodeError:
                     # Ignore non-JSON messages (ping/pong)
                     pass
@@ -460,7 +464,9 @@ async def websocket_screencast(websocket: WebSocket, run_id: str):
             # The screencast client will be cleaned up when the run ends or browser closes
             if not _screencast_websockets[run_id]:
                 del _screencast_websockets[run_id]
-                print(f"📡 All websockets disconnected for run_id: {run_id}, but keeping screencast client alive")
+                print(
+                    f"📡 All websockets disconnected for run_id: {run_id}, but keeping screencast client alive"
+                )
 
 
 if __name__ == "__main__":

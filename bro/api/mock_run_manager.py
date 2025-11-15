@@ -208,7 +208,9 @@ class MockRunManager:
                             next_goal="Arrive at the page and analyze content.",
                         ),
                     )
-                    await run_info.add_log_event(LogType.ACTION, action_context=action_ctx)
+                    await run_info.add_log_event(
+                        LogType.ACTION, action_context=action_ctx
+                    )
 
                 # Simulate thinking action
                 await asyncio.sleep(0.8)
@@ -225,7 +227,9 @@ class MockRunManager:
                         next_goal="Determine the best action to take next",
                     ),
                 )
-                await run_info.add_log_event(LogType.ACTION, action_context=thinking_ctx)
+                await run_info.add_log_event(
+                    LogType.ACTION, action_context=thinking_ctx
+                )
 
                 # Simulate various actions with proper ActionContext structure
                 actions = [
@@ -303,7 +307,8 @@ class MockRunManager:
                 # Simulate awaiting decision
                 run_info.set_status(RunStatus.AWAITING_DECISION)
                 await run_info.add_log_event(
-                    LogType.STATUS, message="Task appears complete. Awaiting user decision."
+                    LogType.STATUS,
+                    message="Task appears complete. Awaiting user decision.",
                 )
 
                 # Wait for decision or timeout
@@ -346,7 +351,9 @@ class MockRunManager:
 
         except asyncio.CancelledError:
             run_info.set_status(RunStatus.STOPPED)
-            await run_info.add_log_event(LogType.STATUS, message="Agent run stopped by user")
+            await run_info.add_log_event(
+                LogType.STATUS, message="Agent run stopped by user"
+            )
             raise
         except Exception as e:
             run_info.set_status(RunStatus.ERROR, str(e))
@@ -388,7 +395,9 @@ class MockRunManager:
             run_info.task.cancel()
 
         run_info.set_status(RunStatus.STOPPED)
-        await run_info.add_log_event(LogType.STATUS, message="Agent run stopped by user")
+        await run_info.add_log_event(
+            LogType.STATUS, message="Agent run stopped by user"
+        )
 
         return True
 
