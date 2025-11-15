@@ -44,7 +44,7 @@ export default function AgentChat({
   runId,
   agentState,
 }: AgentChatProps) {
-  const { chatMessages, addChatMessage } = useAgentStore();
+  const { model, chatMessages, addChatMessage } = useAgentStore();
   const [input, setInput] = useState("");
   const [url, setUrl] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -260,7 +260,7 @@ export default function AgentChat({
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Agent Chat</h2>
+          <h2 className="text-lg font-semibold">Model: {model}</h2>
           {isRunning && !isAwaitingDecision && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />

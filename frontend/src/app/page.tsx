@@ -1,16 +1,27 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { useAgentStore } from "@/store/useAgentStore"
+import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
+import { ArrowUpIcon } from "lucide-react"
 
-
+import {
+    createRun,
+} from "@/lib/api";
 
 export default function Home() {
+
+    const router = useRouter()
     const {
-        setModel
+        model,
+        setModel,
+        setRunId,
+        setError,
     } = useAgentStore();
-    const [query, setQuery] = useState("")
+
+    const [prompt, setPrompt] = useState("")
     let [models, setModels] = useState({})
     useEffect(() => {
         fetch("/models.json")
@@ -18,23 +29,58 @@ export default function Home() {
             .then((data) => {
                 setModels(data)
             });
-    }, []
+        }, []
     )
+
+    const handleStart = useCallback(async (prompt: string, url?: string) => {
+        try {
+
+            const response = await createRun({
+                user_prompt: prompt,
+                url: url || "", // Keep URL in code but use empty string as default
+                max_iterations: 100,
+                take_screenshot: true,
+                enable_logging: true,
+                model: model || "gemini/gemini-2.5-flash-preview-09-2025",
+            });
+            const run_id = response.run_id
+            setRunId(run_id);
+            setModel(model || "gemini/gemini-2.5-flash-preview-09-2025")
+            router.push(`/runs?runId=${run_id}`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to start agent");
+        }
+    }, [setRunId, setError]);
 
 
     return (
         <div className="flex justify-center items-center min-h-screen">
-            <Textarea
-                className="w-1/3"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-            />
-            <Combobox
-                options={models}
-                display={"Select a model"}
-                empty={"No model selected"}
-                setter={setModel}
-            />
+            <div className="relative w-1/2">
+                <Textarea
+                    className="resize-none h-[25vh] focus:border-none focus:ring-0"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Message Bro"
+                />
+                <div className="absolute bottom-0 right-2 flex flex-row gap-2 mt-2">
+                    <Combobox
+                        options={models}
+                        display={"Select a model"}
+                        empty={"No model selected"}
+                        setter={setModel}
+                    />
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label="Submit"
+                        onClick={() => handleStart(prompt)}
+                        className="hover:bg-accent"
+                    >
+                        <ArrowUpIcon />
+                    </Button>
+                </div>
+
+            </div>
         </div>
     )
 

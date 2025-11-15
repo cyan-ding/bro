@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useCallback, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 import AgentChat from "@/components/AgentChat";
 import ScreencastViewer from "@/components/ScreencastViewer";
@@ -33,8 +32,6 @@ export default function Dashboard() {
     setAgentState,
     setError,
   } = useAgentStore();
-  const searchParams = useSearchParams();
-  const runIdFromUrl = searchParams.get("runId")
 
   const [isRunning, setRunning] = useState(false)
   const isAwaitingDecision = runStatus === "awaiting_decision";
