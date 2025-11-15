@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAgentStore, ChatMessage } from "@/store/useAgentStore";
+import Link from "next/link";
 
 interface AgentChatProps {
   onStart: (prompt: string, url?: string) => void;
@@ -288,12 +290,12 @@ export default function AgentChat({
             </Button>
           )}
           {runId && isRunning && (
-            <a
+            <Link
               href={`/logs?runId=${runId}`}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Detailed logs →
-            </a>
+            </Link>
           )}
         </div>
       </div>
@@ -356,7 +358,7 @@ export default function AgentChat({
         {isAwaitingDecision && showModifyInput && (
           <div className="space-y-2">
             <label className="text-sm font-medium">Additional Instructions</label>
-            <textarea
+            <Textarea
               value={additionalInstructions}
               onChange={(e) => setAdditionalInstructions(e.target.value)}
               rows={3}
@@ -397,7 +399,7 @@ export default function AgentChat({
 
             {/* Main textarea and buttons */}
             <div className="flex gap-2">
-              <textarea
+              <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={

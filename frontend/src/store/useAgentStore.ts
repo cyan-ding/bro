@@ -19,8 +19,10 @@ interface AgentStore {
   error: string | null;
   eventSource: EventSource | null;
   chatMessages: ChatMessage[];
+  model: string | null;
 
   // Actions
+  setModel: (model: string | null) => void;
   setRunId: (runId: string | null) => void;
   setLogs: (logs: LogEvent[]) => void;
   addLog: (log: LogEvent) => void;
@@ -46,9 +48,11 @@ export const useAgentStore = create<AgentStore>()(
       error: null,
       eventSource: null,
       chatMessages: [],
+      model: null,
 
 
       // Actions
+      setModel: (model) => set({ model }),
       setRunId: (runId) => set({ runId }),
       setLogs: (logs) => set({ logs }),
       addLog: (log) => set((state) => ({ logs: [...state.logs, log] })),
