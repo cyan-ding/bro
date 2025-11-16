@@ -33,12 +33,12 @@ export default function Dashboard() {
     setError,
   } = useAgentStore();
 
-  const [isRunning, setRunning] = useState(false)
+  const isRunning = runStatus === "running";
   const isAwaitingDecision = runStatus === "awaiting_decision";
 
   // Fetch run status periodically, only when it started
   useEffect(() => {
-    if (!runId || !isRunning) return;
+    if (!runId) return;
 
     const fetchStatus = async () => {
       try {
@@ -94,36 +94,12 @@ export default function Dashboard() {
     };
   }, [runId, isRunning]);
 
-  const handleStart = useCallback(async (prompt: string, url?: string) => {
-    try {
-      setError(null);
-      setLogs([]);
-      setAgentState(null);
-      setRunning(true);
-      setRunStatus(null);
-
-      const response = await createRun({
-        user_prompt: prompt,
-        url: url || "", // Keep URL in code but use empty string as default
-        max_iterations: 100,
-        take_screenshot: true,
-        enable_logging: true,
-        model: model || "gemini/gemini-2.5-flash-preview-09-2025",
-      });
-
-      setRunId(response.run_id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start agent");
-    }
-  }, [setRunId, setLogs, setAgentState, setRunStatus, setError]);
-
   const handleStop = useCallback(async () => {
     if (!runId) return;
 
     try {
       await stopRun(runId);
       setRunStatus("stopped");
-      setRunning(false);
 
       // Close event source when stopping
       useAgentStore.getState().closeEventSource();
@@ -180,12 +156,11 @@ export default function Dashboard() {
           {/* Left column: Chat Interface */}
           <div className="lg:col-span-1">
             <AgentChat
-              onStart={handleStart}
+              isRunning={isRunning}
               onStop={handleStop}
               onCloseBrowser={handleCloseBrowser}
               onSendInput={handleSendInput}
               onSendDecision={handleSendDecision}
-              isRunning={isRunning}
               isAwaitingDecision={isAwaitingDecision}
               logs={logs}
               runId={runId}

@@ -28,7 +28,7 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
 
   
   useEffect(() => {
-    if (!runId) {
+    if (!runId || !isRunning) {
       return;
     }
 
@@ -43,17 +43,6 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
     const connect = () => {
       // Don't connect/reconnect if Chrome was intentionally closed
       if (chromeClosedRef.current) {
-        return;
-      }
-
-      // Only wait for isRunning on the first connection attempt
-      if (!hasConnectedOnce && !isRunning) {
-        setError("Waiting for run to start...");
-        setIsConnected(false);
-        // Try again in 1 second
-        reconnectTimeout = setTimeout(() => {
-          connect();
-        }, 1000);
         return;
       }
 

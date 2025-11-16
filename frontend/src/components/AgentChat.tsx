@@ -20,7 +20,6 @@ import { useAgentStore, ChatMessage } from "@/store/useAgentStore";
 import Link from "next/link";
 
 interface AgentChatProps {
-  onStart: (prompt: string, url?: string) => void;
   onStop: () => void;
   onCloseBrowser: () => void;
   onSendInput?: (message: string) => void;
@@ -33,7 +32,6 @@ interface AgentChatProps {
 }
 
 export default function AgentChat({
-  onStart,
   onStop,
   onCloseBrowser,
   onSendInput,
@@ -174,37 +172,6 @@ export default function AgentChat({
     }
   }, [logs, addChatMessage]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // If awaiting decision and modify input is showing, don't handle submit
-    if (isAwaitingDecision && showModifyInput) {
-      return;
-    }
-
-    // If running, show stop dialog
-    if (isRunning) {
-      setShowStopDialog(true);
-      return;
-    }
-
-    // Otherwise, start a new run
-    if (!input.trim()) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      type: "user",
-      content: input + (url ? `\nStarting URL: ${url}` : ""),
-      timestamp: new Date(),
-    };
-
-    addChatMessage(userMessage);
-    onStart(input, url || undefined);
-    setInput("");
-    setUrl("");
-    setShowUrlInput(false);
-  };
-
   const handleSendAdditionalInput = () => {
     if (!input.trim() || !onSendInput) return;
 
@@ -304,8 +271,7 @@ export default function AgentChat({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {chatMessages.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
-            <p className="mb-2">Welcome! What would you like the agent to do?</p>
-            <p className="text-sm">Type your request below to get started.</p>
+            <p className="mb-2">Run starting...</p>
           </div>
         ) : (
           chatMessages.map((message) => (
@@ -322,9 +288,6 @@ export default function AgentChat({
                   }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                <p className="text-xs opacity-70 mt-1">
-                  {message.timestamp.toLocaleTimeString()}
-                </p>
               </div>
             </div>
           ))
@@ -382,7 +345,7 @@ export default function AgentChat({
 
         {/* Main Input Form */}
         {!isAwaitingDecision && (
-          <form onSubmit={handleSubmit} className="space-y-2">
+          <form className="space-y-2">
             {/* URL Input (optional, collapsible) */}
             {!isRunning && showUrlInput && (
               <div>
@@ -405,7 +368,7 @@ export default function AgentChat({
                 placeholder={
                   isRunning
                     ? "Send additional instructions... (Shift+Enter for new line)"
-                    : "What should the agent do? (Shift+Enter for new line)"
+                    : "Run ended"
                 }
                 rows={3}
                 className="flex-1 px-3 py-2 bg-background border rounded-md focus:outline-none focus:ring-1 focus:ring-ring resize-none"
@@ -414,9 +377,7 @@ export default function AgentChat({
                     e.preventDefault();
                     if (isRunning) {
                       handleSendAdditionalInput();
-                    } else {
-                      handleSubmit(e);
-                    }
+                    } 
                   }
                 }}
               />
@@ -432,7 +393,8 @@ export default function AgentChat({
                       Send
                     </Button>
                     <Button
-                      type="submit"
+                      type="button"
+                      onClick={() => setShowStopDialog(true)}
                       variant="destructive"
                       size="sm"
                     >

@@ -12,7 +12,6 @@ import {
 } from "@/lib/api";
 
 export default function Home() {
-
     const router = useRouter()
     const {
         model,
@@ -29,12 +28,11 @@ export default function Home() {
             .then((data) => {
                 setModels(data)
             });
-        }, []
+    }, []
     )
 
     const handleStart = useCallback(async (prompt: string, url?: string) => {
         try {
-
             const response = await createRun({
                 user_prompt: prompt,
                 url: url || "", // Keep URL in code but use empty string as default
@@ -79,9 +77,7 @@ export default function Home() {
                         <ArrowUpIcon />
                     </Button>
                 </div>
-
             </div>
         </div>
     )
-
 }
