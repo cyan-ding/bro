@@ -14,9 +14,7 @@ from agent.models import (
 
 class AgentState(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    user_id: str = "default"
-    session_id: str = "default"
+    
     extractions: List[Extraction] = Field(default_factory=list)
     tabs: List[TabState] = Field(default_factory=list)
     action_history: List[ActionContext] = Field(default_factory=list)
@@ -293,7 +291,7 @@ class AgentState(BaseModel):
         # Update last_edited timestamp
         self.last_edited = datetime.now().isoformat()
 
-        session_dir = Path.home() / ".bro" / self.user_id / f"session-{self.session_id}"
+        session_dir = Path.home() / ".bro"
         session_dir.mkdir(parents=True, exist_ok=True)
 
         # Use consistent filename that gets updated instead of creating new files
@@ -310,13 +308,4 @@ class AgentState(BaseModel):
         return str(state_file)
 
 
-# Global state manager instance - will be initialized by agent
-_agent_state: Optional[AgentState] = None
 
-
-def initialize_agent_state(
-    user_id: str = "default", session_id: str = "default"
-) -> AgentState:
-    global _agent_state
-    _agent_state = AgentState(user_id=user_id, session_id=session_id)
-    return _agent_state

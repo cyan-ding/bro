@@ -25,7 +25,6 @@ class RunInfo:
     def __init__(
         self,
         run_id: str,
-        session_id: str,
         user_id: str,
         agent: Optional["Agent"],
         max_iterations: int,
@@ -36,14 +35,12 @@ class RunInfo:
 
         Args:
             run_id: Unique identifier for this run
-            session_id: Session identifier
             user_id: User identifier
             agent: The Agent instance (can be None initially)
             max_iterations: Maximum iterations for this run
             user_prompt: The user's task prompt
         """
         self.run_id = run_id
-        self.session_id = session_id
         self.user_id = user_id
         self.agent = agent
         self.max_iterations = max_iterations
@@ -100,7 +97,6 @@ class RunInfo:
         """
         event = LogEvent(
             timestamp=datetime.now().isoformat(),
-            run_id=self.run_id,
             iteration=self.current_iteration,
             event_type=event_type,
             action_context=action_context,

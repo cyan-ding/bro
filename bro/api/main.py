@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from typing import Dict
 from utils.screencast import ScreencastClient
+from utils.db import get_supabase
 
 from .models import (
     CreateRunRequest,
@@ -28,9 +29,9 @@ from .run_manager import RunManager
 from .mock_run_manager import MockRunManager
 from .log_streamer import stream_logs
 
-
 # Set to True to use mock data for frontend testing
 USE_MOCK = False
+
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -77,6 +78,8 @@ async def root():
     }
 
 
+# @app.get("/runs", response_model=)
+
 @app.post("/runs", response_model=CreateRunResponse)
 async def create_run(request: CreateRunRequest):
     """
@@ -101,14 +104,11 @@ async def create_run(request: CreateRunRequest):
             take_screenshot=request.take_screenshot,
             model=request.model,
             user_id=request.user_id,
-            session_id=request.session_id,
             enable_logging=request.enable_logging,
         )
 
         return CreateRunResponse(
             run_id=run_info.run_id,
-            session_id=run_info.session_id,
-            user_id=run_info.user_id,
             status=run_info.status,
             message="Run created successfully and started",
         )
@@ -192,7 +192,7 @@ async def send_input(run_id: str, request: SendInputRequest):
         )
 
     return SendInputResponse(
-        run_id=run_id, status="success", message="Input sent to agent successfully"
+        status="success", message="Input sent to agent successfully"
     )
 
 
@@ -218,7 +218,6 @@ async def send_decision(run_id: str, request: SendDecisionRequest):
         )
 
     return SendDecisionResponse(
-        run_id=run_id,
         status="success",
         message=f"Decision '{request.decision.value}' sent to agent successfully",
     )
@@ -244,7 +243,7 @@ async def stop_run(run_id: str):
         )
 
     return StopRunResponse(
-        run_id=run_id, status=RunStatus.STOPPED, message="Run stopped successfully"
+        status=RunStatus.STOPPED, message="Run stopped successfully"
     )
 
 

@@ -6,6 +6,13 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+export interface ChatMessage {
+  id: string;
+  type: "user" | "agent" | "system";
+  content: string;
+  timestamp: Date;
+}
+
 export interface CreateRunRequest {
   user_prompt: string;
   url?: string;
@@ -13,7 +20,6 @@ export interface CreateRunRequest {
   take_screenshot?: boolean;
   model?: string;
   user_id?: string;
-  session_id?: string;
   enable_logging?: boolean;
 }
 
@@ -27,16 +33,11 @@ export type RunStatus =
 
 export interface CreateRunResponse {
   run_id: string;
-  session_id: string;
-  user_id: string;
   status: string;
   message: string;
 }
 
 export interface AgentStateResponse {
-  run_id: string;
-  user_id: string;
-  session_id: string;
   tabs: Array<{
     index: number;
     url: string;
@@ -83,7 +84,6 @@ export interface SendDecisionRequest {
 export interface LogEvent {
   timestamp: string;
   iteration: number;
-  run_id: string;
   event_type: string;
   message?: string;
   error?: string;

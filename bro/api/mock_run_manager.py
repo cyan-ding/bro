@@ -20,15 +20,14 @@ from .run_info import RunInfo
 class MockAgent:
     """Mock agent that simulates agent state without real execution."""
 
-    def __init__(self, user_id: str = "test_user", session_id: str = "test_session"):
+    def __init__(self, user_id: str = "test_user"):
         """
         Initialize mock agent with simulated state.
 
         Args:
             user_id: User identifier
-            session_id: Session identifier
         """
-        self.agent_state = AgentState(user_id=user_id, session_id=session_id)
+        self.agent_state = AgentState(user_id=user_id)
         self.input_manager = MockInputManager()
 
         # Populate with mock data
@@ -124,7 +123,6 @@ class MockRunManager:
         take_screenshot: bool = True,
         model: str = "gpt-4o-mini",
         user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
         enable_logging: bool = False,
     ) -> RunInfo:
         """
@@ -137,25 +135,21 @@ class MockRunManager:
             take_screenshot: Whether to take screenshots
             model: LLM model to use
             user_id: User identifier
-            session_id: Session identifier
             enable_logging: Whether to enable log streaming
 
         Returns:
             RunInfo object for the created run
         """
         run_id = str(uuid.uuid4())
-        if not session_id:
-            session_id = str(uuid.uuid4())[:8]
         if not user_id:
             user_id = "test_user"
 
-        # Create mock agent with user_id and session_id
-        agent = MockAgent(user_id=user_id, session_id=session_id)
+        # Create mock agent with user_id
+        agent = MockAgent(user_id=user_id)
 
         # Create run info
         run_info = RunInfo(
             run_id=run_id,
-            session_id=session_id,
             user_id=user_id,
             agent=agent,
             max_iterations=max_iterations,
@@ -477,6 +471,5 @@ class MockRunManager:
 
         # Use Pydantic's model_dump to convert to dictionary
         state_dict = run_info.agent.agent_state.model_dump(mode="json")
-        state_dict["run_id"] = run_id
 
         return state_dict

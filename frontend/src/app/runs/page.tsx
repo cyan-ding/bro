@@ -5,7 +5,6 @@ import { useEffect, useCallback, useState } from "react";
 import AgentChat from "@/components/AgentChat";
 import ScreencastViewer from "@/components/ScreencastViewer";
 import {
-  createRun,
   getRunStatus,
   getAgentState,
   sendInput,

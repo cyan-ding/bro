@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 
 
 class Extraction(BaseModel):
@@ -65,3 +65,46 @@ class ActionContext(BaseModel):
     iteration: int
     description: Optional[str] = None  # Human-readable description of the action
     structured_output: Optional[StructuredOutputContext] = None
+
+
+# Clean Pydantic models for LiteLLM response handling
+class LiteLLMFunction(BaseModel):
+    name: Optional[str] = None
+    arguments: Optional[str] = None
+
+
+class LiteLLMToolCall(BaseModel):
+    type: str
+    function: LiteLLMFunction
+    id: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+
+class LiteLLMMessage(BaseModel):
+    role: str
+    content: Optional[str] = None
+    tool_calls: Optional[List[LiteLLMToolCall]] = None
+    thinking_content: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+
+class LiteLLMChoice(BaseModel):
+    message: LiteLLMMessage
+    index: Optional[int] = None
+    finish_reason: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+
+class LiteLLMResponse(BaseModel):
+    choices: List[LiteLLMChoice]
+    model: Optional[str] = None
+    id: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow extra fields

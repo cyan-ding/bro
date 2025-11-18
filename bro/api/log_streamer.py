@@ -46,9 +46,7 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
                 # Send final status event
                 final_event = LogEvent(
                     timestamp=run_info.completed_at.isoformat()
-                    if run_info.completed_at
-                    else "",
-                    run_id=run_info.run_id,
+                    if run_info.completed_at else "",
                     iteration=run_info.current_iteration,
                     event_type="final_status",
                     message="Run Complete",
@@ -71,7 +69,6 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
         # Send error event and close
         error_event = LogEvent(
             timestamp="",
-            run_id=run_info.run_id,
             iteration=run_info.current_iteration,
             event_type="error",
             error=str(e),

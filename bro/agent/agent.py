@@ -1,6 +1,5 @@
 import asyncio
 import json
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
@@ -15,7 +14,7 @@ from .schemas import StructuredOutput
 # Import utility functions
 from bro.utils.action_utils import format_elements_text
 from .actions import click, done, extract, input_text, scroll, search, todo_edit
-from .agent_state import initialize_agent_state
+from .agent_state import AgentState
 from .ai import ai
 from bro.utils.dom_utils import take_screenshot_with_bounding_boxes
 from bro.utils.input_manager import InputManager
@@ -23,48 +22,9 @@ from bro.utils.input_manager import InputManager
 if TYPE_CHECKING:
     from api.run_info import RunInfo
 
-
-# Clean Pydantic models for LiteLLM response handling
-class LiteLLMFunction(BaseModel):
-    name: Optional[str] = None
-    arguments: Optional[str] = None
+from .models import LiteLLMResponse
 
 
-class LiteLLMToolCall(BaseModel):
-    type: str
-    function: LiteLLMFunction
-    id: Optional[str] = None
-
-    class Config:
-        extra = "allow"  # Allow extra fields
-
-
-class LiteLLMMessage(BaseModel):
-    role: str
-    content: Optional[str] = None
-    tool_calls: Optional[List[LiteLLMToolCall]] = None
-    thinking_content: Optional[str] = None
-
-    class Config:
-        extra = "allow"  # Allow extra fields
-
-
-class LiteLLMChoice(BaseModel):
-    message: LiteLLMMessage
-    index: Optional[int] = None
-    finish_reason: Optional[str] = None
-
-    class Config:
-        extra = "allow"  # Allow extra fields
-
-
-class LiteLLMResponse(BaseModel):
-    choices: List[LiteLLMChoice]
-    model: Optional[str] = None
-    id: Optional[str] = None
-
-    class Config:
-        extra = "allow"  # Allow extra fields
 
 
 class Agent:
@@ -84,7 +44,6 @@ class Agent:
     def __init__(
         self,
         system_prompt: str,
-        session_id: str = str(uuid.uuid4())[:8],
         user_id: Optional[str] = None,
         model: str = "gpt-5-mini-2025-08-07",
         run_info: Optional["RunInfo"] = None,
@@ -94,25 +53,17 @@ class Agent:
 
         Args:
             system_prompt: The system prompt that defines Bro's behavior
-            session_id: Unique identifier for this session
             user_id: Unique identifier for the user
             model: The model to use for the LLM
             run_info: Optional RunInfo object for logging
         """
         self.system_prompt = system_prompt
-        self.session_id = session_id
-        self.user_id = user_id or "default"
         self.model = model
         self.input_manager = None
         self.run_info = run_info
-        # Initialize agent state with session info
-        self.agent_state = initialize_agent_state(
-            user_id=self.user_id, session_id=self.session_id
-        )
+        # Initialize agent state
+        self.agent_state = AgentState()
         load_dotenv()
-        print(
-            f"🔧 Initialized agent state (user: {self.user_id}, session: {self.session_id})"
-        )
 
     async def _parse_structured_json(
         self, llm_response: Any
@@ -704,12 +655,12 @@ class Agent:
                         self.run_info.update_iteration()
 
                     # Save agent state to file at end of iteration
-                    try:
-                        state_file = await self.agent_state.save_state_to_file()
-                        print(f"💾 Agent state saved to: {state_file}")
+                    # try:
+                    #     state_file = await self.agent_state.save_state_to_file()
+                    #     print(f"💾 Agent state saved to: {state_file}")
 
-                    except Exception as e:
-                        print(f"⚠️ Failed to save agent state: {e}")
+                    # except Exception as e:
+                    #     print(f"⚠️ Failed to save agent state: {e}")
 
                     # Check if the agent signaled task completion via done function
                     await_decision_messages = [
@@ -771,7 +722,6 @@ async def main():
     ]
     agent = Agent(
         system_prompt,
-        session_id="test",
         user_id="cyan",
         model="gemini/gemini-2.5-flash-preview-09-2025",
     )

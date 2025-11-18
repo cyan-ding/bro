@@ -16,7 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAgentStore, ChatMessage } from "@/store/useAgentStore";
+import { useAgentStore } from "@/store/useAgentStore";
+import { ChatMessage } from "@/lib/api";
 import Link from "next/link";
 
 interface AgentChatProps {

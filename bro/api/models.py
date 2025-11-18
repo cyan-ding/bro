@@ -21,6 +21,17 @@ class RunStatus(str, Enum):
     STOPPED = "stopped"
     ERROR = "error"
 
+class MessageType(str, Enum):
+    USER = "user"
+    AGENT = "agent"
+    SYSTEM = "system"
+
+class ChatMessage(BaseModel):
+    id: str
+    type: MessageType
+    content: str
+    timestamp: str
+
 
 class CreateRunRequest(BaseModel):
     """Request to create a new agent run."""
@@ -31,9 +42,6 @@ class CreateRunRequest(BaseModel):
     take_screenshot: bool = Field(True, description="Whether to take screenshots")
     model: str = Field("gpt-4o-mini", description="LLM model to use")
     user_id: Optional[str] = Field(None, description="User identifier")
-    session_id: Optional[str] = Field(
-        None, description="Session identifier (auto-generated if not provided)"
-    )
     enable_logging: bool = Field(False, description="Whether to enable log streaming")
 
 
@@ -41,8 +49,6 @@ class CreateRunResponse(BaseModel):
     """Response after creating a new agent run."""
 
     run_id: str = Field(..., description="Unique identifier for this run")
-    session_id: str = Field(..., description="Session identifier")
-    user_id: str = Field(..., description="User identifier")
     status: RunStatus = Field(..., description="Current status of the run")
     message: str = Field(..., description="Human-readable status message")
 
@@ -50,9 +56,6 @@ class CreateRunResponse(BaseModel):
 class AgentStateResponse(BaseModel):
     """Response containing full agent state."""
 
-    run_id: str
-    user_id: str
-    session_id: str
     current_tab_index: Optional[int]
     extractions: List[Extraction]
     tabs: List[TabState]
@@ -60,7 +63,6 @@ class AgentStateResponse(BaseModel):
     action_history: List[ActionContext]
     last_edited: str
     max_iterations: int
-
 
 class SendInputRequest(BaseModel):
     """Request to send additional instructions to a running agent."""
@@ -71,7 +73,6 @@ class SendInputRequest(BaseModel):
 class SendInputResponse(BaseModel):
     """Response after sending input to agent."""
 
-    run_id: str
     status: str = Field(..., description="Status of the input submission")
     message: str
 
@@ -98,7 +99,6 @@ class SendDecisionRequest(BaseModel):
 class SendDecisionResponse(BaseModel):
     """Response after sending decision to agent."""
 
-    run_id: str
     status: str
     message: str
 
@@ -106,7 +106,6 @@ class SendDecisionResponse(BaseModel):
 class StopRunResponse(BaseModel):
     """Response after stopping a run."""
 
-    run_id: str
     status: RunStatus
     message: str
 
@@ -134,9 +133,14 @@ class LogEvent(BaseModel):
 
     timestamp: str
     iteration: int = None
-    run_id: str
     event_type: LogType
     message: Optional[str] = None
     error: Optional[str] = None
     action_context: Optional[ActionContext] = None
     decision: Optional[SendDecisionRequest] = None
+
+class SavedRun(BaseModel):
+    run_id: str
+    chat_history: List[ChatMessage]
+    agent_state: AgentStateResponse
+    logs: List[LogEvent]

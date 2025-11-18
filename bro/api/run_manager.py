@@ -36,12 +36,9 @@ class RunManager:
         take_screenshot: bool = True,
         model: str = "gemini/gemini-2.5-flash-preview-09-2025",
         user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
         enable_logging: bool = True,
     ) -> RunInfo:
         run_id = str(uuid.uuid4())
-        if not session_id:
-            session_id = str(uuid.uuid4())[:8]
         if not user_id:
             user_id = "default"
 
@@ -52,7 +49,6 @@ class RunManager:
         # Create run info first (without agent)
         run_info = RunInfo(
             run_id=run_id,
-            session_id=session_id,
             user_id=user_id,
             agent=None,  # Will be set below
             max_iterations=max_iterations,
@@ -62,7 +58,6 @@ class RunManager:
         # Create agent instance with run_info if logging is enabled
         agent = Agent(
             system_prompt=system_prompt,
-            session_id=session_id,
             user_id=user_id,
             model=model,
             run_info=run_info if enable_logging else None,
@@ -78,7 +73,7 @@ class RunManager:
         run_info.task = asyncio.create_task(
             self._run_agent(run_info, url, max_iterations, take_screenshot)
         )
-
+        print("Agent running with model ", model)
         return run_info
 
     async def _run_agent(
@@ -217,6 +212,5 @@ class RunManager:
         state_dict = run_info.agent.agent_state.model_dump(
             mode="json", exclude={"max_action_history", "max_extractions"}
         )
-        state_dict["run_id"] = run_id
 
         return state_dict

@@ -1,14 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { LogEvent, RunStatus, AgentStateResponse } from '@/lib/api';
+import type { LogEvent, RunStatus, AgentStateResponse, ChatMessage } from '@/lib/api';
 import { createLogStream } from '@/lib/api';
 
-export interface ChatMessage {
-  id: string;
-  type: "user" | "agent" | "system";
-  content: string;
-  timestamp: Date;
-}
+
 
 interface AgentStore {
   // State
