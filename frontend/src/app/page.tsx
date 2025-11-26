@@ -6,10 +6,17 @@ import { useAgentStore } from "@/store/useAgentStore"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { ArrowUpIcon } from "lucide-react"
+import { NavigationMenuDemo } from "@/components/ui/navbar"
+import { createClient } from "@supabase/supabase-js"
 
 import {
     createRun,
 } from "@/lib/api";
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function Home() {
     const router = useRouter()
@@ -22,6 +29,7 @@ export default function Home() {
 
     const [prompt, setPrompt] = useState("")
     let [models, setModels] = useState({})
+
     useEffect(() => {
         fetch("/models.json")
             .then((res) => res.json())
@@ -29,6 +37,14 @@ export default function Home() {
                 setModels(data)
             });
     }, []
+    )
+
+    supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === "SIGNED_IN" && session) {
+                
+            }
+        }
+
     )
 
     const handleStart = useCallback(async (prompt: string, url?: string) => {
@@ -52,32 +68,44 @@ export default function Home() {
 
 
     return (
-        <div className="flex justify-center items-center min-h-screen">
-            <div className="relative w-1/2">
-                <Textarea
-                    className="resize-none h-[25vh] focus:border-none focus:ring-0"
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Message Bro"
-                />
-                <div className="absolute bottom-0 right-2 flex flex-row gap-2 mt-2">
-                    <Combobox
-                        options={models}
-                        display={"Select a model"}
-                        empty={"No model selected"}
-                        setter={setModel}
+        <div>
+            <NavigationMenuDemo
+                onGoogleSignin={
+                    () => supabase.auth.signInWithOAuth({
+                        provider: 'google',
+                    })
+                }
+            />
+            <div className="flex justify-center items-center min-h-screen">
+
+
+                <div className="relative w-1/2">
+                    <Textarea
+                        className="resize-none h-[25vh] focus:border-none focus:ring-0"
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="Message Bro"
                     />
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label="Submit"
-                        onClick={() => handleStart(prompt)}
-                        className="hover:bg-accent"
-                    >
-                        <ArrowUpIcon />
-                    </Button>
+                    <div className="absolute bottom-0 right-2 flex flex-row gap-2 mt-2">
+                        <Combobox
+                            options={models}
+                            display={"Select a model"}
+                            empty={"No model selected"}
+                            setter={setModel}
+                        />
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Submit"
+                            onClick={() => handleStart(prompt)}
+                            className="hover:bg-accent"
+                        >
+                            <ArrowUpIcon />
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
+
     )
 }

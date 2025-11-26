@@ -21,17 +21,6 @@ class RunStatus(str, Enum):
     STOPPED = "stopped"
     ERROR = "error"
 
-class MessageType(str, Enum):
-    USER = "user"
-    AGENT = "agent"
-    SYSTEM = "system"
-
-class ChatMessage(BaseModel):
-    id: str
-    type: MessageType
-    content: str
-    timestamp: str
-
 
 class CreateRunRequest(BaseModel):
     """Request to create a new agent run."""
@@ -141,6 +130,5 @@ class LogEvent(BaseModel):
 
 class SavedRun(BaseModel):
     run_id: str
-    chat_history: List[ChatMessage]
     agent_state: AgentStateResponse
     logs: List[LogEvent]

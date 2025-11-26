@@ -78,7 +78,14 @@ async def root():
     }
 
 
-# @app.get("/runs", response_model=)
+@app.get("/runs", response_model=CreateRunResponse)
+async def get_run(request: CreateRunRequest):
+    """
+    get run information from database
+    """
+
+    supabase_client = await get_supabase()
+    
 
 @app.post("/runs", response_model=CreateRunResponse)
 async def create_run(request: CreateRunRequest):
