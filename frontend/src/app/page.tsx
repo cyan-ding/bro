@@ -12,6 +12,8 @@ import { createClient } from "@supabase/supabase-js"
 import {
     createRun,
 } from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore"
+import { User } from "@/store/useAuthStore"
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,6 +29,10 @@ export default function Home() {
         setError,
     } = useAgentStore();
 
+    const {
+        user, setUser
+    } = useAuthStore();
+
     const [prompt, setPrompt] = useState("")
     let [models, setModels] = useState({})
 
@@ -41,10 +47,18 @@ export default function Home() {
 
     supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === "SIGNED_IN" && session) {
-                
+                setUser({
+                    id: session.user.id,
+                    email: session.user.email || null,
+                    name: session.user.user_metadata?.full_name || null,
+                    avatar: session.user.user_metadata?.avatar_url || null,
+                })
+            }
+
+            if (event === "SIGNED_OUT" || !session) {
+                setUser(null)
             }
         }
-
     )
 
     const handleStart = useCallback(async (prompt: string, url?: string) => {
@@ -70,11 +84,16 @@ export default function Home() {
     return (
         <div>
             <NavigationMenuDemo
-                onGoogleSignin={
+                onGoogleSignIn={
                     () => supabase.auth.signInWithOAuth({
                         provider: 'google',
                     })
                 }
+                onGoogleSignOut={
+                    () => supabase.auth.signOut()
+                }
+                user={user}
+
             />
             <div className="flex justify-center items-center min-h-screen">
 

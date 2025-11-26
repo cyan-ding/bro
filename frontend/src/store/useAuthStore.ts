@@ -2,17 +2,17 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 
-interface User {
+export interface User {
     id: string
     email: string | null
     name: string | null
-    avator: string | null
+    avatar: string | null
 }
 
 interface AuthStore {
     user: User | null;
 
-    setUser: (user: User) => void;
+    setUser: (user: User | null) => void;
 
 }
 

@@ -1,11 +1,7 @@
-
 "use client"
 
 import * as React from "react"
 import Link from "next/link"
-import { CircleCheckIcon, CircleHelpIcon, CircleIcon } from "lucide-react"
-
-import { useIsMobile } from "@/hooks/use-mobile"
 import {
     NavigationMenu,
     NavigationMenuContent,
@@ -15,24 +11,35 @@ import {
     NavigationMenuTrigger,
     navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu"
+
 import { Button } from "./button"
-import { OAuthResponse } from "@supabase/supabase-js"
+import { AuthError, OAuthResponse } from "@supabase/supabase-js"
+import { User } from "@/store/useAuthStore"
 
 interface NavBarProps {
-    onGoogleSignin: () => Promise<OAuthResponse>;
-    
+    onGoogleSignIn: () => Promise<OAuthResponse>;
+    onGoogleSignOut: () => Promise<{
+        error: AuthError | null;
+    }>;
+    user: User | null;
+
 }
 
 
-export function NavigationMenuDemo({ onGoogleSignin}: NavBarProps) {
+export function NavigationMenuDemo({ user, onGoogleSignIn, onGoogleSignOut }: NavBarProps) {
 
     return (
         <NavigationMenu>
             <NavigationMenuList className="flex-wrap">
                 <NavigationMenuItem>
                     <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-                        <Button onClick={() => onGoogleSignin()}>Log In/</Button>
+                        <Button onClick={user ? onGoogleSignIn : onGoogleSignOut}>{user ? "Log Out" : "Log In"}</Button>
                     </NavigationMenuLink>
+                </NavigationMenuItem>
+                <NavigationMenuItem>
+                    {user &&
+                        <div>{user.name}</div>
+                    }
                 </NavigationMenuItem>
             </NavigationMenuList>
         </NavigationMenu>
