@@ -45,7 +45,11 @@ export default function Dashboard() {
         setRunStatus(status);
 
         // Stop polling and optionally clear runId if run is complete
-        if (status === "completed" || status === "stopped" || status === "error") {
+        if (
+          status === "completed" ||
+          status === "stopped" ||
+          status === "error"
+        ) {
           clearInterval(interval);
         }
       } catch (err) {
@@ -115,24 +119,32 @@ export default function Dashboard() {
     }
   }, [setError]);
 
-  const handleSendInput = useCallback(async (message: string) => {
-    if (!runId) return;
+  const handleSendInput = useCallback(
+    async (message: string) => {
+      if (!runId) return;
 
-    try {
-      await sendInput(runId, message);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send input");
-    }
-  }, [runId, setError]);
+      try {
+        await sendInput(runId, message);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to send input");
+      }
+    },
+    [runId, setError]
+  );
 
   const handleSendDecision = useCallback(
-    async (decision: "done" | "modify" | "intervene", instructions?: string) => {
+    async (
+      decision: "done" | "modify" | "intervene",
+      instructions?: string
+    ) => {
       if (!runId) return;
 
       try {
         await sendDecision(runId, decision, instructions);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to send decision");
+        setError(
+          err instanceof Error ? err.message : "Failed to send decision"
+        );
       }
     },
     [runId, setError]
@@ -151,7 +163,10 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 grid-rows-1" style={{ height: "calc(100vh - 150px)" }}>
+        <div
+          className="grid grid-cols-1 lg:grid-cols-3 gap-6 grid-rows-1"
+          style={{ height: "calc(100vh - 150px)" }}
+        >
           {/* Left column: Chat Interface */}
           <div className="lg:col-span-1">
             <AgentChat
@@ -171,7 +186,9 @@ export default function Dashboard() {
           <div className="lg:col-span-2">
             <ScreencastViewer
               runId={runId}
-              currentUrl={agentState?.tabs?.[agentState.current_tab_index ?? 0]?.url}
+              currentUrl={
+                agentState?.tabs?.[agentState.current_tab_index ?? 0]?.url
+              }
               isRunning={isRunning}
             />
           </div>

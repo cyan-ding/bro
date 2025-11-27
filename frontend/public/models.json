@@ -1,6 +1,6 @@
 {
-    "claude": "claude-sonnet-4-20250514",
-    "gemini": "gemini/gemini-2.5-flash-preview-09-2025",
-    "groq": "groq/llama-4-scout-17b-16e-instruct",
-    "gpt": "gpt-4o-mini"
+  "claude": "claude-sonnet-4-20250514",
+  "gemini": "gemini/gemini-2.5-flash-preview-09-2025",
+  "groq": "groq/llama-4-scout-17b-16e-instruct",
+  "gpt": "gpt-4o-mini"
 }

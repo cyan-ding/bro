@@ -1,103 +1,90 @@
-"use client"
-import { useEffect, useState, useCallback } from "react"
-import { Textarea } from "@/components/ui/textarea"
-import { Combobox } from "@/components/ui/combobox"
-import { useAgentStore } from "@/store/useAgentStore"
-import { Button } from "@/components/ui/button"
-import { useRouter } from "next/navigation"
-import { ArrowUpIcon } from "lucide-react"
-import { NavigationMenuDemo } from "@/components/ui/navbar"
-import { createClient } from "@supabase/supabase-js"
+"use client";
+import { useEffect, useState, useCallback } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Combobox } from "@/components/ui/combobox";
+import { useAgentStore } from "@/store/useAgentStore";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { ArrowUpIcon } from "lucide-react";
+import { NavigationMenuDemo } from "@/components/ui/navbar";
+import { createClient } from "@supabase/supabase-js";
 
-import {
-    createRun,
-} from "@/lib/api";
-import { useAuthStore } from "@/store/useAuthStore"
-import { User } from "@/store/useAuthStore"
+import { createRun } from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore";
+import { User } from "@/store/useAuthStore";
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+);
 
 export default function Home() {
-    const router = useRouter()
-    const {
-        model,
-        setModel,
-        setRunId,
-        setError,
-    } = useAgentStore();
+    const router = useRouter();
+    const { model, setModel, setRunId, setError } = useAgentStore();
 
-    const {
-        user, setUser
-    } = useAuthStore();
+    const { user, setUser } = useAuthStore();
 
-    const [prompt, setPrompt] = useState("")
-    let [models, setModels] = useState({})
+    const [prompt, setPrompt] = useState("");
+    const [models, setModels] = useState({});
 
     useEffect(() => {
         fetch("/models.json")
             .then((res) => res.json())
             .then((data) => {
-                setModels(data)
+                setModels(data);
             });
-    }, []
-    )
-
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    }, []);
+    useEffect(() => {
+        supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === "SIGNED_IN" && session) {
                 setUser({
                     id: session.user.id,
                     email: session.user.email || null,
                     name: session.user.user_metadata?.full_name || null,
                     avatar: session.user.user_metadata?.avatar_url || null,
-                })
+                });
             }
 
             if (event === "SIGNED_OUT" || !session) {
-                setUser(null)
+                setUser(null);
             }
-        }
-    )
+        });
+    }, []);
 
-    const handleStart = useCallback(async (prompt: string, url?: string) => {
-        try {
-            const response = await createRun({
-                user_prompt: prompt,
-                url: url || "", // Keep URL in code but use empty string as default
-                max_iterations: 100,
-                take_screenshot: true,
-                enable_logging: true,
-                model: model || "gemini/gemini-2.5-flash-preview-09-2025",
-            });
-            const run_id = response.run_id
-            setRunId(run_id);
-            setModel(model || "gemini/gemini-2.5-flash-preview-09-2025")
-            router.push(`/runs?runId=${run_id}`);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to start agent");
-        }
-    }, [setRunId, setError]);
-
+    const handleStart = useCallback(
+        async (prompt: string, url?: string) => {
+            try {
+                const response = await createRun({
+                    user_prompt: prompt,
+                    url: url || "", // Keep URL in code but use empty string as default
+                    max_iterations: 100,
+                    take_screenshot: true,
+                    enable_logging: true,
+                    model: model || "gemini/gemini-2.5-flash-preview-09-2025",
+                });
+                const run_id = response.run_id;
+                setRunId(run_id);
+                setModel(model || "gemini/gemini-2.5-flash-preview-09-2025");
+                router.push(`/runs?runId=${run_id}`);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to start agent");
+            }
+        },
+        [model, router, setModel, setRunId, setError]
+    );
 
     return (
         <div>
             <NavigationMenuDemo
-                onGoogleSignIn={
-                    () => supabase.auth.signInWithOAuth({
-                        provider: 'google',
+                onGoogleSignIn={() =>
+                    supabase.auth.signInWithOAuth({
+                        provider: "google",
                     })
                 }
-                onGoogleSignOut={
-                    () => supabase.auth.signOut()
-                }
+                onGoogleSignOut={() => supabase.auth.signOut()}
                 user={user}
-
             />
             <div className="flex justify-center items-center min-h-screen">
-
-
                 <div className="relative w-1/2">
                     <Textarea
                         className="resize-none h-[25vh] focus:border-none focus:ring-0"
@@ -125,6 +112,5 @@ export default function Home() {
                 </div>
             </div>
         </div>
-
-    )
+    );
 }

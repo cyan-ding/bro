@@ -25,7 +25,7 @@ export function ArrowRightIcon({
       className={className}
       {...props}
     >
-      <path d="M5 12h14m-7-7l7 7l-7 7"/>
+      <path d="M5 12h14m-7-7l7 7l-7 7" />
     </svg>
   );
 }

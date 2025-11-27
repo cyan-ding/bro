@@ -43,7 +43,6 @@ export default function LogStream({ logs }: LogStreamProps) {
   };
 
   const renderLogData = (event: LogEvent) => {
-  
     switch (event.event_type) {
       case "thinking":
         return (
@@ -51,25 +50,37 @@ export default function LogStream({ logs }: LogStreamProps) {
             {event.action_context?.structured_output?.thinking && (
               <div>
                 <span className="font-medium">Thinking: </span>
-                <span className="text-muted-foreground">{event.action_context?.structured_output?.thinking}</span>
+                <span className="text-muted-foreground">
+                  {event.action_context?.structured_output?.thinking}
+                </span>
               </div>
             )}
-            {event.action_context?.structured_output?.evaluation_previous_actions && (
+            {event.action_context?.structured_output
+              ?.evaluation_previous_actions && (
               <div>
                 <span className="font-medium">Evaluation: </span>
-                <span className="text-muted-foreground">{event.action_context?.structured_output?.evaluation_previous_actions}</span>
+                <span className="text-muted-foreground">
+                  {
+                    event.action_context?.structured_output
+                      ?.evaluation_previous_actions
+                  }
+                </span>
               </div>
             )}
             {event.action_context?.structured_output?.memory && (
               <div>
                 <span className="font-medium">Memory: </span>
-                <span className="text-muted-foreground">{event.action_context?.structured_output?.memory}</span>
+                <span className="text-muted-foreground">
+                  {event.action_context?.structured_output?.memory}
+                </span>
               </div>
             )}
             {event.action_context?.structured_output?.next_goal && (
               <div>
                 <span className="font-medium">Next Goal: </span>
-                <span className="text-muted-foreground">{event.action_context?.structured_output?.next_goal}</span>
+                <span className="text-muted-foreground">
+                  {event.action_context?.structured_output?.next_goal}
+                </span>
               </div>
             )}
           </div>
@@ -80,20 +91,25 @@ export default function LogStream({ logs }: LogStreamProps) {
           <div className="space-y-1 text-sm">
             <div>
               <span className="font-medium">Action: </span>
-              <code className="bg-muted px-1 py-0.5 rounded">{event.action_context?.action_name}</code>
+              <code className="bg-muted px-1 py-0.5 rounded">
+                {event.action_context?.action_name}
+              </code>
             </div>
-            {event.action_context?.arguments && Object.keys(event.action_context?.arguments).length > 0 && (
-              <div>
-                <span className="font-medium">Arguments: </span>
-                <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                  {JSON.stringify(event.action_context?.arguments)}
-                </code>
-              </div>
-            )}
+            {event.action_context?.arguments &&
+              Object.keys(event.action_context?.arguments).length > 0 && (
+                <div>
+                  <span className="font-medium">Arguments: </span>
+                  <code className="bg-muted px-1 py-0.5 rounded text-xs">
+                    {JSON.stringify(event.action_context?.arguments)}
+                  </code>
+                </div>
+              )}
             {event.action_context?.result && (
               <div>
                 <span className="font-medium">Result: </span>
-                <span className="text-muted-foreground">{event.action_context?.result}</span>
+                <span className="text-muted-foreground">
+                  {event.action_context?.result}
+                </span>
               </div>
             )}
           </div>
@@ -105,13 +121,13 @@ export default function LogStream({ logs }: LogStreamProps) {
             <span className="text-muted-foreground">{event.message}</span>
           </div>
         );
-      
+
       case "final_status":
         return (
           <div className="text-sm">
             <span className="text-muted-foreground">Run completed</span>
           </div>
-        )
+        );
       case "error":
         return (
           <div className="text-sm text-destructive">
@@ -132,22 +148,26 @@ export default function LogStream({ logs }: LogStreamProps) {
         return (
           <div className="text-sm">
             <span className="font-medium">Decision: </span>
-            <span className="text-muted-foreground">{event.decision?.decision}</span>
+            <span className="text-muted-foreground">
+              {event.decision?.decision}
+            </span>
             {event.decision?.additional_instructions && (
               <div className="mt-1">
                 <span className="font-medium">Instructions: </span>
-                <span className="text-muted-foreground">{event.decision?.additional_instructions}</span>
+                <span className="text-muted-foreground">
+                  {event.decision?.additional_instructions}
+                </span>
               </div>
             )}
           </div>
         );
       default:
-            return (
-              <div className="text-sm text-muted-foreground">
-                {JSON.stringify(event)}
-              </div>
-            );
-        }
+        return (
+          <div className="text-sm text-muted-foreground">
+            {JSON.stringify(event)}
+          </div>
+        );
+    }
   };
 
   return (
@@ -166,7 +186,10 @@ export default function LogStream({ logs }: LogStreamProps) {
               {logs.map((log, index) => (
                 <div key={index}>
                   <div className="flex items-start gap-2">
-                    <Badge variant={getEventBadgeVariant(log.event_type)} className="mt-0.5">
+                    <Badge
+                      variant={getEventBadgeVariant(log.event_type)}
+                      className="mt-0.5"
+                    >
                       {log.event_type}
                     </Badge>
                     <div className="flex-1 space-y-1">

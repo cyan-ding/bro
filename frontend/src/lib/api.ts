@@ -4,7 +4,7 @@
  * Provides typed functions for all backend endpoints.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface ChatMessage {
   id: string;
@@ -44,12 +44,15 @@ export interface AgentStateResponse {
     title: string;
   }>;
   current_tab_index: number | null;
-  extractions: Array<string | {
-    content: string;
-    source_url: string;
-    source_title: string;
-    content_length: number;
-  }>;
+  extractions: Array<
+    | string
+    | {
+        content: string;
+        source_url: string;
+        source_title: string;
+        content_length: number;
+      }
+  >;
   todo_list: Array<{
     task: string;
     completed: boolean;
@@ -77,7 +80,7 @@ export interface StructuredOutput {
 }
 
 export interface SendDecisionRequest {
-  decision: 'done' | 'modify' | 'intervene';
+  decision: "done" | "modify" | "intervene";
   additional_instructions?: string;
 }
 
@@ -88,16 +91,18 @@ export interface LogEvent {
   message?: string;
   error?: string;
   action_context?: ActionContext;
-  decision?: SendDecisionRequest
+  decision?: SendDecisionRequest;
 }
 
 /**
  * Create a new agent run.
  */
-export async function createRun(request: CreateRunRequest): Promise<CreateRunResponse> {
+export async function createRun(
+  request: CreateRunRequest
+): Promise<CreateRunResponse> {
   const response = await fetch(`${API_BASE_URL}/runs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
 
@@ -124,7 +129,9 @@ export async function getRunStatus(runId: string): Promise<RunStatus> {
 /**
  * Get the full agent state for a run.
  */
-export async function getAgentState(runId: string): Promise<AgentStateResponse> {
+export async function getAgentState(
+  runId: string
+): Promise<AgentStateResponse> {
   const response = await fetch(`${API_BASE_URL}/runs/${runId}/state`);
 
   if (!response.ok) {
@@ -139,8 +146,8 @@ export async function getAgentState(runId: string): Promise<AgentStateResponse> 
  */
 export async function sendInput(runId: string, message: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/runs/${runId}/input`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message }),
   });
 
@@ -154,12 +161,12 @@ export async function sendInput(runId: string, message: string): Promise<void> {
  */
 export async function sendDecision(
   runId: string,
-  decision: 'done' | 'modify' | 'intervene',
+  decision: "done" | "modify" | "intervene",
   additionalInstructions?: string
 ): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/runs/${runId}/decision`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       decision,
       additional_instructions: additionalInstructions,
@@ -176,7 +183,7 @@ export async function sendDecision(
  */
 export async function stopRun(runId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/runs/${runId}/stop`, {
-    method: 'POST',
+    method: "POST",
   });
 
   if (!response.ok) {
@@ -189,7 +196,7 @@ export async function stopRun(runId: string): Promise<void> {
  */
 export async function closeBrowser(): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/browser/close`, {
-    method: 'POST',
+    method: "POST",
   });
 
   if (!response.ok) {

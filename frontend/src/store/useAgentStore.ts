@@ -1,9 +1,12 @@
-  import { create } from 'zustand';
-  import { persist } from 'zustand/middleware';
-import type { LogEvent, RunStatus, AgentStateResponse, ChatMessage } from '@/lib/api';
-import { createLogStream } from '@/lib/api';
-
-
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type {
+  LogEvent,
+  RunStatus,
+  AgentStateResponse,
+  ChatMessage,
+} from "@/lib/api";
+import { createLogStream } from "@/lib/api";
 
 interface AgentStore {
   // State
@@ -45,7 +48,6 @@ export const useAgentStore = create<AgentStore>()(
       chatMessages: [],
       model: null,
 
-
       // Actions
       setModel: (model) => set({ model }),
       setRunId: (runId) => set({ runId }),
@@ -55,7 +57,8 @@ export const useAgentStore = create<AgentStore>()(
       setAgentState: (agentState) => set({ agentState }),
       setError: (error) => set({ error }),
       setEventSource: (eventSource) => set({ eventSource }),
-      addChatMessage: (message) => set((state) => ({ chatMessages: [...state.chatMessages, message] })),
+      addChatMessage: (message) =>
+        set((state) => ({ chatMessages: [...state.chatMessages, message] })),
       setChatMessages: (chatMessages) => set({ chatMessages }),
 
       closeEventSource: () => {
@@ -71,17 +74,17 @@ export const useAgentStore = create<AgentStore>()(
 
         // Don't create a new connection if we already have one for this runId
         if (state.eventSource && state.runId === runId) {
-          console.log('[LogStream] Already connected to runId:', runId);
+          console.log("[LogStream] Already connected to runId:", runId);
           return;
         }
 
         // Close existing event source if any
         if (state.eventSource) {
-          console.log('[LogStream] Closing existing connection');
+          console.log("[LogStream] Closing existing connection");
           state.eventSource.close();
         }
 
-        console.log('[LogStream] Starting new connection for runId:', runId);
+        console.log("[LogStream] Starting new connection for runId:", runId);
         const newEventSource = createLogStream(runId);
 
         newEventSource.onmessage = (event) => {
@@ -92,7 +95,7 @@ export const useAgentStore = create<AgentStore>()(
             }
 
             const logEvent: LogEvent = JSON.parse(event.data);
-            console.log('[LogStream]', logEvent);
+            console.log("[LogStream]", logEvent);
 
             // Add log to store
             const currentState = get();
@@ -104,7 +107,12 @@ export const useAgentStore = create<AgentStore>()(
               set({ eventSource: null });
             }
           } catch (err) {
-            console.error("Failed to parse log event:", err, "Data:", event.data);
+            console.error(
+              "Failed to parse log event:",
+              err,
+              "Data:",
+              event.data
+            );
           }
         };
 
@@ -134,7 +142,7 @@ export const useAgentStore = create<AgentStore>()(
       },
     }),
     {
-      name: 'agent-storage',
+      name: "agent-storage",
       partialize: (state) => ({
         runId: state.runId,
         // Don't persist logs, runStatus, agentState as they'll be fetched fresh

@@ -13,7 +13,11 @@ interface ScreencastViewerProps {
  *
  * Shows Chrome screencast at ~10 FPS with optional manual intervention controls.
  */
-export default function ScreencastViewer({ runId, currentUrl, isRunning = false }: ScreencastViewerProps) {
+export default function ScreencastViewer({
+  runId,
+  currentUrl,
+  isRunning = false,
+}: ScreencastViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -21,12 +25,15 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
   const [fps, setFps] = useState(0);
   const lastFrameTimeRef = useRef(Date.now());
   const frameCountRef = useRef(0);
-  const [viewportDimensions, setViewportDimensions] = useState({ width: 1280, height: 720 });
-  const [manualInterventionEnabled, setManualInterventionEnabled] = useState(false);
+  const [viewportDimensions, setViewportDimensions] = useState({
+    width: 1280,
+    height: 720,
+  });
+  const [manualInterventionEnabled, setManualInterventionEnabled] =
+    useState(false);
   const chromeClosedRef = useRef(false);
-  const [localUrl, setLocalUrl] = useState(currentUrl ?? "")
+  const [localUrl, setLocalUrl] = useState(currentUrl ?? "");
 
-  
   useEffect(() => {
     if (!runId || !isRunning) {
       return;
@@ -63,7 +70,7 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
 
             // Check if Chrome was intentionally closed
             if (data.type === "chrome_closed") {
-            chromeClosedRef.current = true;
+              chromeClosedRef.current = true;
               setIsConnected(false);
               setError("Chrome browser has been closed");
               return;
@@ -79,7 +86,10 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
                     canvas.width = img.width;
                     canvas.height = img.height;
 
-                    setViewportDimensions({ width: img.width, height: img.height });
+                    setViewportDimensions({
+                      width: img.width,
+                      height: img.height,
+                    });
 
                     ctx.drawImage(img, 0, 0);
 
@@ -88,7 +98,9 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
                     const elapsed = now - lastFrameTimeRef.current;
 
                     if (elapsed >= 1000) {
-                      setFps(Math.round((frameCountRef.current / elapsed) * 1000));
+                      setFps(
+                        Math.round((frameCountRef.current / elapsed) * 1000)
+                      );
                       frameCountRef.current = 0;
                       lastFrameTimeRef.current = now;
                     }
@@ -109,7 +121,9 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
 
         ws.onerror = (err) => {
           console.error("[Screencast] WebSocket error:", err);
-          setError("WebSocket connection error. Chrome may not be running or the run may have ended.");
+          setError(
+            "WebSocket connection error. Chrome may not be running or the run may have ended."
+          );
           setIsConnected(false);
         };
 
@@ -123,7 +137,7 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
             }, 2000);
           } else if (chromeClosedRef.current) {
             setError("Chrome browser has been closed");
-          } 
+          }
         };
       } catch (err) {
         console.error("Failed to create WebSocket:", err);
@@ -173,9 +187,13 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
     const canvasX = event.clientX - rect.left;
     const canvasY = event.clientY - rect.top;
 
-    const { x: viewportX, y: viewportY } = canvasToViewportCoords(canvasX, canvasY);
+    const { x: viewportX, y: viewportY } = canvasToViewportCoords(
+      canvasX,
+      canvasY
+    );
 
-    const button = event.button === 0 ? "left" : event.button === 2 ? "right" : "middle";
+    const button =
+      event.button === 0 ? "left" : event.button === 2 ? "right" : "middle";
 
     ws.send(
       JSON.stringify({
@@ -188,7 +206,9 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
     );
   };
 
-  const handleCanvasContextMenu = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasContextMenu = (
+    event: React.MouseEvent<HTMLCanvasElement>
+  ) => {
     event.preventDefault();
   };
 
@@ -233,7 +253,10 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
     const canvasX = event.clientX - rect.left;
     const canvasY = event.clientY - rect.top;
 
-    const { x: viewportX, y: viewportY } = canvasToViewportCoords(canvasX, canvasY);
+    const { x: viewportX, y: viewportY } = canvasToViewportCoords(
+      canvasX,
+      canvasY
+    );
 
     ws.send(
       JSON.stringify({
@@ -247,15 +270,15 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
   };
 
   const updateUrl = (url: string) => {
-    const ws = wsRef.current
+    const ws = wsRef.current;
     ws?.send(
       JSON.stringify({
         type: "navigation",
         action: "url",
         url: url,
       })
-    )
-  }
+    );
+  };
 
   return (
     <div className="bg-card rounded-lg border shadow-sm p-4 h-full flex flex-col">
@@ -265,29 +288,36 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
           {/* Connection status*/}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div
-              className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"
-                }`}
+              className={`w-2 h-2 rounded-full ${
+                isConnected ? "bg-green-500" : "bg-red-500"
+              }`}
             />
             <span>{fps} FPS</span>
           </div>
         </div>
-        { /* Manual button */}
+        {/* Manual button */}
         <button
-          onClick={() => setManualInterventionEnabled(!manualInterventionEnabled)}
-          className={`px-3 py-1 text-sm rounded-md font-medium transition-colors ${manualInterventionEnabled
-            ? "bg-green-600 hover:bg-green-700 text-white"
-            : "bg-secondary hover:bg-secondary/80"
-            }`}
+          onClick={() =>
+            setManualInterventionEnabled(!manualInterventionEnabled)
+          }
+          className={`px-3 py-1 text-sm rounded-md font-medium transition-colors ${
+            manualInterventionEnabled
+              ? "bg-green-600 hover:bg-green-700 text-white"
+              : "bg-secondary hover:bg-secondary/80"
+          }`}
         >
           {manualInterventionEnabled ? "Manual: ON" : "Manual: OFF"}
         </button>
       </div>
 
       {error && (
-        <div className={`mb-3 p-3 rounded text-sm flex-shrink-0 ${error.includes("Waiting")
-          ? "bg-blue-500/10 border border-blue-500 text-blue-700 dark:text-blue-300"
-          : "bg-destructive/10 border border-destructive text-destructive"
-          }`}>
+        <div
+          className={`mb-3 p-3 rounded text-sm flex-shrink-0 ${
+            error.includes("Waiting")
+              ? "bg-blue-500/10 border border-blue-500 text-blue-700 dark:text-blue-300"
+              : "bg-destructive/10 border border-destructive text-destructive"
+          }`}
+        >
           {error}
         </div>
       )}
@@ -358,21 +388,20 @@ export default function ScreencastViewer({ runId, currentUrl, isRunning = false 
               clipRule="evenodd"
             />
           </svg>
-          <input className="text-muted-foreground truncate outline-none border-none"
+          <input
+            className="text-muted-foreground truncate outline-none border-none"
             value={localUrl || "Connecting..."}
-            onChange={e => setLocalUrl(e.target.value)}
-            onKeyDown={
-              e => {
-                if (e.key === "Enter") {
-                  updateUrl(localUrl)
-                }
+            onChange={(e) => setLocalUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                updateUrl(localUrl);
               }
-            }
+            }}
           />
         </div>
       </div>
 
-      { /* Screencast */}
+      {/* Screencast */}
       <div className="bg-black rounded overflow-hidden flex-1 flex items-center justify-center">
         <canvas
           ref={canvasRef}

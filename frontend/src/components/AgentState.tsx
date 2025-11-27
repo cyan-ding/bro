@@ -15,7 +15,11 @@ interface AgentStateProps {
 /**
  * Component for displaying the current agent state including tabs, todo list, and extractions.
  */
-export default function AgentState({ state, runStatus, max_iterations}: AgentStateProps) {
+export default function AgentState({
+  state,
+  runStatus,
+  max_iterations,
+}: AgentStateProps) {
   if (!state) {
     return (
       <Card>
@@ -30,7 +34,7 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
       </Card>
     );
   }
-  const lastAction = state.action_history[state.action_history.length - 1]
+  const lastAction = state.action_history[state.action_history.length - 1];
   return (
     <Card className="h-[calc(100vh-12rem)]">
       <CardHeader>
@@ -47,7 +51,9 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
               <div>
                 <span className="text-sm font-medium">Status</span>
                 <div className="mt-1">
-                  <Badge variant={runStatus === "running" ? "default" : "secondary"}>
+                  <Badge
+                    variant={runStatus === "running" ? "default" : "secondary"}
+                  >
                     {runStatus || "unknown"}
                   </Badge>
                 </div>
@@ -68,7 +74,6 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
                 </code>
               </div>
             </div>
-
           </CardContent>
         </Card>
 
@@ -83,17 +88,25 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
             ) : (
               <div className="space-y-2">
                 {state.tabs.map((tab) => (
-                  <div key={tab.url + "-" + tab.index}
-                    className={`p-3 rounded-lg border ${tab.index === state.current_tab_index ? "border-primary bg-muted" : ""
-                      }`}
+                  <div
+                    key={tab.url + "-" + tab.index}
+                    className={`p-3 rounded-lg border ${
+                      tab.index === state.current_tab_index
+                        ? "border-primary bg-muted"
+                        : ""
+                    }`}
                   >
                     <div className="flex items-start gap-2">
                       <Badge variant="outline" className="mt-0.5">
                         {tab.index}
                       </Badge>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{tab.title}</div>
-                        <div className="text-xs text-muted-foreground truncate">{tab.url}</div>
+                        <div className="font-medium text-sm truncate">
+                          {tab.title}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {tab.url}
+                        </div>
                       </div>
                       {tab.index === state.current_tab_index && (
                         <Badge variant="default" className="text-xs">
@@ -120,8 +133,13 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
               <div className="space-y-2">
                 {state.todo_list.map((todo, index) => (
                   <div key={index} className="flex items-start gap-2">
-                    <div className={`w-4 h-4 mt-0.5 rounded border ${todo.completed ? "bg-primary border-primary" : "border-muted-foreground"
-                      }`}>
+                    <div
+                      className={`w-4 h-4 mt-0.5 rounded border ${
+                        todo.completed
+                          ? "bg-primary border-primary"
+                          : "border-muted-foreground"
+                      }`}
+                    >
                       {todo.completed && (
                         <svg
                           className="w-4 h-4 text-primary-foreground"
@@ -134,7 +152,9 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
                         </svg>
                       )}
                     </div>
-                    <span className={`text-sm ${todo.completed ? "line-through text-muted-foreground" : ""}`}>
+                    <span
+                      className={`text-sm ${todo.completed ? "line-through text-muted-foreground" : ""}`}
+                    >
                       {todo.task}
                     </span>
                   </div>
@@ -151,12 +171,14 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
           </CardHeader>
           <CardContent>
             {state.extractions.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No extractions yet</div>
+              <div className="text-sm text-muted-foreground">
+                No extractions yet
+              </div>
             ) : (
               <ScrollArea className="h-[300px] w-full">
                 <div className="space-y-3">
                   {state.extractions.map((extraction, index) => {
-                    const isString = typeof extraction === 'string';
+                    const isString = typeof extraction === "string";
                     const extractionObj = !isString ? extraction : null;
 
                     return (
@@ -164,13 +186,17 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
                         <div className="text-xs text-muted-foreground mb-1">
                           Extraction {index + 1}
                           {extractionObj?.source_title && (
-                            <span className="ml-2 font-medium">{extractionObj.source_title}</span>
+                            <span className="ml-2 font-medium">
+                              {extractionObj.source_title}
+                            </span>
                           )}
                         </div>
                         <div className="text-sm bg-muted p-3 rounded-lg whitespace-pre-wrap">
                           {isString ? extraction : extractionObj?.content}
                         </div>
-                        {index < state.extractions.length - 1 && <Separator className="mt-3" />}
+                        {index < state.extractions.length - 1 && (
+                          <Separator className="mt-3" />
+                        )}
                       </div>
                     );
                   })}
@@ -187,39 +213,54 @@ export default function AgentState({ state, runStatus, max_iterations}: AgentSta
           </CardHeader>
           <CardContent>
             {state.action_history.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No actions yet</div>
+              <div className="text-sm text-muted-foreground">
+                No actions yet
+              </div>
             ) : (
               <ScrollArea className="h-[400px] w-full">
                 <div className="space-y-3">
-                  {state.action_history.slice().reverse().map((action, index) => (
-                    <div key={index}>
-                      <div className="flex items-start gap-2">
-                        <Badge variant="outline" className="mt-0.5">
-                          #{action.iteration}
-                        </Badge>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <code className="text-sm font-medium">{action.action_name}</code>
-                            {action.timestamp && (
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(action.timestamp).toLocaleTimeString()}
-                              </span>
-                            )}
-                          </div>
-                          {Object.keys(action.arguments).length > 0 && (
-                            <div className="text-xs">
-                              <span className="text-muted-foreground">Args: </span>
-                              <code className="bg-muted px-1 py-0.5 rounded">
-                                {JSON.stringify(action.arguments)}
+                  {state.action_history
+                    .slice()
+                    .reverse()
+                    .map((action, index) => (
+                      <div key={index}>
+                        <div className="flex items-start gap-2">
+                          <Badge variant="outline" className="mt-0.5">
+                            #{action.iteration}
+                          </Badge>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <code className="text-sm font-medium">
+                                {action.action_name}
                               </code>
+                              {action.timestamp && (
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(
+                                    action.timestamp
+                                  ).toLocaleTimeString()}
+                                </span>
+                              )}
                             </div>
-                          )}
-                          <div className="text-xs text-muted-foreground">{action.result}</div>
+                            {Object.keys(action.arguments).length > 0 && (
+                              <div className="text-xs">
+                                <span className="text-muted-foreground">
+                                  Args:{" "}
+                                </span>
+                                <code className="bg-muted px-1 py-0.5 rounded">
+                                  {JSON.stringify(action.arguments)}
+                                </code>
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground">
+                              {action.result}
+                            </div>
+                          </div>
                         </div>
+                        {index < state.action_history.length - 1 && (
+                          <Separator className="mt-3" />
+                        )}
                       </div>
-                      {index < state.action_history.length - 1 && <Separator className="mt-3" />}
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </ScrollArea>
             )}

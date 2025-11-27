@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea"
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,10 @@ interface AgentChatProps {
   onStop: () => void;
   onCloseBrowser: () => void;
   onSendInput?: (message: string) => void;
-  onSendDecision?: (decision: "done" | "modify" | "intervene", instructions?: string) => void;
+  onSendDecision?: (
+    decision: "done" | "modify" | "intervene",
+    instructions?: string
+  ) => void;
   isRunning: boolean;
   isAwaitingDecision?: boolean;
   logs: LogEvent[];
@@ -66,7 +69,12 @@ export default function AgentChat({
 
   // Detect when run ends and show extractions if available
   useEffect(() => {
-    if (!isRunning && !hasShownExtractions && agentState?.extractions && agentState.extractions.length > 0) {
+    if (
+      !isRunning &&
+      !hasShownExtractions &&
+      agentState?.extractions &&
+      agentState.extractions.length > 0
+    ) {
       // Run has ended and we have extractions
       setShowExtractions(true);
       setHasShownExtractions(true);
@@ -86,11 +94,17 @@ export default function AgentChat({
     }
 
     const todoListStr = JSON.stringify(agentState.todo_list);
-    if (todoListStr !== lastTodoListRef.current && lastTodoListRef.current !== "") {
+    if (
+      todoListStr !== lastTodoListRef.current &&
+      lastTodoListRef.current !== ""
+    ) {
       // Todo list changed, add a message showing the current todos
       const todoItems = agentState.todo_list
-        .map((todo, idx) => `${idx + 1}. ${todo.completed ? '✅' : '⬜'} ${todo.task}`)
-        .join('\n');
+        .map(
+          (todo, idx) =>
+            `${idx + 1}. ${todo.completed ? "✅" : "⬜"} ${todo.task}`
+        )
+        .join("\n");
 
       const todoMessage: ChatMessage = {
         id: `todo-${Date.now()}`,
@@ -169,7 +183,7 @@ export default function AgentChat({
     });
 
     if (newMessages.length > 0) {
-      newMessages.forEach(msg => addChatMessage(msg));
+      newMessages.forEach((msg) => addChatMessage(msg));
     }
   }, [logs, addChatMessage]);
 
@@ -217,7 +231,9 @@ export default function AgentChat({
     const systemMessage: ChatMessage = {
       id: Date.now().toString(),
       type: "system",
-      content: closeBrowser ? "Agent stopped and browser closed" : "Agent stopped",
+      content: closeBrowser
+        ? "Agent stopped and browser closed"
+        : "Agent stopped",
       timestamp: new Date(),
     };
     addChatMessage(systemMessage);
@@ -247,16 +263,18 @@ export default function AgentChat({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {runId && agentState?.extractions && agentState.extractions.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowExtractions(true)}
-              className="text-xs"
-            >
-              View Extractions ({agentState.extractions.length})
-            </Button>
-          )}
+          {runId &&
+            agentState?.extractions &&
+            agentState.extractions.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExtractions(true)}
+                className="text-xs"
+              >
+                View Extractions ({agentState.extractions.length})
+              </Button>
+            )}
           {runId && isRunning && (
             <Link
               href={`/logs?runId=${runId}`}
@@ -281,12 +299,13 @@ export default function AgentChat({
               className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${message.type === "user"
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  message.type === "user"
                     ? "bg-primary text-primary-foreground"
                     : message.type === "agent"
                       ? "bg-secondary"
                       : "bg-destructive/10 text-destructive"
-                  }`}
+                }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
               </div>
@@ -305,13 +324,25 @@ export default function AgentChat({
               The agent believes the task is complete. Choose an action:
             </p>
             <div className="grid grid-cols-3 gap-2">
-              <Button onClick={() => handleDecision("done")} variant="default" size="sm">
+              <Button
+                onClick={() => handleDecision("done")}
+                variant="default"
+                size="sm"
+              >
                 ✅ Done
               </Button>
-              <Button onClick={() => handleDecision("modify")} variant="default" size="sm">
+              <Button
+                onClick={() => handleDecision("modify")}
+                variant="default"
+                size="sm"
+              >
                 🔄 Modify
               </Button>
-              <Button onClick={() => handleDecision("intervene")} variant="default" size="sm">
+              <Button
+                onClick={() => handleDecision("intervene")}
+                variant="default"
+                size="sm"
+              >
                 🛠️ Intervene
               </Button>
             </div>
@@ -321,7 +352,9 @@ export default function AgentChat({
         {/* Modify Instructions Input */}
         {isAwaitingDecision && showModifyInput && (
           <div className="space-y-2">
-            <label className="text-sm font-medium">Additional Instructions</label>
+            <label className="text-sm font-medium">
+              Additional Instructions
+            </label>
             <Textarea
               value={additionalInstructions}
               onChange={(e) => setAdditionalInstructions(e.target.value)}
@@ -337,7 +370,10 @@ export default function AgentChat({
               >
                 Submit Instructions
               </Button>
-              <Button onClick={() => setShowModifyInput(false)} variant="outline">
+              <Button
+                onClick={() => setShowModifyInput(false)}
+                variant="outline"
+              >
                 Cancel
               </Button>
             </div>
@@ -350,7 +386,9 @@ export default function AgentChat({
             {/* URL Input (optional, collapsible) */}
             {!isRunning && showUrlInput && (
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Starting URL (optional)</label>
+                <label className="text-xs font-medium text-muted-foreground">
+                  Starting URL (optional)
+                </label>
                 <Input
                   type="text"
                   value={url}
@@ -378,7 +416,7 @@ export default function AgentChat({
                     e.preventDefault();
                     if (isRunning) {
                       handleSendAdditionalInput();
-                    } 
+                    }
                   }
                 }}
               />
@@ -432,7 +470,7 @@ export default function AgentChat({
             <div className="space-y-4">
               {agentState?.extractions && agentState.extractions.length > 0 ? (
                 agentState.extractions.map((extraction, index) => {
-                  const isString = typeof extraction === 'string';
+                  const isString = typeof extraction === "string";
                   const extractionObj = !isString ? extraction : null;
 
                   return (
@@ -441,7 +479,9 @@ export default function AgentChat({
                         <CardTitle className="text-sm flex items-center justify-between">
                           <span>Extraction {index + 1}</span>
                           {extractionObj?.source_title && (
-                            <Badge variant="outline">{extractionObj.source_title}</Badge>
+                            <Badge variant="outline">
+                              {extractionObj.source_title}
+                            </Badge>
                           )}
                         </CardTitle>
                         {extractionObj?.source_url && (
@@ -473,7 +513,10 @@ export default function AgentChat({
             </div>
           </ScrollArea>
           <DialogFooter>
-            <Button onClick={() => setShowExtractions(false)} className="w-full">
+            <Button
+              onClick={() => setShowExtractions(false)}
+              className="w-full"
+            >
               Close
             </Button>
           </DialogFooter>
@@ -491,10 +534,12 @@ export default function AgentChat({
           </DialogHeader>
           <div className="py-4 space-y-2">
             <p className="text-sm text-muted-foreground">
-              <strong>Stop Only:</strong> Stops the agent but keeps the browser open.
+              <strong>Stop Only:</strong> Stops the agent but keeps the browser
+              open.
             </p>
             <p className="text-sm text-muted-foreground">
-              <strong>Close Browser:</strong> Stops the agent and closes the browser completely.
+              <strong>Close Browser:</strong> Stops the agent and closes the
+              browser completely.
             </p>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
