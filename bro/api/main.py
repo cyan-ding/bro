@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from typing import Dict
 from utils.screencast import ScreencastClient
-from utils.db import get_supabase
 
 from .models import (
     CreateRunRequest,
@@ -79,13 +78,11 @@ async def root():
 
 
 @app.get("/runs", response_model=CreateRunResponse)
-async def get_run(request: CreateRunRequest):
+async def list_runs(request: CreateRunRequest):
     """
     get run information from database
     """
 
-    supabase_client = await get_supabase()
-    
 
 @app.post("/runs", response_model=CreateRunResponse)
 async def create_run(request: CreateRunRequest):
@@ -249,9 +246,7 @@ async def stop_run(run_id: str):
             detail="Could not stop run. Run may not exist or already stopped.",
         )
 
-    return StopRunResponse(
-        status=RunStatus.STOPPED, message="Run stopped successfully"
-    )
+    return StopRunResponse(status=RunStatus.STOPPED, message="Run stopped successfully")
 
 
 @app.post("/browser/close", response_model=CloseBrowserResponse)

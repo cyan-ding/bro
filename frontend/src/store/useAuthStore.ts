@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 export interface User {
   id: string;
@@ -10,11 +9,14 @@ export interface User {
 
 interface AuthStore {
   user: User | null;
-
   setUser: (user: User | null) => void;
+  authToken: string | null;
+  setAuthToken: (authToken: string | null) => void;
 }
 
 export const useAuthStore = create<AuthStore>()((set, get) => ({
   user: null,
   setUser: (user) => set({ user }),
+  authToken: null,
+  setAuthToken: (authToken) => set({ authToken }),
 }));

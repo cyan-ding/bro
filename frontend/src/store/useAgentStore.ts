@@ -5,12 +5,14 @@ import type {
   RunStatus,
   AgentStateResponse,
   ChatMessage,
+  RunMetadata
 } from "@/lib/api";
 import { createLogStream } from "@/lib/api";
 
 interface AgentStore {
   // State
   runId: string | null;
+  runs: RunMetadata[]
   logs: LogEvent[];
   runStatus: RunStatus | null;
   agentState: AgentStateResponse | null;
@@ -23,6 +25,7 @@ interface AgentStore {
   setModel: (model: string | null) => void;
   setRunId: (runId: string | null) => void;
   setLogs: (logs: LogEvent[]) => void;
+  setRuns: (runs: RunMetadata[]) => void;
   addLog: (log: LogEvent) => void;
   setRunStatus: (status: RunStatus | null) => void;
   setAgentState: (state: AgentStateResponse | null) => void;
@@ -40,6 +43,7 @@ export const useAgentStore = create<AgentStore>()(
     (set, get) => ({
       // Initial state
       runId: null,
+      runs: [],
       logs: [],
       runStatus: null,
       agentState: null,
@@ -51,6 +55,7 @@ export const useAgentStore = create<AgentStore>()(
       // Actions
       setModel: (model) => set({ model }),
       setRunId: (runId) => set({ runId }),
+      setRuns: (runs) => set({ runs }),
       setLogs: (logs) => set({ logs }),
       addLog: (log) => set((state) => ({ logs: [...state.logs, log] })),
       setRunStatus: (runStatus) => set({ runStatus }),

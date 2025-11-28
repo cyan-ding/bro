@@ -23,6 +23,15 @@ export interface CreateRunRequest {
   enable_logging?: boolean;
 }
 
+// for just the dashboard 
+export interface RunMetadata extends CreateRunRequest {
+  id: string,
+  user_id: string;
+  status: RunStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export type RunStatus =
   | "pending"
   | "running"
@@ -47,11 +56,11 @@ export interface AgentStateResponse {
   extractions: Array<
     | string
     | {
-        content: string;
-        source_url: string;
-        source_title: string;
-        content_length: number;
-      }
+      content: string;
+      source_url: string;
+      source_title: string;
+      content_length: number;
+    }
   >;
   todo_list: Array<{
     task: string;
@@ -210,3 +219,24 @@ export async function closeBrowser(): Promise<void> {
 export function createLogStream(runId: string): EventSource {
   return new EventSource(`${API_BASE_URL}/runs/${runId}/logs`);
 }
+
+
+/**
+ * Poll the db to get runs stuff
+ *  i could either: pull from the database, directly from the front end
+ *  or: i could send a request to the backend, 
+ */
+
+export async function getRuns(authToken: string): Promise<RunMetadata[]> {
+  const response = await fetch(`${API_BASE_URL}/runs`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${authToken}`}
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get database contents ${response.statusText}`);
+  }
+
+  return response.json()
+} 
+

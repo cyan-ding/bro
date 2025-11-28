@@ -5,6 +5,7 @@ import os
 
 _supabase_client: Optional[AsyncClient] = None
 
+
 async def get_supabase() -> AsyncClient:
     load_dotenv()
     global _supabase_client

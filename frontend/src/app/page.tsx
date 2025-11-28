@@ -9,7 +9,7 @@ import { ArrowUpIcon } from "lucide-react";
 import { NavigationMenuDemo } from "@/components/ui/navbar";
 import { createClient } from "@supabase/supabase-js";
 
-import { createRun } from "@/lib/api";
+import { createRun, getRuns } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { User } from "@/store/useAuthStore";
 
@@ -20,9 +20,9 @@ const supabase = createClient(
 
 export default function Home() {
     const router = useRouter();
-    const { model, setModel, setRunId, setError } = useAgentStore();
+    const { model, setModel, setRunId, setError, setRuns } = useAgentStore();
 
-    const { user, setUser } = useAuthStore();
+    const { user, setUser, authToken, setAuthToken } = useAuthStore();
 
     const [prompt, setPrompt] = useState("");
     const [models, setModels] = useState({});
@@ -44,12 +44,25 @@ export default function Home() {
                     avatar: session.user.user_metadata?.avatar_url || null,
                 });
             }
-
+            setAuthToken(session?.access_token || null)
             if (event === "SIGNED_OUT" || !session) {
                 setUser(null);
             }
         });
-    }, []);
+    }, [setAuthToken, setUser]);
+
+    useEffect(() => {
+        if (authToken) {
+            const fetchRuns = async () => {
+                const runs = await getRuns(authToken);
+                setRuns(runs);
+            }
+
+            fetchRuns()
+        }
+    },
+        [setRuns, authToken]
+    );
 
     const handleStart = useCallback(
         async (prompt: string, url?: string) => {
