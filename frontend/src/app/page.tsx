@@ -6,23 +6,16 @@ import { useAgentStore } from "@/store/useAgentStore";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon } from "lucide-react";
-import { NavigationMenuDemo } from "@/components/ui/navbar";
-import { createClient } from "@supabase/supabase-js";
-
 import { createRun, getRuns } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { User } from "@/store/useAuthStore";
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+
 
 export default function Home() {
     const router = useRouter();
     const { model, setModel, setRunId, setError, setRuns } = useAgentStore();
 
-    const { user, setUser, authToken, setAuthToken } = useAuthStore();
+    const { authToken } = useAuthStore();
 
     const [prompt, setPrompt] = useState("");
     const [models, setModels] = useState({});
@@ -34,22 +27,7 @@ export default function Home() {
                 setModels(data);
             });
     }, []);
-    useEffect(() => {
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === "SIGNED_IN" && session) {
-                setUser({
-                    id: session.user.id,
-                    email: session.user.email || null,
-                    name: session.user.user_metadata?.full_name || null,
-                    avatar: session.user.user_metadata?.avatar_url || null,
-                });
-            }
-            setAuthToken(session?.access_token || null)
-            if (event === "SIGNED_OUT" || !session) {
-                setUser(null);
-            }
-        });
-    }, [setAuthToken, setUser]);
+
 
     useEffect(() => {
         if (authToken) {
@@ -87,41 +65,30 @@ export default function Home() {
     );
 
     return (
-        <div>
-            <NavigationMenuDemo
-                onGoogleSignIn={() =>
-                    supabase.auth.signInWithOAuth({
-                        provider: "google",
-                    })
-                }
-                onGoogleSignOut={() => supabase.auth.signOut()}
-                user={user}
-            />
-            <div className="flex justify-center items-center min-h-screen">
-                <div className="relative w-1/2">
-                    <Textarea
-                        className="resize-none h-[25vh] focus:border-none focus:ring-0"
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Message Bro"
+        <div className="flex justify-center items-center min-h-screen">
+            <div className="relative w-1/2">
+                <Textarea
+                    className="resize-none h-[25vh] focus:border-none focus:ring-0"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Message Bro"
+                />
+                <div className="absolute bottom-0 right-2 flex flex-row gap-2 mt-2">
+                    <Combobox
+                        options={models}
+                        display={"Select a model"}
+                        empty={"No model selected"}
+                        setter={setModel}
                     />
-                    <div className="absolute bottom-0 right-2 flex flex-row gap-2 mt-2">
-                        <Combobox
-                            options={models}
-                            display={"Select a model"}
-                            empty={"No model selected"}
-                            setter={setModel}
-                        />
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            aria-label="Submit"
-                            onClick={() => handleStart(prompt)}
-                            className="hover:bg-accent"
-                        >
-                            <ArrowUpIcon />
-                        </Button>
-                    </div>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label="Submit"
+                        onClick={() => handleStart(prompt)}
+                        className="hover:bg-accent"
+                    >
+                        <ArrowUpIcon />
+                    </Button>
                 </div>
             </div>
         </div>

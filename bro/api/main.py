@@ -11,11 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from typing import Dict
 from utils.screencast import ScreencastClient
-
+from utils.db import get_supabase
 from .models import (
     CreateRunRequest,
     CreateRunResponse,
     AgentStateResponse,
+    ListRunsResponse,
     SendInputRequest,
     SendInputResponse,
     SendDecisionRequest,
@@ -77,11 +78,17 @@ async def root():
     }
 
 
-@app.get("/runs", response_model=CreateRunResponse)
-async def list_runs(request: CreateRunRequest):
+@app.get("/runs", response_model=ListRunsResponse)
+async def list_runs(authToken: str):
     """
     get run information from database
     """
+
+    db = await get_supabase()
+    user_id = db.auth.get_user(authToken)
+    runs = await db.table("runs").select("*").eq("user_id", user_id)
+
+    return runs
 
 
 @app.post("/runs", response_model=CreateRunResponse)

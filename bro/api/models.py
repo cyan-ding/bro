@@ -42,6 +42,14 @@ class CreateRunResponse(BaseModel):
     message: str = Field(..., description="Human-readable status message")
 
 
+class ListRunsResponse(CreateRunRequest):
+    id: str
+    user_id: str
+    status: RunStatus
+    created_at: str
+    updated_at: str
+
+
 class AgentStateResponse(BaseModel):
     """Response containing full agent state."""
 
@@ -52,6 +60,7 @@ class AgentStateResponse(BaseModel):
     action_history: List[ActionContext]
     last_edited: str
     max_iterations: int
+
 
 class SendInputRequest(BaseModel):
     """Request to send additional instructions to a running agent."""
@@ -127,6 +136,7 @@ class LogEvent(BaseModel):
     error: Optional[str] = None
     action_context: Optional[ActionContext] = None
     decision: Optional[SendDecisionRequest] = None
+
 
 class SavedRun(BaseModel):
     run_id: str

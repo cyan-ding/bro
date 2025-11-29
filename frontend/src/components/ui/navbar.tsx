@@ -21,7 +21,7 @@ interface NavBarProps {
   user: User | null;
 }
 
-export function NavigationMenuDemo({
+export function NavMenu({
   user,
   onGoogleSignIn,
   onGoogleSignOut,
