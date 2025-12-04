@@ -5,14 +5,14 @@ import type {
   RunStatus,
   AgentStateResponse,
   ChatMessage,
-  RunMetadata
+  RunMetadata,
 } from "@/lib/api";
 import { createLogStream } from "@/lib/api";
 
 interface AgentStore {
   // State
   runId: string | null;
-  runs: RunMetadata[]
+  runs: RunMetadata[];
   logs: LogEvent[];
   runStatus: RunStatus | null;
   agentState: AgentStateResponse | null;

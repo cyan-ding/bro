@@ -9,8 +9,3 @@
 - **Computer Vision**: Integrates YOLO models for visual understanding
 - **Parallel Task Execution**: Runs multiple subtasks simultaneously for efficiency
 - **Flexible AI Backends**: Supports multiple language models (GPT, Claude, Cerebras)
-
-
-
-
-
