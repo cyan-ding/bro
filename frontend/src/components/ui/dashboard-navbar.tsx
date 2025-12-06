@@ -24,15 +24,14 @@ export function DashboardNavbar() {
   };
 
   return (
-    <div className="flex justify-end">
       <NavigationMenu>
         <NavigationMenuList>
           <NavigationMenuItem>
             <NavigationMenuLink
               asChild
-              className={navigationMenuTriggerStyle()}
+              className={navigationMenuTriggerStyle() }
             >
-              <Button onClick={handleGoogleSignOut}>Log out</Button>
+              <Button className="right-0" onClick={handleGoogleSignOut}>Log out</Button>
             </NavigationMenuLink>
           </NavigationMenuItem>
           <NavigationMenuItem>
@@ -40,6 +39,5 @@ export function DashboardNavbar() {
           </NavigationMenuItem>
         </NavigationMenuList>
       </NavigationMenu>
-    </div>
   );
 }

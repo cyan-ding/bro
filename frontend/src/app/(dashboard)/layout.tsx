@@ -9,12 +9,16 @@ export default function DashboardLayout({
 }) {
   return (
     <SidebarProvider>
-      <AppSidebar />
-      <DashboardNavbar />
-      <main className="flex flex-1 flex-col">
-        <SidebarTrigger />
-        {children}
-      </main>
+      <div className="grid grid-cols-[auto_1fr] grid-rows-1 min-h-svh w-screen">
+        <AppSidebar />
+        <div className="grid grid-rows-[auto_1fr]">
+          <div className="flex justify-between items-center">
+            <SidebarTrigger />
+            <DashboardNavbar />
+          </div>
+          {children}
+        </div>
+      </div>
     </SidebarProvider>
   );
 }

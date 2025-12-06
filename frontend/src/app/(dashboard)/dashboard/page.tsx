@@ -60,32 +60,40 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="flex justify-center items-center min-h-screen">
-      <div className="relative w-1/2">
+    <div className="flex justify-center items-center">
+      <div className="w-1/2">
         <Textarea
-          className="resize-none h-[25vh] focus:border-none focus:ring-0"
+          className="resize-none border-none max-h-48"
+          onInput={e => {
+            const target = e.currentTarget;
+            target.style.height = "auto"
+            target.style.height = `${target.scrollHeight}px`
+          }}
+          rows={4}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Message Bro"
         />
-        <div className="absolute bottom-0 right-2 flex flex-row gap-2 mt-2">
-          <Combobox
-            options={models}
-            display={"Select a model"}
-            empty={"No model selected"}
-            setter={setModel}
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Submit"
-            onClick={() => handleStart(prompt)}
-            className="hover:bg-accent"
-          >
-            <ArrowUpIcon />
-          </Button>
+        <div className="bottom-0 w-full flex items-center">
+            <div className="ml-auto flex items-center">
+              <Combobox
+                options={models}
+                display={"Select a model"}
+                empty={"No model selected"}
+                setter={setModel}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Submit"
+                onClick={() => handleStart(prompt)}
+              >
+                <ArrowUpIcon />
+              </Button>
+            </div>
         </div>
       </div>
+
     </div>
   );
 }
