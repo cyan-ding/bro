@@ -13,7 +13,7 @@ export default function Dashboard() {
   const router = useRouter();
   const { model, setModel, setRunId, setError, setRuns } = useAgentStore();
 
-  const { authToken } = useAuthStore();
+  const { user } = useAuthStore();
 
   const [prompt, setPrompt] = useState("");
   const [models, setModels] = useState({});
@@ -26,16 +26,16 @@ export default function Dashboard() {
       });
   }, []);
 
-  useEffect(() => {
-    if (authToken) {
-      const fetchRuns = async () => {
-        const runs = await getRuns(authToken);
-        setRuns(runs);
-      };
+  // useEffect(() => {
+  //   if (authToken) {
+  //     const fetchRuns = async () => {
+  //       const runs = await getRuns(authToken);
+  //       setRuns(runs);
+  //     };
 
-      fetchRuns();
-    }
-  }, [setRuns, authToken]);
+  //     fetchRuns();
+  //   }
+  // }, [setRuns, authToken]);
 
   const handleStart = useCallback(
     async (prompt: string, url?: string) => {
@@ -47,6 +47,7 @@ export default function Dashboard() {
           take_screenshot: true,
           enable_logging: true,
           model: model || "gemini/gemini-2.5-flash-preview-09-2025",
+          user_id: user?.id || ""
         });
         const run_id = response.run_id;
         setRunId(run_id);
@@ -56,7 +57,7 @@ export default function Dashboard() {
         setError(err instanceof Error ? err.message : "Failed to start agent");
       }
     },
-    [model, router, setModel, setRunId, setError]
+    [model, router, setModel, setRunId, setError, user]
   );
 
   return (
@@ -93,7 +94,6 @@ export default function Dashboard() {
             </div>
         </div>
       </div>
-
     </div>
   );
 }

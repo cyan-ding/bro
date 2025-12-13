@@ -10,6 +10,7 @@ import json
 from typing import AsyncGenerator
 from .run_manager import RunInfo
 from .models import LogEvent, RunStatus
+from utils.db import save_logs
 
 
 async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
@@ -39,6 +40,7 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
                         event = await asyncio.wait_for(
                             run_info.log_queue.get(), timeout=0.1
                         )
+                        await save_logs(run_info.run_id, event)
                         yield format_sse(event)
                     except asyncio.TimeoutError:
                         break
@@ -51,12 +53,14 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
                     event_type="final_status",
                     message="Run Complete",
                 )
+                await save_logs(run_info.run_id, final_event)
                 yield format_sse(final_event)
                 break
 
             # Wait for next log event
             try:
                 event = await asyncio.wait_for(run_info.log_queue.get(), timeout=1.0)
+                await save_logs(run_info.run_id, event)
                 yield format_sse(event)
             except asyncio.TimeoutError:
                 # Send keepalive comment to prevent connection timeout
@@ -73,6 +77,7 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
             event_type="error",
             error=str(e),
         )
+        await save_logs(run_info.run_id, error_event)
         yield format_sse(error_event)
 
 

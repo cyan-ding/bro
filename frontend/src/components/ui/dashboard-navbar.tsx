@@ -27,12 +27,7 @@ export function DashboardNavbar() {
       <NavigationMenu>
         <NavigationMenuList>
           <NavigationMenuItem>
-            <NavigationMenuLink
-              asChild
-              className={navigationMenuTriggerStyle() }
-            >
-              <Button className="right-0" onClick={handleGoogleSignOut}>Log out</Button>
-            </NavigationMenuLink>
+              <Button className="right-0 text-base" onClick={handleGoogleSignOut}>Log out</Button>
           </NavigationMenuItem>
           <NavigationMenuItem>
             {user && <div>{user.name}</div>}

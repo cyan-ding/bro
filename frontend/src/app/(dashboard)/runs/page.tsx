@@ -151,47 +151,43 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto py-8 px-4">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Bro</h1>
+    <div className="container mx-auto py-8 px-4">
+        <h1 className="text-4xl font-bold mb-2">Bro</h1>
+
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 border border-destructive rounded-lg">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
+
+      <div
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6 grid-rows-1"
+        style={{ height: "calc(100vh - 150px)" }}
+      >
+        {/* Left column: Chat Interface */}
+        <div className="lg:col-span-1">
+          <AgentChat
+            isRunning={isRunning}
+            onStop={handleStop}
+            onCloseBrowser={handleCloseBrowser}
+            onSendInput={handleSendInput}
+            onSendDecision={handleSendDecision}
+            isAwaitingDecision={isAwaitingDecision}
+            logs={logs}
+            runId={runId}
+            agentState={agentState}
+          />
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-destructive/10 border border-destructive rounded-lg">
-            <p className="text-sm text-destructive">{error}</p>
-          </div>
-        )}
-
-        <div
-          className="grid grid-cols-1 lg:grid-cols-3 gap-6 grid-rows-1"
-          style={{ height: "calc(100vh - 150px)" }}
-        >
-          {/* Left column: Chat Interface */}
-          <div className="lg:col-span-1">
-            <AgentChat
-              isRunning={isRunning}
-              onStop={handleStop}
-              onCloseBrowser={handleCloseBrowser}
-              onSendInput={handleSendInput}
-              onSendDecision={handleSendDecision}
-              isAwaitingDecision={isAwaitingDecision}
-              logs={logs}
-              runId={runId}
-              agentState={agentState}
-            />
-          </div>
-
-          {/* Middle + Right columns: Screencast (expanded) */}
-          <div className="lg:col-span-2">
-            <ScreencastViewer
-              runId={runId}
-              currentUrl={
-                agentState?.tabs?.[agentState.current_tab_index ?? 0]?.url
-              }
-              isRunning={isRunning}
-            />
-          </div>
+        {/* Middle + Right columns: Screencast (expanded) */}
+        <div className="lg:col-span-2">
+          <ScreencastViewer
+            runId={runId}
+            currentUrl={
+              agentState?.tabs?.[agentState.current_tab_index ?? 0]?.url
+            }
+            isRunning={isRunning}
+          />
         </div>
       </div>
     </div>

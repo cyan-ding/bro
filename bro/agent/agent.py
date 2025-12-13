@@ -3,9 +3,10 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+from api.models import RunState
+
 from bro.utils.use_cdp import use_cdp
 from patchright.async_api import Page, async_playwright
-from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from .build_llm_prompt import build_llm_prompt
@@ -18,13 +19,12 @@ from .agent_state import AgentState
 from .ai import ai
 from bro.utils.dom_utils import take_screenshot_with_bounding_boxes
 from bro.utils.input_manager import InputManager
+from utils.db import save_run_state
 
 if TYPE_CHECKING:
     from api.run_info import RunInfo
 
 from .models import LiteLLMResponse
-
-
 
 
 class Agent:
@@ -650,6 +650,23 @@ class Agent:
                     # Agent state update at end of iteration
                     await self.agent_state.update_tab_state(page)
 
+                    if self.run_info:
+                        await save_run_state(
+                            RunState(
+                                id=self.run_info.run_id,
+                                user_id=self.run_info.user_id,
+                                status=self.run_info.status,
+                                user_prompt=user_prompt,
+                                url=url,
+                                max_iterations=max_iterations,
+                                model=self.model,
+                                current_iteration=self.run_info.current_iteration,
+                                error_message=self.run_info.error_message,
+                                created_at=self.run_info.created_at,
+                                completed_at=self.run_info.completed_at,
+                                metadata=self.agent_state.model_dump(),
+                            )
+                        )
                     # Update iteration in run_info
                     if self.run_info:
                         self.run_info.update_iteration()

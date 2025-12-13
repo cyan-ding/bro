@@ -5,7 +5,8 @@ Defines the data structures used for communication between the API client
 and the Bro agent backend.
 """
 
-from typing import List, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
 from agent.models import Extraction, TabState, TodoItem, ActionContext
@@ -138,7 +139,16 @@ class LogEvent(BaseModel):
     decision: Optional[SendDecisionRequest] = None
 
 
-class SavedRun(BaseModel):
-    run_id: str
-    agent_state: AgentStateResponse
-    logs: List[LogEvent]
+class RunState(BaseModel):
+    user_id: str
+    id: str
+    status: RunStatus
+    user_prompt: str
+    url: Optional[str]
+    max_iterations: int
+    model: str
+    current_iteration: Optional[int]
+    error_message: Optional[str]
+    created_at: datetime
+    completed_at: Optional[datetime]
+    metadata: Optional[Dict[str, Any]]

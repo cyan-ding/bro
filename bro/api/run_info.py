@@ -29,6 +29,7 @@ class RunInfo:
         agent: Optional["Agent"],
         max_iterations: int,
         user_prompt: str,
+        url: str = None
     ):
         """
         Initialize run information.
@@ -50,6 +51,7 @@ class RunInfo:
         self.error_message: Optional[str] = None
         self.created_at = datetime.now()
         self.completed_at: Optional[datetime] = None
+        self.url=url
 
         # Task that runs the agent
         self.task: Optional[asyncio.Task] = None
