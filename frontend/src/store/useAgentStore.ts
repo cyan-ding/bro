@@ -20,6 +20,10 @@ interface AgentStore {
   eventSource: EventSource | null;
   chatMessages: ChatMessage[];
   model: string | null;
+  viewedRunId: string | null;
+  viewedRunData: RunMetadata[];
+  viewedRunLogs: LogEvent[];
+
 
   // Actions
   setModel: (model: string | null) => void;
@@ -36,6 +40,9 @@ interface AgentStore {
   addChatMessage: (message: ChatMessage) => void;
   setChatMessages: (messages: ChatMessage[]) => void;
   clearAll: () => void;
+  setViewedRunId: (runId: string | null) => void;
+  setViewedRunData: (data: RunMetadata[]) => void;
+  setViewedRunLogs: (logs: LogEvent[]) => void;
 }
 
 export const useAgentStore = create<AgentStore>()(
@@ -51,6 +58,9 @@ export const useAgentStore = create<AgentStore>()(
       eventSource: null,
       chatMessages: [],
       model: null,
+      viewedRunId: null,
+      viewedRunData: [],
+      viewedRunLogs: [],
 
       // Actions
       setModel: (model) => set({ model }),
@@ -65,7 +75,10 @@ export const useAgentStore = create<AgentStore>()(
       addChatMessage: (message) =>
         set((state) => ({ chatMessages: [...state.chatMessages, message] })),
       setChatMessages: (chatMessages) => set({ chatMessages }),
-
+      setViewedRunId: (runId: string | null) => set({ viewedRunId: runId }),
+      setViewedRunData: (data: RunMetadata[]) => set({ viewedRunData: data }),
+      setViewedRunLogs: (logs: LogEvent[]) => set({ viewedRunLogs: logs }),
+      
       closeEventSource: () => {
         const state = get();
         if (state.eventSource) {

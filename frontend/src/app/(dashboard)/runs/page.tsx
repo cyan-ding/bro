@@ -17,7 +17,7 @@ import { useAgentStore } from "@/store/useAgentStore";
 /**
  * Main dashboard page for controlling and monitoring the Bro agent.
  */
-export default function Dashboard() {
+export default function Run() {
   const {
     runId,
     logs,

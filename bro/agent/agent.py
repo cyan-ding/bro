@@ -657,6 +657,7 @@ class Agent:
                                 user_id=self.run_info.user_id,
                                 status=self.run_info.status,
                                 user_prompt=user_prompt,
+                                title=self.run_info.title,
                                 url=url,
                                 max_iterations=max_iterations,
                                 model=self.model,

@@ -27,6 +27,7 @@ export interface CreateRunRequest {
 export interface RunMetadata extends CreateRunRequest {
   id: string;
   user_id: string;
+  title: string;
   status: RunStatus;
   created_at: string;
   updated_at: string;
@@ -101,6 +102,11 @@ export interface LogEvent {
   error?: string;
   action_context?: ActionContext;
   decision?: SendDecisionRequest;
+}
+
+export interface LogEventDB extends LogEvent {
+  id: string
+  run_id: string
 }
 
 /**
@@ -217,7 +223,7 @@ export async function closeBrowser(): Promise<void> {
  * Create an EventSource for streaming logs from a run.
  */
 export function createLogStream(runId: string): EventSource {
-  return new EventSource(`${API_BASE_URL}/runs/${runId}/logs`);
+  return new EventSource(`${API_BASE_URL}/runs/${runId}/logs/stream`);
 }
 
 /**
@@ -231,6 +237,19 @@ export async function getRuns(authToken: string): Promise<RunMetadata[]> {
     method: "GET",
     headers: { Authorization: `Bearer ${authToken}` },
   });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get database contents ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function getLogs(runId: string): Promise<LogEventDB[]> {
+  const response = await fetch(`${API_BASE_URL}/runs/${runId}/logs`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${runId}`}
+  })
 
   if (!response.ok) {
     throw new Error(`Failed to get database contents ${response.statusText}`);

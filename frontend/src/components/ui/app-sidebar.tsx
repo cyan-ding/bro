@@ -1,4 +1,4 @@
-import { Calendar, Home, Inbox, Search, Settings } from "lucide-react";
+import { MoreVerticalIcon } from "lucide-react";
 
 import {
   Sidebar,
@@ -11,36 +11,10 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-// Menu items.
-const items = [
-  {
-    title: "Home",
-    url: "#",
-    icon: Home,
-  },
-  {
-    title: "Inbox",
-    url: "#",
-    icon: Inbox,
-  },
-  {
-    title: "Calendar",
-    url: "#",
-    icon: Calendar,
-  },
-  {
-    title: "Search",
-    url: "#",
-    icon: Search,
-  },
-  {
-    title: "Settings",
-    url: "#",
-    icon: Settings,
-  },
-];
+import { RunMetadata } from "@/lib/api";
+import { Button } from "./button";
 
-export function AppSidebar() {
+export function AppSidebar({runs} : { runs: RunMetadata[]}) {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
@@ -48,12 +22,14 @@ export function AppSidebar() {
           <SidebarGroupLabel>Bro</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
+              {runs.map((run) => (
+                <SidebarMenuItem key={run.title}>
                   <SidebarMenuButton asChild>
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
+                    <a href={`/runs?runId=${run.id}`}>
+                      <span>{run.title}</span>
+                      <Button variant="outline" size="icon">
+                        <MoreVerticalIcon />
+                      </Button>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

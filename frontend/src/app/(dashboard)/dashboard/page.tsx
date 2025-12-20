@@ -13,7 +13,7 @@ export default function Dashboard() {
   const router = useRouter();
   const { model, setModel, setRunId, setError, setRuns } = useAgentStore();
 
-  const { user } = useAuthStore();
+  const { authToken, user } = useAuthStore();
 
   const [prompt, setPrompt] = useState("");
   const [models, setModels] = useState({});
@@ -26,16 +26,16 @@ export default function Dashboard() {
       });
   }, []);
 
-  // useEffect(() => {
-  //   if (authToken) {
-  //     const fetchRuns = async () => {
-  //       const runs = await getRuns(authToken);
-  //       setRuns(runs);
-  //     };
+  useEffect(() => {
+    if (authToken) {
+      const fetchRuns = async () => {
+        const runs = await getRuns(authToken);
+        setRuns(runs);
+      };
 
-  //     fetchRuns();
-  //   }
-  // }, [setRuns, authToken]);
+      fetchRuns();
+    }
+  }, [setRuns, authToken]);
 
   const handleStart = useCallback(
     async (prompt: string, url?: string) => {

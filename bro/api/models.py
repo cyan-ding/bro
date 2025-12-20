@@ -138,10 +138,14 @@ class LogEvent(BaseModel):
     action_context: Optional[ActionContext] = None
     decision: Optional[SendDecisionRequest] = None
 
+class LogEventDB(LogEvent):
+    id: str
+    run_id: str
 
 class RunState(BaseModel):
     user_id: str
     id: str
+    title: str
     status: RunStatus
     user_prompt: str
     url: Optional[str]

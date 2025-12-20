@@ -9,7 +9,7 @@ import json
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
-from typing import Dict
+from typing import Dict, List
 from utils.screencast import ScreencastClient
 from utils.db import get_supabase
 from .models import (
@@ -17,6 +17,7 @@ from .models import (
     CreateRunResponse,
     AgentStateResponse,
     ListRunsResponse,
+    LogEventDB,
     SendInputRequest,
     SendInputResponse,
     SendDecisionRequest,
@@ -78,7 +79,7 @@ async def root():
     }
 
 
-@app.get("/runs", response_model=ListRunsResponse)
+@app.get("/runs", response_model=List[ListRunsResponse])
 async def list_runs(authToken: str):
     """
     get run information from database
@@ -147,7 +148,7 @@ async def get_run_status(run_id: str):
     return run_info.status
 
 
-@app.get("/runs/{run_id}/logs")
+@app.get("/runs/{run_id}/logs/stream")
 async def stream_run_logs(run_id: str):
     """
     Stream log events from an agent run using Server-Sent Events.
@@ -163,6 +164,12 @@ async def stream_run_logs(run_id: str):
         raise HTTPException(status_code=404, detail="Run not found")
 
     return EventSourceResponse(stream_logs(run_info))
+
+@app.get("/runs/{run_id}/logs", response_model=List[LogEventDB])
+async def get_logs(run_id: str):
+    """get logs from supabase"""
+    db = await get_supabase()
+    return await db.table("run_logs").select("*").eq("run_id", run_id)
 
 
 @app.get("/runs/{run_id}/state", response_model=AgentStateResponse)

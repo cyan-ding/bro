@@ -29,7 +29,8 @@ class RunInfo:
         agent: Optional["Agent"],
         max_iterations: int,
         user_prompt: str,
-        url: str = None
+        url: str = None,
+        title: str = None # ai generated summary of the user prompt
     ):
         """
         Initialize run information.
@@ -52,7 +53,7 @@ class RunInfo:
         self.created_at = datetime.now()
         self.completed_at: Optional[datetime] = None
         self.url=url
-
+        self.title = title
         # Task that runs the agent
         self.task: Optional[asyncio.Task] = None
 
