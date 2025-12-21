@@ -80,16 +80,15 @@ async def root():
 
 
 @app.get("/runs", response_model=List[ListRunsResponse])
-async def list_runs(authToken: str):
+async def list_runs():
     """
     get run information from database
     """
 
     db = await get_supabase()
-    user_id = db.auth.get_user(authToken)
-    runs = await db.table("runs").select("*").eq("user_id", user_id)
+    runs = await db.table("runs").select("*").execute()
 
-    return runs
+    return runs.data
 
 
 @app.post("/runs", response_model=CreateRunResponse)
@@ -115,7 +114,6 @@ async def create_run(request: CreateRunRequest):
             max_iterations=request.max_iterations,
             take_screenshot=request.take_screenshot,
             model=request.model,
-            user_id=request.user_id,
             enable_logging=request.enable_logging,
         )
 
@@ -164,6 +162,7 @@ async def stream_run_logs(run_id: str):
         raise HTTPException(status_code=404, detail="Run not found")
 
     return EventSourceResponse(stream_logs(run_info))
+
 
 @app.get("/runs/{run_id}/logs", response_model=List[LogEventDB])
 async def get_logs(run_id: str):

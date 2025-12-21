@@ -20,14 +20,11 @@ from .run_info import RunInfo
 class MockAgent:
     """Mock agent that simulates agent state without real execution."""
 
-    def __init__(self, user_id: str = "test_user"):
+    def __init__(self):
         """
         Initialize mock agent with simulated state.
-
-        Args:
-            user_id: User identifier
         """
-        self.agent_state = AgentState(user_id=user_id)
+        self.agent_state = AgentState()
         self.input_manager = MockInputManager()
 
         # Populate with mock data
@@ -122,7 +119,6 @@ class MockRunManager:
         max_iterations: int = 100,
         take_screenshot: bool = True,
         model: str = "gpt-4o-mini",
-        user_id: Optional[str] = None,
         enable_logging: bool = False,
     ) -> RunInfo:
         """
@@ -134,23 +130,19 @@ class MockRunManager:
             max_iterations: Maximum number of iterations
             take_screenshot: Whether to take screenshots
             model: LLM model to use
-            user_id: User identifier
             enable_logging: Whether to enable log streaming
 
         Returns:
             RunInfo object for the created run
         """
         run_id = str(uuid.uuid4())
-        if not user_id:
-            user_id = "test_user"
 
-        # Create mock agent with user_id
-        agent = MockAgent(user_id=user_id)
+        # Create mock agent
+        agent = MockAgent()
 
         # Create run info
         run_info = RunInfo(
             run_id=run_id,
-            user_id=user_id,
             agent=agent,
             max_iterations=max_iterations,
             user_prompt=user_prompt,

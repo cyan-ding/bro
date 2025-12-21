@@ -1,3 +1,5 @@
+"use client"
+
 import { AppSidebar } from "@/components/ui/app-sidebar";
 import { DashboardNavbar } from "@/components/ui/dashboard-navbar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";

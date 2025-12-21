@@ -23,7 +23,7 @@ export function MarketingNavbar() {
               asChild
               className={navigationMenuTriggerStyle()}
             >
-              <Button onClick={() => router.push("/login")}>Log in</Button>
+              <Button onClick={() => router.push("/dashboard")}>Dashboard</Button>
             </NavigationMenuLink>
           </NavigationMenuItem>
         </NavigationMenuList>

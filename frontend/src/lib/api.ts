@@ -19,14 +19,12 @@ export interface CreateRunRequest {
   max_iterations?: number;
   take_screenshot?: boolean;
   model?: string;
-  user_id?: string;
   enable_logging?: boolean;
 }
 
 // for just the dashboard
 export interface RunMetadata extends CreateRunRequest {
   id: string;
-  user_id: string;
   title: string;
   status: RunStatus;
   created_at: string;
@@ -232,10 +230,9 @@ export function createLogStream(runId: string): EventSource {
  *  or: i could send a request to the backend,
  */
 
-export async function getRuns(authToken: string): Promise<RunMetadata[]> {
+export async function getRuns(): Promise<RunMetadata[]> {
   const response = await fetch(`${API_BASE_URL}/runs`, {
     method: "GET",
-    headers: { Authorization: `Bearer ${authToken}` },
   });
 
   if (!response.ok) {
@@ -248,7 +245,6 @@ export async function getRuns(authToken: string): Promise<RunMetadata[]> {
 export async function getLogs(runId: string): Promise<LogEventDB[]> {
   const response = await fetch(`${API_BASE_URL}/runs/${runId}/logs`, {
     method: "GET",
-    headers: { Authorization: `Bearer ${runId}`}
   })
 
   if (!response.ok) {

@@ -44,7 +44,6 @@ class Agent:
     def __init__(
         self,
         system_prompt: str,
-        user_id: Optional[str] = None,
         model: str = "gpt-5-mini-2025-08-07",
         run_info: Optional["RunInfo"] = None,
     ):
@@ -53,7 +52,6 @@ class Agent:
 
         Args:
             system_prompt: The system prompt that defines Bro's behavior
-            user_id: Unique identifier for the user
             model: The model to use for the LLM
             run_info: Optional RunInfo object for logging
         """
@@ -654,7 +652,6 @@ class Agent:
                         await save_run_state(
                             RunState(
                                 id=self.run_info.run_id,
-                                user_id=self.run_info.user_id,
                                 status=self.run_info.status,
                                 user_prompt=user_prompt,
                                 title=self.run_info.title,
@@ -740,7 +737,6 @@ async def main():
     ]
     agent = Agent(
         system_prompt,
-        user_id="cyan",
         model="gemini/gemini-2.5-flash-preview-09-2025",
     )
     # claude-sonnet-4-20250514

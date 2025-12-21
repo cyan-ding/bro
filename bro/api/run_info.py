@@ -25,25 +25,22 @@ class RunInfo:
     def __init__(
         self,
         run_id: str,
-        user_id: str,
         agent: Optional["Agent"],
         max_iterations: int,
         user_prompt: str,
         url: str = None,
-        title: str = None # ai generated summary of the user prompt
+        title: str = None,  # ai generated summary of the user prompt
     ):
         """
         Initialize run information.
 
         Args:
             run_id: Unique identifier for this run
-            user_id: User identifier
             agent: The Agent instance (can be None initially)
             max_iterations: Maximum iterations for this run
             user_prompt: The user's task prompt
         """
         self.run_id = run_id
-        self.user_id = user_id
         self.agent = agent
         self.max_iterations = max_iterations
         self.user_prompt = user_prompt
@@ -52,7 +49,7 @@ class RunInfo:
         self.error_message: Optional[str] = None
         self.created_at = datetime.now()
         self.completed_at: Optional[datetime] = None
-        self.url=url
+        self.url = url
         self.title = title
         # Task that runs the agent
         self.task: Optional[asyncio.Task] = None

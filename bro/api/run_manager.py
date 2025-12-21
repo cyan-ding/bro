@@ -38,14 +38,9 @@ class RunManager:
         max_iterations: int = 100,
         take_screenshot: bool = True,
         model: str = "gemini/gemini-2.5-flash-preview-09-2025",
-        user_id: Optional[str] = None,
         enable_logging: bool = True,
     ) -> RunInfo:
         run_id = str(uuid.uuid4())
-        if not user_id:
-            user_id = (
-                "00000000-0000-0000-0000-000000000000"  # Null UUID for anonymous users
-            )
 
         # Load system prompt
         system_prompt_path = Path(__file__).parent.parent.parent / "bro.txt"
@@ -66,7 +61,6 @@ class RunManager:
         # Create run info first (without agent)
         run_info = RunInfo(
             run_id=run_id,
-            user_id=user_id,
             agent=None,  # Will be set below
             max_iterations=max_iterations,
             user_prompt=user_prompt,
@@ -77,7 +71,6 @@ class RunManager:
         # Create agent instance with run_info if logging is enabled
         agent = Agent(
             system_prompt=system_prompt,
-            user_id=user_id,
             model=model,
             run_info=run_info if enable_logging else None,
         )
@@ -98,7 +91,7 @@ class RunManager:
         def task_done_callback(task: asyncio.Task):
             try:
                 task.result()
-            except Exception as e:
+            except Exception:
                 print("background task failed")
                 import traceback
 
@@ -132,7 +125,6 @@ class RunManager:
             await save_run_state(
                 RunState(
                     id=run_info.run_id,
-                    user_id=run_info.user_id,
                     title=run_info.title,
                     status=run_info.status,
                     user_prompt=run_info.user_prompt,
@@ -163,7 +155,6 @@ class RunManager:
             await save_run_state(
                 RunState(
                     id=run_info.run_id,
-                    user_id=run_info.user_id,
                     title=run_info.title,
                     status=run_info.status,
                     user_prompt=run_info.user_prompt,
@@ -186,7 +177,6 @@ class RunManager:
             await save_run_state(
                 RunState(
                     id=run_info.run_id,
-                    user_id=run_info.user_id,
                     title=run_info.title,
                     status=run_info.status,
                     user_prompt=run_info.user_prompt,
@@ -287,7 +277,6 @@ class RunManager:
         await save_run_state(
             RunState(
                 id=run_info.run_id,
-                user_id=run_info.user_id,
                 title=run_info.title,
                 status=run_info.status,
                 user_prompt=run_info.user_prompt,

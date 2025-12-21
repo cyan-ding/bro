@@ -31,7 +31,6 @@ class CreateRunRequest(BaseModel):
     max_iterations: int = Field(100, description="Maximum number of iterations")
     take_screenshot: bool = Field(True, description="Whether to take screenshots")
     model: str = Field("gpt-4o-mini", description="LLM model to use")
-    user_id: Optional[str] = Field(None, description="User identifier")
     enable_logging: bool = Field(False, description="Whether to enable log streaming")
 
 
@@ -45,7 +44,6 @@ class CreateRunResponse(BaseModel):
 
 class ListRunsResponse(CreateRunRequest):
     id: str
-    user_id: str
     status: RunStatus
     created_at: str
     updated_at: str
@@ -138,12 +136,13 @@ class LogEvent(BaseModel):
     action_context: Optional[ActionContext] = None
     decision: Optional[SendDecisionRequest] = None
 
+
 class LogEventDB(LogEvent):
     id: str
     run_id: str
 
+
 class RunState(BaseModel):
-    user_id: str
     id: str
     title: str
     status: RunStatus
