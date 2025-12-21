@@ -16,19 +16,18 @@ export interface ChatMessage {
 export interface CreateRunRequest {
   user_prompt: string;
   url?: string;
-  max_iterations?: number;
+  max_iterations: number;
   take_screenshot?: boolean;
-  model?: string;
+  model: string;
   enable_logging?: boolean;
 }
 
 // for just the dashboard
-export interface RunMetadata extends CreateRunRequest {
+export interface ListRunsResponse {
   id: string;
-  title: string;
+  title?: string;
   status: RunStatus;
-  created_at: string;
-  updated_at: string;
+  completed_at?: string;
 }
 
 export type RunStatus =
@@ -105,6 +104,21 @@ export interface LogEvent {
 export interface LogEventDB extends LogEvent {
   id: string
   run_id: string
+}
+
+export interface RunState {
+  id: string;
+  title?: string | null;
+  status: string;
+  user_prompt: string;
+  url?: string | null;
+  max_iterations: number;
+  model: string;
+  current_iteration?: number | null;
+  error_message?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 /**
@@ -230,7 +244,7 @@ export function createLogStream(runId: string): EventSource {
  *  or: i could send a request to the backend,
  */
 
-export async function getRuns(): Promise<RunMetadata[]> {
+export async function getRuns(): Promise<ListRunsResponse[]> {
   const response = await fetch(`${API_BASE_URL}/runs`, {
     method: "GET",
   });

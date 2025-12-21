@@ -7,13 +7,14 @@ and provides thread-safe access to run information.
 
 import asyncio
 import uuid
-from typing import Dict, Optional
 from pathlib import Path
+from typing import Dict, Optional
 
 from agent.agent import Agent
 from agent.ai import ai
 from agent.build_llm_prompt import build_llm_prompt
 from utils.db import save_run_state
+
 from .models import RunState, RunStatus, SendDecisionRequest
 from .run_info import RunInfo
 
@@ -49,13 +50,21 @@ class RunManager:
         # generate a 3-5 word summary of the user prompt to be the title of the run
 
         summary_prompt = "Summarized the user's prompt concisely in 3-5 words"
-        title = await ai(
+        title_response = await ai(
             build_llm_prompt(
                 user_prompt=user_prompt,
                 system_prompt=summary_prompt,
                 model=model,
                 structured_format=False,
             )
+        )
+        # Extract string content from ModelResponse
+        title = (
+            title_response.choices[0].message.content.strip()
+            if title_response
+            and title_response.choices
+            and len(title_response.choices) > 0
+            else user_prompt[:50]  # Fallback to first 50 chars of prompt
         )
 
         # Create run info first (without agent)
@@ -86,7 +95,7 @@ class RunManager:
             self._run_agent(run_info, url, max_iterations, take_screenshot)
         )
 
-        # temporary callback
+        # callback to verify run succeeded
 
         def task_done_callback(task: asyncio.Task):
             try:

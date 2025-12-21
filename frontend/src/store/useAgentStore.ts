@@ -5,14 +5,15 @@ import type {
   RunStatus,
   AgentStateResponse,
   ChatMessage,
-  RunMetadata,
+  ListRunsResponse,
+  RunState
 } from "@/lib/api";
 import { createLogStream } from "@/lib/api";
 
 interface AgentStore {
   // State
   runId: string | null;
-  runs: RunMetadata[];
+  runs: ListRunsResponse[];
   logs: LogEvent[];
   runStatus: RunStatus | null;
   agentState: AgentStateResponse | null;
@@ -20,16 +21,16 @@ interface AgentStore {
   eventSource: EventSource | null;
   chatMessages: ChatMessage[];
   model: string | null;
-  viewedRunId: string | null;
-  viewedRunData: RunMetadata[];
-  viewedRunLogs: LogEvent[];
+  viewedRunId: string | null; // we have to to track currently viewed run, without overriding the runId that could be for a live run
+  viewedRunData: RunState | null; 
+  viewedRunLogs: LogEvent[]; 
 
 
   // Actions
   setModel: (model: string | null) => void;
   setRunId: (runId: string | null) => void;
   setLogs: (logs: LogEvent[]) => void;
-  setRuns: (runs: RunMetadata[]) => void;
+  setRuns: (runs: ListRunsResponse[]) => void;
   addLog: (log: LogEvent) => void;
   setRunStatus: (status: RunStatus | null) => void;
   setAgentState: (state: AgentStateResponse | null) => void;
@@ -41,7 +42,7 @@ interface AgentStore {
   setChatMessages: (messages: ChatMessage[]) => void;
   clearAll: () => void;
   setViewedRunId: (runId: string | null) => void;
-  setViewedRunData: (data: RunMetadata[]) => void;
+  setViewedRunData: (data: RunState | null) => void;
   setViewedRunLogs: (logs: LogEvent[]) => void;
 }
 
@@ -59,7 +60,7 @@ export const useAgentStore = create<AgentStore>()(
       chatMessages: [],
       model: null,
       viewedRunId: null,
-      viewedRunData: [],
+      viewedRunData: null,
       viewedRunLogs: [],
 
       // Actions
@@ -76,7 +77,7 @@ export const useAgentStore = create<AgentStore>()(
         set((state) => ({ chatMessages: [...state.chatMessages, message] })),
       setChatMessages: (chatMessages) => set({ chatMessages }),
       setViewedRunId: (runId: string | null) => set({ viewedRunId: runId }),
-      setViewedRunData: (data: RunMetadata[]) => set({ viewedRunData: data }),
+      setViewedRunData: (data: RunState | null) => set({ viewedRunData: data }),
       setViewedRunLogs: (logs: LogEvent[]) => set({ viewedRunLogs: logs }),
       
       closeEventSource: () => {
@@ -163,6 +164,7 @@ export const useAgentStore = create<AgentStore>()(
       name: "agent-storage",
       partialize: (state) => ({
         runId: state.runId,
+        runs: state.runs,
         // Don't persist logs, runStatus, agentState as they'll be fetched fresh
       }),
     }

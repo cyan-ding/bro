@@ -1,7 +1,7 @@
 import asyncio
 import os
-import sys
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from typing import Optional

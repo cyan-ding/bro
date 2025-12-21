@@ -86,7 +86,7 @@ async def list_runs():
     """
 
     db = await get_supabase()
-    runs = await db.table("runs").select("*").execute()
+    runs = await db.table("runs").select("id, status, title, completed_at").execute()
 
     return runs.data
 

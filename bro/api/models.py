@@ -29,9 +29,13 @@ class CreateRunRequest(BaseModel):
     user_prompt: str = Field(..., description="The task for the agent to complete")
     url: Optional[str] = Field(None, description="Optional starting URL")
     max_iterations: int = Field(100, description="Maximum number of iterations")
-    take_screenshot: bool = Field(True, description="Whether to take screenshots")
+    take_screenshot: Optional[bool] = Field(
+        True, description="Whether to take screenshots"
+    )
     model: str = Field("gpt-4o-mini", description="LLM model to use")
-    enable_logging: bool = Field(False, description="Whether to enable log streaming")
+    enable_logging: Optional[bool] = Field(
+        False, description="Whether to enable log streaming"
+    )
 
 
 class CreateRunResponse(BaseModel):
@@ -42,11 +46,11 @@ class CreateRunResponse(BaseModel):
     message: str = Field(..., description="Human-readable status message")
 
 
-class ListRunsResponse(CreateRunRequest):
+class ListRunsResponse(BaseModel):
     id: str
     status: RunStatus
-    created_at: str
-    updated_at: str
+    title: Optional[str]
+    completed_at: Optional[str]
 
 
 class AgentStateResponse(BaseModel):
@@ -144,7 +148,7 @@ class LogEventDB(LogEvent):
 
 class RunState(BaseModel):
     id: str
-    title: str
+    title: Optional[str]
     status: RunStatus
     user_prompt: str
     url: Optional[str]

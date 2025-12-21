@@ -11,10 +11,10 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-import { RunMetadata } from "@/lib/api";
+import { ListRunsResponse } from "@/lib/api";
 import { Button } from "./button";
 
-export function AppSidebar({runs} : { runs: RunMetadata[]}) {
+export function AppSidebar({runs} : { runs: ListRunsResponse[]}) {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
@@ -23,7 +23,7 @@ export function AppSidebar({runs} : { runs: RunMetadata[]}) {
           <SidebarGroupContent>
             <SidebarMenu>
               {runs.map((run) => (
-                <SidebarMenuItem key={run.title}>
+                <SidebarMenuItem key={run.id}>
                   <SidebarMenuButton asChild>
                     <a href={`/runs?runId=${run.id}`}>
                       <span>{run.title}</span>
