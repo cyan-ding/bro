@@ -1,25 +1,28 @@
 import asyncio
+import sys
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+# Fix for Windows: Playwright requires SelectorEventLoop for subprocess support
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from api.models import RunState
-
-from bro.utils.use_cdp import use_cdp
-from patchright.async_api import Page, async_playwright
 from dotenv import load_dotenv
-
-from .build_llm_prompt import build_llm_prompt
-from .schemas import StructuredOutput
+from patchright.async_api import Page, async_playwright
+from utils.db import save_run_state
 
 # Import utility functions
 from bro.utils.action_utils import format_elements_text
+from bro.utils.dom_utils import take_screenshot_with_bounding_boxes
+from bro.utils.input_manager import InputManager
+
 from .actions import click, done, extract, input_text, scroll, search, todo_edit
 from .agent_state import AgentState
 from .ai import ai
-from bro.utils.dom_utils import take_screenshot_with_bounding_boxes
-from bro.utils.input_manager import InputManager
-from utils.db import save_run_state
+from .build_llm_prompt import build_llm_prompt
+from .schemas import StructuredOutput
 
 if TYPE_CHECKING:
     from api.run_info import RunInfo
@@ -419,13 +422,6 @@ class Agent:
             await self.input_manager.start()
 
         async with async_playwright() as p:
-            # browser_context = await p.chromium.launch_persistent_context(
-            #     user_data_dir="./browser_data",
-            #     channel="chrome",
-            #     headless=False,
-            #     no_viewport=True,
-            # )
-            await use_cdp()
             self.browser = await p.chromium.connect_over_cdp("http://localhost:9222")
             # List contexts (Chrome profiles)
             contexts = self.browser.contexts
@@ -439,9 +435,6 @@ class Agent:
                 if browser_context.pages
                 else await browser_context.new_page()
             )
-            # Install DOM change detector early so it persists across navigations
-            # page = await browser_context.new_page()
-
             # If no URL provided, navigate to blank page to start
             if not url:
                 print("No initial URL provided, starting with blank page...")

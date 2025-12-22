@@ -182,7 +182,6 @@ export default function Run() {
         {/* Middle + Right columns: Screencast (expanded) */}
         <div className="lg:col-span-2">
           <ScreencastViewer
-            runId={runId}
             currentUrl={
               agentState?.tabs?.[agentState.current_tab_index ?? 0]?.url
             }

@@ -1,16 +1,17 @@
-import asyncio
 import os
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Optional
 
 # Global variable to track the Chrome subprocess
 _chrome_process: Optional[subprocess.Popen] = None
+_chrome_running: bool = False
 
 
-async def use_cdp() -> None:
+def use_cdp() -> None:
     def is_chrome_running():
         try:
             with urllib.request.urlopen(
@@ -38,23 +39,20 @@ async def use_cdp() -> None:
                 chrome_path,
                 "--remote-debugging-port=9222",
                 f"--user-data-dir={user_data_dir}",
-            ]
+            ],
+            creationflags=134217728,
         )
 
-        # Wait for Chrome to start up
-        print("Waiting for Chrome to initialize...")
-        max_wait = 30  # Wait up to 30 seconds
-        wait_time = 0
-        while not is_chrome_running() and wait_time < max_wait:
-            await asyncio.sleep(1)
-            wait_time += 1
-            if wait_time % 5 == 0:  # Print every 5 seconds
-                print(f"Still waiting for Chrome... ({wait_time}s)")
+        for _ in range(30):
+            time.sleep(1)
+            if is_chrome_running():
+                break
 
         if is_chrome_running():
             print("✅ Chrome is running with CDP enabled")
         else:
             print("❌ Failed to start Chrome with CDP after 30 seconds")
+            raise TimeoutError
     else:
         print("✅ Chrome is already running with CDP enabled")
 
@@ -95,4 +93,4 @@ def close_chrome() -> bool:
 
 
 if __name__ == "__main__":
-    asyncio.run(use_cdp())
+    use_cdp()

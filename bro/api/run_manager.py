@@ -147,6 +147,7 @@ class RunManager:
                     metadata={},
                 )
             )
+
             # Run the agent
             await run_info.agent.run(
                 user_prompt=run_info.user_prompt,
@@ -180,8 +181,13 @@ class RunManager:
 
         except Exception as e:
             run_info.set_status(RunStatus.ERROR, str(e))
+            print(e)
             await run_info.add_log_event(
-                "error", error=str(e), message="Agent run failed"
+                "error",
+                error=str(e),
+                message="Run Failed: Unable to Connect to Browser"
+                if isinstance(e, TimeoutError)
+                else "Agent run failed",
             )
             await save_run_state(
                 RunState(

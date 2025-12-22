@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 
 interface ScreencastViewerProps {
-  runId: string | null;
   currentUrl?: string;
   isRunning?: boolean;
 }
@@ -14,7 +13,6 @@ interface ScreencastViewerProps {
  * Shows Chrome screencast at ~10 FPS with optional manual intervention controls.
  */
 export default function ScreencastViewer({
-  runId,
   currentUrl,
   isRunning = false,
 }: ScreencastViewerProps) {
@@ -35,25 +33,20 @@ export default function ScreencastViewer({
   const [localUrl, setLocalUrl] = useState(currentUrl ?? "");
 
   useEffect(() => {
-    if (!runId || !isRunning) {
+    if (!isRunning) {
       return;
     }
 
-    // Reset chromeClosed flag when runId changes (new run)
+    // Reset chromeClosed flag
     chromeClosedRef.current = false;
 
-    const wsUrl = `ws://localhost:8000/ws/screencast/${runId}`;
-
-    let reconnectTimeout: NodeJS.Timeout;
-    let hasConnectedOnce = false;
+    const wsUrl = `ws://localhost:8000/ws/screencast`;
 
     const connect = () => {
       // Don't connect/reconnect if Chrome was intentionally closed
       if (chromeClosedRef.current) {
         return;
       }
-
-      hasConnectedOnce = true;
       setError(null);
       try {
         const ws = new WebSocket(wsUrl);
@@ -129,12 +122,8 @@ export default function ScreencastViewer({
 
         ws.onclose = (event) => {
           setIsConnected(false);
-          // Only reconnect if it wasn't a clean close and Chrome wasn't intentionally closed
           if (event.code !== 1000 && !chromeClosedRef.current) {
-            setError(`Connection lost. Retrying in 2s...`);
-            reconnectTimeout = setTimeout(() => {
-              connect();
-            }, 2000);
+            setError("Connection lost");
           } else if (chromeClosedRef.current) {
             setError("Chrome browser has been closed");
           }
@@ -148,14 +137,11 @@ export default function ScreencastViewer({
     connect();
 
     return () => {
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
       if (wsRef.current) {
         wsRef.current.close();
       }
     };
-  }, [runId, isRunning]);
+  }, [isRunning]);
 
   const canvasToViewportCoords = (canvasX: number, canvasY: number) => {
     const canvas = canvasRef.current;
@@ -390,7 +376,7 @@ export default function ScreencastViewer({
           </svg>
           <input
             className="text-muted-foreground truncate outline-none border-none"
-            value={localUrl || "Connecting..."}
+            value={localUrl}
             onChange={(e) => setLocalUrl(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {

@@ -19,6 +19,11 @@ class ScreencastClient:
 
         Args:
             cdp_url: Chrome DevTools Protocol endpoint URL
+            ws: websocket connecting to cdp
+            session: http client to interface with ws
+            running: if screencast is running
+            frame_callback: num frames/second
+            message_id: message number
         """
         self.cdp_url = cdp_url
         self.ws: Optional[aiohttp.ClientWebSocketResponse] = None
@@ -115,8 +120,7 @@ class ScreencastClient:
 
     async def _listen_for_frames(self) -> None:
         """
-        Listen for screencast frames and acknowledgements.
-
+        Listen for screencast frames passed back from the cdp ws connectiono
         Receives frames from Chrome, calls the callback, and sends acknowledgements.
         """
         if not self.ws:
