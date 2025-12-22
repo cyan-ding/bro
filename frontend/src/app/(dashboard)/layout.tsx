@@ -1,6 +1,6 @@
 "use client"
 
-import { AppSidebar } from "@/components/ui/app-sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import { DashboardNavbar } from "@/components/ui/dashboard-navbar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAgentStore } from "@/store/useAgentStore";
