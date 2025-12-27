@@ -419,6 +419,7 @@ export default function AgentChat({
                     }
                   }
                 }}
+                disabled={!isRunning}
               />
               <div className="flex flex-col gap-2">
                 {isRunning ? (

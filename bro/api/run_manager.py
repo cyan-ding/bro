@@ -15,7 +15,7 @@ from agent.ai import ai
 from agent.build_llm_prompt import build_llm_prompt
 from utils.db import save_run_state
 
-from .models import RunState, RunStatus, SendDecisionRequest
+from .models import RunStatus, SendDecisionRequest
 from .run_info import RunInfo
 
 
@@ -31,6 +31,15 @@ class RunManager:
         """Initialize the run manager."""
         self._runs: Dict[str, RunInfo] = {}
         self._lock = asyncio.Lock()
+
+    async def set_run(self, run_id, run_info):
+        # helper to add a run
+        async with self._lock:
+            self._runs[run_id] = run_info
+
+    async def get_run(self, run_id: str) -> Optional[RunInfo]:
+        async with self._lock:
+            return self._runs.get(run_id)
 
     async def create_run(
         self,
@@ -87,9 +96,7 @@ class RunManager:
         # Set the agent in run_info
         run_info.agent = agent
 
-        async with self._lock:
-            self._runs[run_id] = run_info
-
+        await self.set_run(run_id, run_info)
         # Start the agent in background
         run_info.task = asyncio.create_task(
             self._run_agent(run_info, url, max_iterations, take_screenshot)
@@ -100,6 +107,8 @@ class RunManager:
         def task_done_callback(task: asyncio.Task):
             try:
                 task.result()
+            except asyncio.CancelledError:
+                pass  # no need to log errors if its canceled
             except Exception:
                 print("background task failed")
                 import traceback
@@ -131,22 +140,7 @@ class RunManager:
             await run_info.add_log_event(
                 "status", message=f"Agent run started: {run_info.user_prompt}"
             )
-            await save_run_state(
-                RunState(
-                    id=run_info.run_id,
-                    title=run_info.title,
-                    status=run_info.status,
-                    user_prompt=run_info.user_prompt,
-                    url=url,
-                    max_iterations=max_iterations,
-                    model=run_info.agent.model,
-                    current_iteration=run_info.current_iteration,
-                    error_message=run_info.error_message,
-                    created_at=run_info.created_at,
-                    completed_at=None,
-                    metadata={},
-                )
-            )
+            await save_run_state(run_info)
 
             # Run the agent
             await run_info.agent.run(
@@ -162,23 +156,9 @@ class RunManager:
                 "status", message="Agent run completed successfully"
             )
 
-            await save_run_state(
-                RunState(
-                    id=run_info.run_id,
-                    title=run_info.title,
-                    status=run_info.status,
-                    user_prompt=run_info.user_prompt,
-                    url=url,
-                    max_iterations=max_iterations,
-                    model=run_info.agent.model,
-                    current_iteration=run_info.current_iteration,
-                    error_message=run_info.error_message,
-                    created_at=run_info.created_at,
-                    completed_at=run_info.completed_at,
-                    metadata=run_info.agent.agent_state.model_dump(),
-                )
-            )
-
+            await save_run_state(run_info)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             run_info.set_status(RunStatus.ERROR, str(e))
             print(e)
@@ -189,26 +169,7 @@ class RunManager:
                 if isinstance(e, TimeoutError)
                 else "Agent run failed",
             )
-            await save_run_state(
-                RunState(
-                    id=run_info.run_id,
-                    title=run_info.title,
-                    status=run_info.status,
-                    user_prompt=run_info.user_prompt,
-                    url=url,
-                    max_iterations=max_iterations,
-                    model=run_info.agent.model,
-                    current_iteration=run_info.current_iteration,
-                    error_message=run_info.error_message,
-                    created_at=run_info.created_at,
-                    completed_at=run_info.completed_at,
-                    metadata=run_info.agent.agent_state.model_dump(),
-                )
-            )
-
-    async def get_run(self, run_id: str) -> Optional[RunInfo]:
-        async with self._lock:
-            return self._runs.get(run_id)
+            await save_run_state(run_info)
 
     async def stop_run(self, run_id: str) -> bool:
         """
@@ -231,6 +192,7 @@ class RunManager:
             run_info.task.cancel()
 
         run_info.set_status(RunStatus.STOPPED)
+        await save_run_state(run_info)
         await run_info.add_log_event("status", message="Agent run stopped by user")
 
         return True
@@ -289,22 +251,7 @@ class RunManager:
             run_info.set_status(RunStatus.COMPLETED)
         else:
             run_info.set_status(RunStatus.RUNNING)
-        await save_run_state(
-            RunState(
-                id=run_info.run_id,
-                title=run_info.title,
-                status=run_info.status,
-                user_prompt=run_info.user_prompt,
-                url=run_info.url,
-                max_iterations=run_info.max_iterations,
-                model=run_info.agent.model,
-                current_iteration=run_info.current_iteration,
-                error_message=run_info.error_message,
-                created_at=run_info.created_at,
-                completed_at=run_info.completed_at,
-                metadata=run_info.agent.agent_state.model_dump(),
-            )
-        )
+        await save_run_state(run_info)
         return True
 
     async def get_agent_state(self, run_id: str) -> Optional[Dict]:

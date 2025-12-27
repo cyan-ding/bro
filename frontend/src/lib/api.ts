@@ -144,7 +144,7 @@ export async function createRun(
  * Get the current status of a run.
  */
 export async function getRunStatus(runId: string): Promise<RunStatus> {
-  const response = await fetch(`${API_BASE_URL}/runs/${runId}`);
+  const response = await fetch(`${API_BASE_URL}/runs/${runId}/status`);
 
   if (!response.ok) {
     throw new Error(`Failed to get run status: ${response.statusText}`);
@@ -240,17 +240,27 @@ export function createLogStream(runId: string): EventSource {
 
 /**
  * Poll the db to get runs stuff
- *  i could either: pull from the database, directly from the front end
- *  or: i could send a request to the backend,
  */
 
-export async function getRuns(): Promise<ListRunsResponse[]> {
+export async function getRunList(): Promise<ListRunsResponse[]> {
   const response = await fetch(`${API_BASE_URL}/runs`, {
     method: "GET",
   });
 
   if (!response.ok) {
     throw new Error(`Failed to get database contents ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function getRun(runId: string): Promise<RunState> {
+  const response = await fetch(`${API_BASE_URL}/${runId}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get run contents ${response.statusText}`);
   }
 
   return response.json();

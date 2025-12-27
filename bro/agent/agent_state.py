@@ -1,6 +1,6 @@
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 from patchright.async_api import Page
 from utils.action_utils import generate_action_description
 from agent.models import (
@@ -13,8 +13,6 @@ from agent.models import (
 
 
 class AgentState(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    
     extractions: List[Extraction] = Field(default_factory=list)
     tabs: List[TabState] = Field(default_factory=list)
     action_history: List[ActionContext] = Field(default_factory=list)
@@ -306,6 +304,3 @@ class AgentState(BaseModel):
             json.dump(state_data, f, indent=2, ensure_ascii=False)
 
         return str(state_file)
-
-
-

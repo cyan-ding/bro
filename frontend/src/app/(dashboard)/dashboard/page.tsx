@@ -6,7 +6,7 @@ import { useAgentStore } from "@/store/useAgentStore";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon } from "lucide-react";
-import { createRun, getRuns } from "@/lib/api";
+import { createRun, getRunList } from "@/lib/api";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -25,7 +25,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchRuns = async () => {
-      const runs = await getRuns();
+      // get the List of runs
+      const runs = await getRunList();
       setRuns(runs);
     };
 

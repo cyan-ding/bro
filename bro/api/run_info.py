@@ -55,7 +55,7 @@ class RunInfo:
         self.task: Optional[asyncio.Task] = None
 
         # Log events for streaming
-        self.log_queue: asyncio.Queue[LogEvent] = asyncio.Queue()
+        self.log_queue: Optional[asyncio.Queue[LogEvent]] = asyncio.Queue()
 
     def update_iteration(self) -> None:
         """

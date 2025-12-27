@@ -8,6 +8,8 @@ and interacting with running agents.
 import asyncio
 import sys
 
+from api.run_info import RunInfo
+
 # fix for windows
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -31,6 +33,7 @@ from .models import (
     CreateRunResponse,
     ListRunsResponse,
     LogEventDB,
+    RunState,
     RunStatus,
     SendDecisionRequest,
     SendDecisionResponse,
@@ -143,7 +146,7 @@ async def create_run(request: CreateRunRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/runs/{run_id}", response_model=RunStatus)
+@app.get("/runs/{run_id}/status", response_model=RunStatus)
 async def get_run_status(run_id: str):
     """
     Get the current status of an agent run.
@@ -157,7 +160,19 @@ async def get_run_status(run_id: str):
 
     run_info = await run_manager.get_run(run_id)
     if not run_info:
-        raise HTTPException(status_code=404, detail="Run not found")
+        try:
+            pulled_run = await get_run(run_id)
+            run_info = RunInfo(
+                run_id=run_id,
+                agent=None,
+                max_iterations=pulled_run.max_iterations,
+                user_prompt=pulled_run.user_prompt,
+                title=pulled_run.title,
+            )
+            run_info.set_status(pulled_run.status)
+            await run_manager.set_run(run_id, run_info)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Run not found")
 
     return run_info.status
 
@@ -178,6 +193,20 @@ async def stream_run_logs(run_id: str):
         raise HTTPException(status_code=404, detail="Run not found")
 
     return EventSourceResponse(stream_logs(run_info))
+
+
+@app.get("/runs/{run_id}", response_model=RunState)
+async def get_run(run_id: str) -> RunState:
+    """get the data of one run"""
+
+    supabase = await get_supabase()
+
+    run_data = await supabase.table("runs").select("*").eq("id", run_id).execute().data
+
+    if not run_data:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return run_data
 
 
 @app.get("/runs/{run_id}/logs", response_model=List[LogEventDB])
@@ -276,6 +305,15 @@ async def stop_run(run_id: str):
         )
 
     return StopRunResponse(status=RunStatus.STOPPED, message="Run stopped successfully")
+
+
+async def delete_run(run_id: str):
+    try:
+        supabase = await get_supabase()
+
+        await supabase.table("runs").delete().eq("id", run_id).execute()
+    except Exception as e:
+        print("Warning, Failed to delete run: ", e)
 
 
 @app.post("/browser/close", response_model=CloseBrowserResponse)

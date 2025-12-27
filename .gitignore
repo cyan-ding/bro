@@ -50,7 +50,6 @@ unlabeled/
 blip2_lora_results/
 
 # Training Logs and Checkpoints
-logs/
 checkpoints/
 wandb/
 tensorboard/

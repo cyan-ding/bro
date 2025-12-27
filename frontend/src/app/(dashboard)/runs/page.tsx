@@ -11,6 +11,10 @@ import {
   sendDecision,
   stopRun,
   closeBrowser,
+  getRunList,
+  getLogs,
+  getRun,
+  AgentStateResponse,
 } from "@/lib/api";
 import { useAgentStore } from "@/store/useAgentStore";
 
@@ -24,12 +28,13 @@ export default function Run() {
     runStatus,
     agentState,
     error,
-    model,
-    setRunId,
-    setLogs,
     setRunStatus,
     setAgentState,
     setError,
+    setViewedRunData,
+    setViewedRunLogs,
+    viewedRunData,
+    viewedRunLogs,
   } = useAgentStore();
 
   const isRunning = runStatus === "running";
@@ -50,6 +55,11 @@ export default function Run() {
           status === "stopped" ||
           status === "error"
         ) {
+          // pull the data once so it can be shown(the run is complete)
+          const runs = await getRun(runId)
+          setViewedRunData(runs)
+          const logs = await getLogs(runId)
+          setViewedRunLogs(logs)
           clearInterval(interval);
         }
       } catch (err) {
@@ -173,9 +183,9 @@ export default function Run() {
             onSendInput={handleSendInput}
             onSendDecision={handleSendDecision}
             isAwaitingDecision={isAwaitingDecision}
-            logs={logs}
+            logs={isRunning ? logs : viewedRunLogs}
             runId={runId}
-            agentState={agentState}
+            agentState={isRunning ? agentState : viewedRunData?.metadata as AgentStateResponse | null} // unsafe but works in prod??
           />
         </div>
 

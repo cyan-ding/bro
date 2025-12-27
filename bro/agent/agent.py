@@ -642,22 +642,7 @@ class Agent:
                     await self.agent_state.update_tab_state(page)
 
                     if self.run_info:
-                        await save_run_state(
-                            RunState(
-                                id=self.run_info.run_id,
-                                status=self.run_info.status,
-                                user_prompt=user_prompt,
-                                title=self.run_info.title,
-                                url=url,
-                                max_iterations=max_iterations,
-                                model=self.model,
-                                current_iteration=self.run_info.current_iteration,
-                                error_message=self.run_info.error_message,
-                                created_at=self.run_info.created_at,
-                                completed_at=self.run_info.completed_at,
-                                metadata=self.agent_state.model_dump(),
-                            )
-                        )
+                        await save_run_state(RunState(self.run_info))
                     # Update iteration in run_info
                     if self.run_info:
                         self.run_info.update_iteration()
