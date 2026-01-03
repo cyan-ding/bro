@@ -3,12 +3,12 @@ import sys
 import traceback
 from typing import List, Optional
 import json
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserSettings(BaseModel):
     platform: str = sys.platform
-    downloaded_models: List[str] = []
+    downloaded_models: List[str] = Field(default_factory=list)
     preferred_model: Optional[str] = None
     chrome_path: Optional[str] = None
 

@@ -14,8 +14,9 @@ import {
   getRunList,
   getLogs,
   getRun,
-  AgentStateResponse,
 } from "@/lib/api";
+
+import { AgentStateResponse } from "@/lib/models";
 import { useAgentStore } from "@/store/useAgentStore";
 
 /**
@@ -162,7 +163,7 @@ export default function Run() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-        <h1 className="text-4xl font-bold mb-2">Bro</h1>
+      <h1 className="text-4xl font-bold mb-2">Bro</h1>
 
       {error && (
         <div className="mb-6 p-4 bg-destructive/10 border border-destructive rounded-lg">

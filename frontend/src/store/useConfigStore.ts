@@ -1,20 +1,41 @@
+import { getSettings, updateSettings } from "@/lib/api";
+import { UserSettings } from "@/lib/models";
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface ConfigStore {
-  chromePath: string | null
-  setChromePath: (chromePath: string | null) => void
-  localModels: string[] 
-  setLocalModels: (localModels: string[]) => void;
-  providerModels: string[]
-  setProviderModels: (providerModels: string[]) => void;
-
+  settings: UserSettings | null;
+  loadSettings: () => Promise<void>;
+  updateSettings: (updates: UserSettings) => Promise<void>;
 }
 
-export const useAuthStore = create<ConfigStore>()((set, get) => ({
-    chromePath: null,
-    setChromePath: (chromePath) => set({chromePath}),
-    localModels: [] ,
-    setLocalModels: (localModels) => set({localModels}),
-    providerModels: [],
-    setProviderModels: (providerModels) => set({providerModels}),
-}));
+export const useConfigStore = create<ConfigStore>()(
+  persist(
+    (set, get) => ({
+      settings: null,
+      loadSettings: async () => {
+        try {
+          const settings = await getSettings();
+          set({ settings });
+        } catch (error) {
+          console.error("Failed to load settings", error)
+        }
+      },
+      updateSettings: async (updates) => {
+        const current = get().settings;
+        if (!current) return;
+
+        try {
+          const updated = await updateSettings(updates);
+          set({ settings: updated });
+        } catch (error) {
+          console.error("Failed to update settings", error);
+        }
+      }
+    }),
+    {
+      name: "bro-config",
+      partialize: (state) => ({ settings: state.settings })
+    }
+  )
+);

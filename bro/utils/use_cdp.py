@@ -1,10 +1,13 @@
 import os
+import platform
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Optional
+
+from bro.utils.config import UserSettings
 
 # Global variable to track the Chrome subprocess
 _chrome_process: Optional[subprocess.Popen] = None
@@ -12,7 +15,8 @@ _chrome_running: bool = False
 
 
 def use_cdp() -> None:
-    def is_chrome_running():
+    """Start Chrome with CDP enabled using the path from UserSettings."""
+    def is_chrome_running() -> bool:
         try:
             with urllib.request.urlopen(
                 "http://localhost:9222/json", timeout=2
@@ -25,24 +29,47 @@ def use_cdp() -> None:
 
     if not is_chrome_running():
         print("Starting Chrome with CDP...")
-        if sys.platform == "darwin":
-            # macOS default Chrome path
-            chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-            user_data_dir = os.path.expanduser("~/tmp/chrome-profile")
+        
+        # Get Chrome path from UserSettings (guaranteed to exist from onboarding)
+        settings = UserSettings.load()
+        if not settings.chrome_path:
+            raise RuntimeError(
+                "Chrome path not configured. Please complete onboarding."
+            )
+        
+        chrome_path = Path(settings.chrome_path)
+        if not chrome_path.exists():
+            raise RuntimeError(
+                f"Chrome executable not found at: {chrome_path}. "
+                "Please update your Chrome path in settings."
+            )
+        
+        # Determine user data directory (platform-agnostic)
+        user_data_dir = os.path.expanduser("~/tmp/chrome-profile")
+        
+        # Prepare subprocess arguments
+        subprocess_args = [
+            str(chrome_path),
+            "--remote-debugging-port=9222",
+            f"--user-data-dir={user_data_dir}",
+        ]
+        
+        # Windows-specific: creationflags to prevent new console window
+        system = platform.system().lower()
+        if system == "windows":
+            # CREATE_NO_WINDOW = 0x08000000
+            _chrome_process = subprocess.Popen(
+                subprocess_args,
+                creationflags=0x08000000,
+            )
         else:
-            # Windows default Chrome path
-            chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-            user_data_dir = "C:/tmp/chrome-profile"
+            _chrome_process = subprocess.Popen(
+                subprocess_args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
-        _chrome_process = subprocess.Popen(
-            [
-                chrome_path,
-                "--remote-debugging-port=9222",
-                f"--user-data-dir={user_data_dir}",
-            ],
-            creationflags=134217728,
-        )
-
+        # Wait for Chrome to start
         for _ in range(30):
             time.sleep(1)
             if is_chrome_running():
@@ -52,7 +79,7 @@ def use_cdp() -> None:
             print("✅ Chrome is running with CDP enabled")
         else:
             print("❌ Failed to start Chrome with CDP after 30 seconds")
-            raise TimeoutError
+            raise TimeoutError("Chrome failed to start with CDP")
     else:
         print("✅ Chrome is already running with CDP enabled")
 

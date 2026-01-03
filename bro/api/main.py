@@ -9,6 +9,7 @@ import asyncio
 import sys
 
 from api.run_info import RunInfo
+from utils.config import UserSettings
 
 # fix for windows
 if sys.platform == "win32":
@@ -58,7 +59,7 @@ app = FastAPI(
     title="Bro Agent API",
     description="API for managing Bro web automation agent runs",
     version="0.1.0",
-    lifespan=lifespan,
+    # lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -126,6 +127,8 @@ async def create_run(request: CreateRunRequest):
     try:
         # Reset the Chrome closed flag when starting a new run
         _chrome_intentionally_closed = False
+
+        use_cdp()
 
         run_info = await run_manager.create_run(
             user_prompt=request.user_prompt,
@@ -397,6 +400,7 @@ async def websocket_screencast(websocket: WebSocket):
         await websocket.close(code=1000, reason="Chrome closed")
         return
 
+    use_cdp() # naive solution but works because its idempotent
     # Close existing websocket if one exists
     if _screencast_websocket:
         try:
@@ -464,9 +468,6 @@ async def websocket_screencast(websocket: WebSocket):
                 try:
                     data = json.loads(message)
 
-                    if _screencast_client is None:
-                        continue
-
                     match data.get("type"):
                         case "input":
                             action = data.get("action")
@@ -521,6 +522,18 @@ async def websocket_screencast(websocket: WebSocket):
     finally:
         # Cleanup
         _screencast_websocket = None
+
+@app.get("/settings")
+async def get_settings():
+    settings = UserSettings.load()
+    if not settings:
+        raise HTTPException(status_code=404, detail="User settings not found")
+    return settings.model_dump(model="json")
+
+@app.put("/settings", response_model=UserSettings)
+async def update_settings(request: UserSettings):
+    request.save()
+    return request
 
 
 if __name__ == "__main__":
