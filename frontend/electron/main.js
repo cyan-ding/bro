@@ -2,13 +2,16 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
 const isDev = process.env.NODE_ENV === 'development';
+const iconPath = path.join(__dirname, "../../assets/bro_256.png")
 
 let mainWindow;
 
 function createWindow() {
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
