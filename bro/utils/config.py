@@ -11,6 +11,7 @@ class UserSettings(BaseModel):
     downloaded_models: List[str] = Field(default_factory=list)
     preferred_model: Optional[str] = None
     chrome_path: Optional[str] = None
+    step: int = 0
 
     def save(self) -> str:
         """save settings to file"""
@@ -23,7 +24,7 @@ class UserSettings(BaseModel):
             json.dump(self.model_dump(mode="json"), f, indent=2)
 
         return str(settings_file)
-    
+
     @classmethod
     def load(cls) -> "UserSettings":
         """load settings from path"""
@@ -34,7 +35,7 @@ class UserSettings(BaseModel):
                 with open(settings_file, "r") as f:
                     data = json.load(f)
                 return cls(**data)
-            except(json.JSONDecodeError, Exception):
+            except (json.JSONDecodeError, Exception):
                 traceback.print_exc()
 
         return cls()

@@ -119,4 +119,5 @@ export interface UserSettings {
   downloaded_models: string[];
   preferred_model: string | null;
   chrome_path: string | null;
+  step: number;
 }

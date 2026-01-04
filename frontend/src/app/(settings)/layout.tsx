@@ -1,6 +1,6 @@
 import { MarketingNavbar } from "@/components/ui/marketing-navbar";
 
-export default function MarketingLayout({
+export default function SettingsLayout({
   children,
 }: {
   children: React.ReactNode;
