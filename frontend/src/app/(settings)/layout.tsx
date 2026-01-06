@@ -7,7 +7,6 @@ export default function SettingsLayout({
 }) {
   return (
     <>
-      <MarketingNavbar />
       <main className="flex flex-1 flex-col justify-center">{children}</main>
     </>
   );

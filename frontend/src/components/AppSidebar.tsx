@@ -13,10 +13,15 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-import { ListRunsResponse } from "@/lib/api";
+import { ListRunsResponse } from "@/lib/models";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "next-themes";
 
 export function AppSidebar({ runs }: { runs: ListRunsResponse[] }) {
+
+  const { theme, resolvedTheme } = useTheme();
+  const isDark = (theme ? (theme === "dark") : resolvedTheme === "dark")
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -24,12 +29,11 @@ export function AppSidebar({ runs }: { runs: ListRunsResponse[] }) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <span className="text-lg font-bold">B</span>
+                <div className="flex size-8 items-center justify-center rounded-lg">
+                  <img src={isDark ? "/assets/bro_logo_dark.svg" : "/assets/bro_logo.svg"} alt="Bro logo" className="w-full h-full object-contain" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Bro</span>
-                  <span className="truncate text-xs">Agent</span>
                 </div>
               </a>
             </SidebarMenuButton>

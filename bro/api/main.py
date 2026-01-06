@@ -400,7 +400,7 @@ async def websocket_screencast(websocket: WebSocket):
         await websocket.close(code=1000, reason="Chrome closed")
         return
 
-    use_cdp() # naive solution but works because its idempotent
+    use_cdp()  # naive solution but works because its idempotent
     # Close existing websocket if one exists
     if _screencast_websocket:
         try:
@@ -523,12 +523,14 @@ async def websocket_screencast(websocket: WebSocket):
         # Cleanup
         _screencast_websocket = None
 
+
 @app.get("/settings")
 async def get_settings():
     settings = UserSettings.load()
     if not settings:
         raise HTTPException(status_code=404, detail="User settings not found")
-    return settings.model_dump(model="json")
+    return settings.model_dump(mode="json")
+
 
 @app.put("/settings", response_model=UserSettings)
 async def update_settings(request: UserSettings):
