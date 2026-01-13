@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
@@ -106,6 +106,34 @@ function findChromePath() {
   return validPaths;
 }
 
+async function chooseChromePath() {
+  const system = os.platform().toLowerCase();
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: "Select Chrome executable",
+    properties: ["openFile"],
+    defaultPath:
+      system === "darwin"
+        ? "/Applications"
+        : system === "win32"
+        ? "C:\\Program Files\\Google\\Chrome\\Application"
+        : "/usr/bin",
+    filters:
+      system === "darwin"
+        ? [{ name: "Chrome", extensions: ["app"] }]
+        : [{ name: "Executables", extensions: ["exe", ""] }],
+  });
+
+  if (canceled || !filePaths.length) return null;
+
+  // On macOS, user may pick the .app bundle; point to the binary
+  const selected = filePaths[0];
+  if (system === "darwin" && selected.endsWith(".app")) {
+    return path.join(selected, "Contents", "MacOS", "Google Chrome");
+  }
+
+  return selected;
+}
+
 async function getSettings() {
   const settingsFile = path.join(os.homedir(), '.bro', 'user_settings.json');
   
@@ -140,6 +168,10 @@ async function updateSettings(settings) {
 // Register IPC handlers
 ipcMain.handle('find-chrome-path', () => {
   return findChromePath();
+});
+
+ipcMain.handle('choose-chrome-path', async () => {
+  return await chooseChromePath();
 });
 
 ipcMain.handle('get-settings', async () => {

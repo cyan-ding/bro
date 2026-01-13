@@ -63,3 +63,14 @@ export async function findChromePath(): Promise<string[]> {
   
   return electronAPI.findChromePath();
 }
+
+/**
+ * Open file picker to select Chrome executable.
+ */
+export async function chooseChromePath(): Promise<string | null> {
+  if (!electronAPI.isElectron()) {
+    throw new Error("chooseChromePath is only available in Electron environment");
+  }
+
+  return electronAPI.chooseChromePath();
+}

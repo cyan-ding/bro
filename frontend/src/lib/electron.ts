@@ -9,6 +9,7 @@ declare global {
   interface Window {
     electronAPI?: {
       findChromePath: () => Promise<string[]>;
+      chooseChromePath: () => Promise<string | null>;
       getSettings: () => Promise<UserSettings>;
       updateSettings: (settings: UserSettings) => Promise<UserSettings>;
     };
@@ -36,6 +37,17 @@ export async function findChromePath(): Promise<string[]> {
   }
   
   return window.electronAPI!.findChromePath();
+}
+
+/**
+ * Open file picker to choose Chrome executable.
+ */
+export async function chooseChromePath(): Promise<string | null> {
+  if (!isElectron()) {
+    throw new Error("chooseChromePath is only available in Electron environment");
+  }
+
+  return window.electronAPI!.chooseChromePath();
 }
 
 /**

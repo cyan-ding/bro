@@ -2,8 +2,9 @@
 import { Button } from "@/components/ui/button";
 import { UserSettings } from "@/lib/models";
 import { useConfigStore } from "@/store/useConfigStore";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { findChromePath, chooseChromePath } from "@/lib/settings";
 
 interface Settings {
   settings: UserSettings;
@@ -50,22 +51,89 @@ function StartStep({ settings, updateSettings }: Settings) {
 
 
 function ChromeStep({ settings, updateSettings }: Settings) {
-  return <>
-    <h1>Bro uses Chrome to run its browser agent. Lets check if you have chrome installed</h1>
-    <Button
-      variant="outline"
-      aria-label="Submit"
-      onClick={() => updateSettings({ ...settings, step: settings.step + 1 })}
-    >
-      Continue
-    </Button>
-  </>
+  const [detectedPath, setDetectedPath] = useState<string | null>(settings.chrome_path);
+  const [detecting, setDetecting] = useState(false);
+
+  const autoDetect = useCallback(async () => {
+    if (settings.chrome_path) {
+      setDetectedPath(settings.chrome_path);
+      return;
+    }
+    setDetecting(true);
+    try {
+      const paths = await findChromePath();
+      if (paths.length) {
+        setDetectedPath(paths[0]);
+      }
+    } catch (error) {
+      // ignore if detection is unavailable (e.g., non-Electron env)
+    } finally {
+      setDetecting(false);
+    }
+  }, [settings.chrome_path]);
+
+  useEffect(() => {
+    void autoDetect();
+  }, [autoDetect]);
+
+  const handlePick = async () => {
+    const chosen = await chooseChromePath();
+    if (chosen) {
+      setDetectedPath(chosen);
+    }
+  };
+
+  const handleContinue = async () => {
+    await updateSettings({
+      ...settings,
+      chrome_path: detectedPath || settings.chrome_path,
+      step: settings.step + 1,
+    });
+  };
+
+  const chromeFound = Boolean(detectedPath);
+
+  return (
+    <>
+      <h1>Bro uses Chrome to run its browser agent.</h1>
+      <p className="mt-2">
+        {chromeFound
+          ? `Chrome detected at: ${detectedPath}`
+          : "We couldn't find Chrome automatically."}
+      </p>
+      {!chromeFound && (
+        <div className="mt-4 space-y-2">
+          <Button
+            variant="outline"
+            aria-label="Pick Chrome"
+            onClick={handlePick}
+          >
+            {detecting ? "Scanning..." : "Pick Chrome manually"}
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            If you don't have Chrome installed, please download it and return here.
+          </p>
+        </div>
+      )}
+      {chromeFound && (
+        <Button
+          className="mt-4"
+          variant="outline"
+          aria-label="Continue"
+          onClick={handleContinue}
+        >
+          Continue
+        </Button>
+      )}
+    </>
+  );
 }
 
 
 function LocalModelsStep({ settings, updateSettings }: Settings) {
   return <>
     <h1>Bro is compatible with all open source models on ollama. Select a few to try!</h1>
+    
     <Button
       variant="outline"
       aria-label="Submit"
