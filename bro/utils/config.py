@@ -1,14 +1,13 @@
 from pathlib import Path
 import sys
 import traceback
-from typing import List, Optional
+from typing import Optional
 import json
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class UserSettings(BaseModel):
     platform: str = sys.platform
-    downloaded_models: List[str] = Field(default_factory=list)
     preferred_model: Optional[str] = None
     chrome_path: Optional[str] = None
     step: int = 0

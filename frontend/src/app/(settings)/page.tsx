@@ -19,7 +19,7 @@ export default function Home() {
   }, [loadSettings])
 
   useEffect(() => {
-    if (settings?.step === 4) router.push("/dashboard")
+    if (settings?.step === 3) router.push("/dashboard")
   }, [settings?.step, router]) // if user has completed onboarding, send directly to dashboard. 
 
   if (!settings) return <div>Loading...</div>
@@ -28,8 +28,7 @@ export default function Home() {
     <div className="flex flex-col justify-center items-center min-h-screen">
       {settings.step === 0 && <StartStep settings={settings} updateSettings={updateSettings} />}
       {settings.step === 1 && <ChromeStep settings={settings} updateSettings={updateSettings} />}
-      {settings.step === 2 && <LocalModelsStep settings={settings} updateSettings={updateSettings} />}
-      {settings.step === 3 && <ProviderModelsStep settings={settings} updateSettings={updateSettings} />}
+      {settings.step === 2 && <ProviderModelsStep settings={settings} updateSettings={updateSettings} />}
     </div>
   )
 }
@@ -127,21 +126,6 @@ function ChromeStep({ settings, updateSettings }: Settings) {
       )}
     </>
   );
-}
-
-
-function LocalModelsStep({ settings, updateSettings }: Settings) {
-  return <>
-    <h1>Bro is compatible with all open source models on ollama. Select a few to try!</h1>
-    
-    <Button
-      variant="outline"
-      aria-label="Submit"
-      onClick={() => updateSettings({ ...settings, step: settings.step + 1 })}
-    >
-      Continue
-    </Button>
-  </>
 }
 
 function ProviderModelsStep({ settings, updateSettings }: Settings) {

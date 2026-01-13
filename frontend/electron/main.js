@@ -144,7 +144,6 @@ async function getSettings() {
     // File doesn't exist or is invalid, return defaults
     return {
       platform: os.platform(),
-      downloaded_models: [],
       preferred_model: null,
       chrome_path: null,
       step: 0,
