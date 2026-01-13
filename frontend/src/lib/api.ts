@@ -13,7 +13,6 @@ import type {
   AgentStateResponse,
   RunState,
   LogEventDB,
-  UserSettings
 } from "./models";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -170,30 +169,6 @@ export async function getLogs(runId: string): Promise<LogEventDB[]> {
 
   if (!response.ok) {
     throw new Error(`Failed to get database contents ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
-export async function getSettings(): Promise<UserSettings> {
-  const response = await fetch(`${API_BASE_URL}/settings`);
-  if (!response.ok) {
-    throw new Error(`Failed to get settings ${response.statusText}`)
-  }
-
-  return response.json();
-}
-
-export async function updateSettings(settings: UserSettings): Promise<UserSettings> {
-  const response = await fetch(`${API_BASE_URL}/settings`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json"},
-    body: JSON.stringify(settings),
-
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to update settings ${response.statusText}`)
   }
 
   return response.json();

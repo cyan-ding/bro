@@ -1,4 +1,4 @@
-import { getSettings, updateSettings } from "@/lib/api";
+import { getSettings, updateSettings } from "@/lib/settings";
 import { UserSettings } from "@/lib/models";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";

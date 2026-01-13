@@ -523,6 +523,9 @@ async def websocket_screencast(websocket: WebSocket):
         # Cleanup
         _screencast_websocket = None
 
+"""
+these settings endpoints are not actively used, the desktop directly interacts with the filesystem
+"""
 
 @app.get("/settings")
 async def get_settings():
