@@ -1,11 +1,15 @@
 # Bro
 
-**Bro** is an AI agent that autonomously interacts with the web. It takes a user-defined task, splits it into multiple subtasks to be run in parallel, which are assigned to other AI agents to complete. Bro navigates web pages using Chromium via Playwright, processes HTML, and repeatedly queries a language model (like `gpt-4o`) to decide the next action—until the task is completed.
+Bro is a locally run browser use agent inspired by [Browser-Use](https://github.com/browser-use/browser-use). 
 
-## Features
+## Functions
 
-- **Autonomous Web Navigation**: Uses Playwright to interact with web pages
-- **Multi-Agent Architecture**: Splits tasks among specialized AI agents (CEO, Manager, Worker)
-- **Computer Vision**: Integrates YOLO models for visual understanding
-- **Parallel Task Execution**: Runs multiple subtasks simultaneously for efficiency
-- **Flexible AI Backends**: Supports multiple language models (GPT, Claude, Cerebras)
+Bro is model agnostic and you can use the dashboard to view runs.
+- There is an optional Supabase integration to store data on the cloud. All data flows to your own account.
+- The default is local storage (disk).
+- Select and download open source models in the onboarding. 
+
+## Tools Used
+
+- Bro uses Playwright to interface with Chrome, and uses the Document Object Model (DOM) to find clickable elements
+- Front end is built using Next.js, backend is a simple agent loop interfacing with Fast API
