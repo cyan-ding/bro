@@ -12,6 +12,8 @@ declare global {
       chooseChromePath: () => Promise<string | null>;
       getSettings: () => Promise<UserSettings>;
       updateSettings: (settings: UserSettings) => Promise<UserSettings>;
+      writeEnvFile: (envContent: string) => Promise<{ success: boolean }>;
+      readEnvFile: () => Promise<string>;
     };
   }
 }
@@ -77,4 +79,33 @@ export async function updateSettings(settings: UserSettings): Promise<UserSettin
   }
   
   return window.electronAPI!.updateSettings(settings);
+}
+
+/**
+ * Write environment variables to .env file.
+ * 
+ * @param envContent - Raw .env file content as string
+ * @returns Success indicator
+ * @throws Error if not running in Electron or if IPC fails
+ */
+export async function writeEnvFile(envContent: string): Promise<{ success: boolean }> {
+  if (!isElectron()) {
+    throw new Error("writeEnvFile is only available in Electron environment");
+  }
+  
+  return window.electronAPI!.writeEnvFile(envContent);
+}
+
+/**
+ * Read environment variables from .env file.
+ * 
+ * @returns Raw .env file content as string
+ * @throws Error if not running in Electron or if IPC fails
+ */
+export async function readEnvFile(): Promise<string> {
+  if (!isElectron()) {
+    throw new Error("readEnvFile is only available in Electron environment");
+  }
+  
+  return window.electronAPI!.readEnvFile();
 }

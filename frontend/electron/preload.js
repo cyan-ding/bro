@@ -12,4 +12,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   chooseChromePath: () => ipcRenderer.invoke('choose-chrome-path'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.invoke('update-settings', settings),
+  writeEnvFile: (envContent) => ipcRenderer.invoke('write-env-file', envContent),
+  readEnvFile: () => ipcRenderer.invoke('read-env-file'),
 });

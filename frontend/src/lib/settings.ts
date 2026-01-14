@@ -74,3 +74,27 @@ export async function chooseChromePath(): Promise<string | null> {
 
   return electronAPI.chooseChromePath();
 }
+
+/**
+ * Write environment variables to .env file.
+ * Only available in Electron environment.
+ */
+export async function writeEnvFile(envContent: string): Promise<void> {
+  if (!electronAPI.isElectron()) {
+    throw new Error("writeEnvFile is only available in Electron environment");
+  }
+  
+  await electronAPI.writeEnvFile(envContent);
+}
+
+/**
+ * Read environment variables from .env file.
+ * Only available in Electron environment.
+ */
+export async function readEnvFile(): Promise<string> {
+  if (!electronAPI.isElectron()) {
+    throw new Error("readEnvFile is only available in Electron environment");
+  }
+  
+  return electronAPI.readEnvFile();
+}

@@ -115,7 +115,6 @@ export interface RunState {
 }
 
 export interface UserSettings {
-  platform: string;
   preferred_model: string | null;
   chrome_path: string | null;
   step: number;

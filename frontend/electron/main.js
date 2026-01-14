@@ -143,7 +143,6 @@ async function getSettings() {
   } catch (e) {
     // File doesn't exist or is invalid, return defaults
     return {
-      platform: os.platform(),
       preferred_model: null,
       chrome_path: null,
       step: 0,
@@ -164,6 +163,35 @@ async function updateSettings(settings) {
   return settings;
 }
 
+async function writeEnvFile(envContent) {
+  try {
+    const envDir = path.join(os.homedir(), '.bro');
+    const envFile = path.join(envDir, '.env');
+    
+    // Ensure directory exists
+    await fsPromises.mkdir(envDir, { recursive: true });
+    
+    // Write .env file content directly
+    await fsPromises.writeFile(envFile, envContent, 'utf8');
+    return { success: true };
+  } catch (error) {
+    console.error('Error in writeEnvFile:', error);
+    throw error;
+  }
+}
+
+async function readEnvFile() {
+  const envFile = path.join(os.homedir(), '.bro', '.env');
+  
+  try {
+    const content = await fsPromises.readFile(envFile, 'utf8');
+    return content;
+  } catch (e) {
+    // File doesn't exist, return empty string
+    return '';
+  }
+}
+
 // Register IPC handlers
 ipcMain.handle('find-chrome-path', () => {
   return findChromePath();
@@ -179,4 +207,17 @@ ipcMain.handle('get-settings', async () => {
 
 ipcMain.handle('update-settings', async (event, settings) => {
   return await updateSettings(settings);
+});
+
+ipcMain.handle('write-env-file', async (event, envContent) => {
+  try {
+    return await writeEnvFile(envContent);
+  } catch (error) {
+    console.error('Error writing .env file:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('read-env-file', async () => {
+  return await readEnvFile();
 });

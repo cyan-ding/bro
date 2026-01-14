@@ -1,5 +1,4 @@
 from pathlib import Path
-import sys
 import traceback
 from typing import Optional
 import json
@@ -7,7 +6,6 @@ from pydantic import BaseModel
 
 
 class UserSettings(BaseModel):
-    platform: str = sys.platform
     preferred_model: Optional[str] = None
     chrome_path: Optional[str] = None
     step: int = 0
