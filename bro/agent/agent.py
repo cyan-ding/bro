@@ -9,7 +9,7 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from api.models import RunState
-from dotenv import load_dotenv
+from utils.env_loader import load_env_files
 from patchright.async_api import Page, async_playwright
 from utils.db import save_run_state
 
@@ -64,7 +64,7 @@ class Agent:
         self.run_info = run_info
         # Initialize agent state
         self.agent_state = AgentState()
-        load_dotenv()
+        load_env_files()
 
     async def _parse_structured_json(
         self, llm_response: Any

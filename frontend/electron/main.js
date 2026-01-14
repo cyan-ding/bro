@@ -143,6 +143,7 @@ async function getSettings() {
   } catch (e) {
     // File doesn't exist or is invalid, return defaults
     return {
+      selected_models: [],
       preferred_model: null,
       chrome_path: null,
       step: 0,

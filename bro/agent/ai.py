@@ -1,5 +1,5 @@
 from typing import Any, Dict
-from dotenv import load_dotenv
+from utils.env_loader import load_env_files
 import litellm
 
 
@@ -13,7 +13,7 @@ async def ai(params: Dict[str, Any]):
     Returns:
         Chat completion response from LiteLLM
     """
-    load_dotenv()
+    load_env_files()
     try:
         response = await litellm.acompletion(**params)
         return response

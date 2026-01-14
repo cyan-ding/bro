@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${GeistSans.className} ${GeistMono.className}`}>
-      <body>
+      <body suppressHydrationWarning={true}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

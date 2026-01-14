@@ -3,14 +3,14 @@ from typing import Optional
 
 from api.models import LogEvent, RunState
 from api.run_info import RunInfo
-from dotenv import load_dotenv
+from utils.env_loader import load_env_files
 from supabase import AsyncClient, create_async_client
 
 _supabase_client: Optional[AsyncClient] = None
 
 
 async def get_supabase() -> AsyncClient:
-    load_dotenv()
+    load_env_files()
     global _supabase_client
 
     if _supabase_client is None:

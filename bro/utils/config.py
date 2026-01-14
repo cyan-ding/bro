@@ -1,12 +1,13 @@
 from pathlib import Path
 import traceback
-from typing import Optional
+from typing import Optional, List
 import json
 from pydantic import BaseModel
 
 
 class UserSettings(BaseModel):
     preferred_model: Optional[str] = None
+    selected_models: List[str] = []
     chrome_path: Optional[str] = None
     step: int = 0
 

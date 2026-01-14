@@ -1,5 +1,3 @@
-import { MarketingNavbar } from "@/components/ui/marketing-navbar";
-
 export default function SettingsLayout({
   children,
 }: {

@@ -527,6 +527,32 @@ async def websocket_screencast(websocket: WebSocket):
 these settings endpoints are not actively used, the desktop directly interacts with the filesystem
 """
 
+@app.post("/models/validate")
+async def get_valid_models():
+    """
+    Get valid models based on environment variables.
+    Uses LiteLLM's get_valid_models() to check which models are accessible
+    with the current API keys.
+    
+    Returns:
+        Dictionary with list of valid model names
+    """
+    from litellm import get_valid_models
+    from utils.env_loader import load_env_files
+    
+    # Load environment variables (repo .env and ~/.bro/.env)
+    load_env_files()
+    
+    try:
+        valid_models = get_valid_models(check_provider_endpoint=True)
+        return {"models": valid_models}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to get valid models: {str(e)}"
+        )
+
+
 @app.get("/settings")
 async def get_settings():
     settings = UserSettings.load()
