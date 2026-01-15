@@ -37,13 +37,12 @@ export default function Home() {
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [stepCompletion, setStepCompletion] = useState<boolean[]>([true, false, false, false]);
-
+  const isEditMode = searchParams.get("edit") === "true";
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
 
   useEffect(() => {
-    const isEditMode = searchParams.get("edit") === "true";
     if (settings?.step === 4 && !isEditMode) router.push("/dashboard");
   }, [settings?.step, router, searchParams]);
 
@@ -164,6 +163,11 @@ export default function Home() {
           <CarouselNext className="right-4" disabled={!stepCompletion[current]} onClick={() => api?.scrollNext()} /> // override normal carousel behavior with api
         )}
       </Carousel>
+      {isEditMode ?
+        <Button onClick={() => router.push("/dashboard")}>
+          Go back
+        </Button> : <div></div>
+      }
     </div>
   );
 }
