@@ -102,13 +102,19 @@ async def root():
 @app.get("/runs", response_model=List[ListRunsResponse])
 async def list_runs():
     """
-    get run information from database
+    get run information from database or local storage
     """
+    from utils.db import get_storage_mode, list_local_runs
 
-    db = await get_supabase()
-    runs = await db.table("runs").select("id, status, title, completed_at").execute()
+    storage_mode = get_storage_mode()
 
-    return runs.data
+    if storage_mode == "local":
+        runs = await list_local_runs()
+        return runs
+    else:
+        db = await get_supabase()
+        runs = await db.table("runs").select("id, status, title, completed_at").execute()
+        return runs.data
 
 
 @app.post("/runs", response_model=CreateRunResponse)
@@ -201,22 +207,39 @@ async def stream_run_logs(run_id: str):
 @app.get("/runs/{run_id}", response_model=RunState)
 async def get_run(run_id: str) -> RunState:
     """get the data of one run"""
+    from utils.db import get_storage_mode, get_local_run
 
-    supabase = await get_supabase()
+    storage_mode = get_storage_mode()
 
-    run_data = await supabase.table("runs").select("*").eq("id", run_id).execute().data
+    if storage_mode == "local":
+        run_data = await get_local_run(run_id)
+        if not run_data:
+            raise HTTPException(status_code=404, detail="Run not found")
+        return run_data
+    else:
+        supabase = await get_supabase()
+        run_data = await supabase.table("runs").select("*").eq("id", run_id).execute()
 
-    if not run_data:
-        raise HTTPException(status_code=404, detail="Run not found")
+        if not run_data.data:
+            raise HTTPException(status_code=404, detail="Run not found")
 
-    return run_data
+        return run_data.data[0]
 
 
 @app.get("/runs/{run_id}/logs", response_model=List[LogEventDB])
 async def get_logs(run_id: str):
-    """get logs from supabase"""
-    db = await get_supabase()
-    return await db.table("run_logs").select("*").eq("run_id", run_id)
+    """get logs from supabase or local storage"""
+    from utils.db import get_storage_mode, get_local_logs
+
+    storage_mode = get_storage_mode()
+
+    if storage_mode == "local":
+        logs = await get_local_logs(run_id)
+        return logs
+    else:
+        db = await get_supabase()
+        result = await db.table("run_logs").select("*").eq("run_id", run_id).execute()
+        return result.data
 
 
 @app.get("/runs/{run_id}/state", response_model=AgentStateResponse)

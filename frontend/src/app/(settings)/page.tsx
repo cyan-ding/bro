@@ -4,6 +4,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { toast } from "sonner";
 import {
   Carousel,
   CarouselContent,
@@ -36,14 +40,14 @@ export default function Home() {
   const searchParams = useSearchParams();
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
-  const [stepCompletion, setStepCompletion] = useState<boolean[]>([true, false, false, false]);
+  const [stepCompletion, setStepCompletion] = useState<boolean[]>([true, false, false, false, false]);
   const isEditMode = searchParams.get("edit") === "true";
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
 
   useEffect(() => {
-    if (settings?.step === 4 && !isEditMode) router.push("/dashboard");
+    if (settings?.step === 5 && !isEditMode) router.push("/dashboard");
   }, [settings?.step, router, searchParams]);
 
   // Initialize completion state based on existing settings
@@ -53,10 +57,11 @@ export default function Home() {
         true, // Step 0 is always completable
         Boolean(settings.chrome_path) || settings.step > 1, // Step 1 completed if chrome_path exists
         settings.step > 2, // Step 2 completed if we've progressed past it
-        (settings.selected_models?.length ?? 0) > 0 || settings.step > 3, // Step 3 completed if models selected
+        Boolean(settings.storage_mode) || settings.step > 3, // Step 3 completed if storage mode selected
+        (settings.selected_models?.length ?? 0) > 0 || settings.step > 4, // Step 4 completed if models selected
       ]);
     }
-  }, [settings?.chrome_path, settings?.step, settings?.selected_models]);
+  }, [settings?.chrome_path, settings?.step, settings?.storage_mode, settings?.selected_models]);
 
   // if user goes back, only update current
   useEffect(() => {
@@ -106,7 +111,7 @@ export default function Home() {
   };
 
   const canGoBack = current > 0;
-  const canGoNext = current < 3 && stepCompletion[current];
+  const canGoNext = current < 4 && stepCompletion[current];
 
   return (
     <div className="flex flex-col justify-center items-center min-h-screen p-8">
@@ -147,12 +152,21 @@ export default function Home() {
             />
           </CarouselItem>
           <CarouselItem>
-            <ProviderModelsStep
+            <StorageStep
               settings={settings}
               updateSettings={updateSettings}
               onComplete={() => handleStepComplete(4)}
               onBack={handleBack}
               onCompletionChange={(isCompleted) => handleCompletionChange(3, isCompleted)}
+            />
+          </CarouselItem>
+          <CarouselItem>
+            <ProviderModelsStep
+              settings={settings}
+              updateSettings={updateSettings}
+              onComplete={() => handleStepComplete(5)}
+              onBack={handleBack}
+              onCompletionChange={(isCompleted) => handleCompletionChange(4, isCompleted)}
             />
           </CarouselItem>
         </CarouselContent>
@@ -206,7 +220,7 @@ function ChromeStep({ settings, updateSettings, onComplete, onCompletionChange }
         setDetectedPath(paths[0]);
       }
     } catch (error) {
-      // ignore if detection is unavailable (e.g., non-Electron env)
+      toast.error("Failed to detect Chrome automatically. Please select it manually.");
     } finally {
       setDetecting(false);
     }
@@ -217,9 +231,14 @@ function ChromeStep({ settings, updateSettings, onComplete, onCompletionChange }
   }, [autoDetect]);
 
   const handlePick = async () => {
-    const chosen = await chooseChromePath();
-    if (chosen) {
-      setDetectedPath(chosen);
+    try {
+      const chosen = await chooseChromePath();
+      if (chosen) {
+        setDetectedPath(chosen);
+        toast.success("Chrome path selected successfully");
+      }
+    } catch (error) {
+      toast.error("Failed to select Chrome path");
     }
   };
 
@@ -278,7 +297,7 @@ function EnvVarsStep({ settings, updateSettings, onComplete, onCompletionChange 
         const content = await readEnvFile();
         setEnvText(content);
       } catch (error) {
-        // Ignore if not in Electron environment
+        toast.error("Failed to load environment variables. You can still add them manually.");
       }
     }
     void loadEnvVars();
@@ -292,9 +311,10 @@ function EnvVarsStep({ settings, updateSettings, onComplete, onCompletionChange 
         ...settings,
         step: Math.max(settings.step, 2),
       });
+      toast.success("Environment variables saved successfully");
       onComplete();
     } catch (error) {
-      // Handle error - could show a toast notification
+      toast.error(error instanceof Error ? error.message : "Failed to save environment variables");
     } finally {
       setLoading(false);
     }
@@ -326,6 +346,126 @@ GOOGLE_API_KEY=..."
   );
 }
 
+function StorageStep({ settings, updateSettings, onComplete, onCompletionChange }: StepProps) {
+  const [storageMode, setStorageMode] = useState<string>(settings.storage_mode || "local");
+  const [supabaseUrl, setSupabaseUrl] = useState<string>(settings.supabase_url || "");
+  const [supabaseApiKey, setSupabaseApiKey] = useState<string>(settings.supabase_api_key || "");
+
+  useEffect(() => {
+    const isCompleted =
+      storageMode === "local" ||
+      (storageMode === "cloud" && supabaseUrl.trim() !== "" && supabaseApiKey.trim() !== "");
+    onCompletionChange?.(isCompleted);
+  }, [storageMode, supabaseUrl, supabaseApiKey]);
+
+  const handleContinue = async () => {
+    try {
+      await updateSettings({
+        ...settings,
+        storage_mode: storageMode,
+        supabase_url: storageMode === "cloud" ? supabaseUrl : undefined,
+        supabase_api_key: storageMode === "cloud" ? supabaseApiKey : undefined,
+        step: Math.max(settings.step, 3),
+      });
+      toast.success(`Storage mode set to ${storageMode === "local" ? "local" : "cloud"}`);
+      onComplete();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save storage settings");
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 px-4">
+      <h1 className="text-2xl font-bold text-center">Choose Storage Type</h1>
+      <p className="text-sm text-muted-foreground text-center max-w-2xl">
+        Select how you want to store your runs and logs. Local storage is private and works offline.
+        Cloud storage allows access from multiple devices.
+      </p>
+
+      <RadioGroup
+        value={storageMode}
+        onValueChange={setStorageMode}
+        className="w-full max-w-2xl space-y-4"
+      >
+        <Card
+          className={`cursor-pointer transition-colors ${
+            storageMode === "local" ? "border-primary" : ""
+          }`}
+          onClick={() => setStorageMode("local")}
+        >
+          <CardHeader>
+            <div className="flex items-start space-x-3">
+              <RadioGroupItem value="local" id="local" />
+              <div>
+                <CardTitle>Local Storage</CardTitle>
+                <CardDescription>
+                  Store runs and logs locally on your machine. Private and works offline.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-colors ${
+            storageMode === "cloud" ? "border-primary" : ""
+          }`}
+          onClick={() => setStorageMode("cloud")}
+        >
+          <CardHeader>
+            <div className="flex items-start space-x-3">
+              <RadioGroupItem value="cloud" id="cloud" />
+              <div className="flex-1">
+                <CardTitle>Cloud Storage (Supabase)</CardTitle>
+                <CardDescription>
+                  Store runs and logs in your Supabase database. Accessible from anywhere.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          {storageMode === "cloud" && (
+            <CardContent className="space-y-3">
+              <div>
+                <Label htmlFor="supabase-url" className="text-sm">Supabase URL</Label>
+                <Input
+                  id="supabase-url"
+                  type="text"
+                  value={supabaseUrl}
+                  onChange={(e) => setSupabaseUrl(e.target.value)}
+                  placeholder="https://your-project.supabase.co"
+                  className="mt-1"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div>
+                <Label htmlFor="supabase-key" className="text-sm">Supabase API Key</Label>
+                <Input
+                  id="supabase-key"
+                  type="password"
+                  value={supabaseApiKey}
+                  onChange={(e) => setSupabaseApiKey(e.target.value)}
+                  placeholder="Your anon/service key"
+                  className="mt-1"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      </RadioGroup>
+
+      <Button
+        variant="outline"
+        aria-label="Continue"
+        onClick={handleContinue}
+        disabled={storageMode === "cloud" && (!supabaseUrl.trim() || !supabaseApiKey.trim())}
+      >
+        Continue
+      </Button>
+    </div>
+  );
+}
+
 function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletionChange }: StepProps) {
   const [validModels, setValidModels] = useState<string[]>([]);
   const [selectedModels, setSelectedModels] = useState<string[]>(settings.selected_models || []);
@@ -347,7 +487,9 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
         const response = await getValidModels();
         setValidModels(response.models || []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load models");
+        const errorMessage = err instanceof Error ? err.message : "Failed to load models";
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -429,7 +571,7 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
         onClick={handleContinue}
         disabled={validModels.length > 0 && selectedModels.length === 0}
       >
-        Continue
+        Continue to Dashboard
       </Button>
     </div>
   );

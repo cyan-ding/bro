@@ -10,6 +10,9 @@ class UserSettings(BaseModel):
     selected_models: List[str] = []
     chrome_path: Optional[str] = None
     step: int = 0
+    storage_mode: str = "local"
+    supabase_url: Optional[str] = None
+    supabase_api_key: Optional[str] = None
 
     def save(self) -> str:
         """save settings to file"""
