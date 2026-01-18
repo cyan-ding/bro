@@ -118,8 +118,8 @@ export interface UserSettings {
   selected_models: string[];
   preferred_model: string | null;
   chrome_path: string | null;
-  step: number;
   storage_mode?: string;
   supabase_url?: string;
   supabase_api_key?: string;
+  initialized?: boolean;
 }

@@ -2,9 +2,16 @@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
@@ -30,8 +37,8 @@ interface Settings {
 
 interface StepProps extends Settings {
   onComplete: () => void;
-  onBack: () => void;
-  onCompletionChange?: (isCompleted: boolean) => void;
+  onCompletionChange: (isCompleted: boolean) => void;
+  env?: string | undefined;
 }
 
 export default function Home() {
@@ -41,49 +48,62 @@ export default function Home() {
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [stepCompletion, setStepCompletion] = useState<boolean[]>([true, false, false, false, false]);
+  const [env, setEnv] = useState("")
   const isEditMode = searchParams.get("edit") === "true";
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
 
+  // pull the env variables so we can make sure the user has them
   useEffect(() => {
-    if (settings?.step === 5 && !isEditMode) router.push("/dashboard");
-  }, [settings?.step, router, searchParams]);
+    async function loadEnvVars() {
+      try {
+        const content = await readEnvFile();
+        setEnv(content);
+      } catch (error) {
+        toast.error("Failed to load environment variables. You can still add them manually.");
+      }
+    }
+    void loadEnvVars();
+  }, []);
 
   // Initialize completion state based on existing settings
   useEffect(() => {
     if (settings) {
       setStepCompletion([
-        true, // Step 0 is always completable
-        Boolean(settings.chrome_path) || settings.step > 1, // Step 1 completed if chrome_path exists
-        settings.step > 2, // Step 2 completed if we've progressed past it
-        Boolean(settings.storage_mode) || settings.step > 3, // Step 3 completed if storage mode selected
-        (settings.selected_models?.length ?? 0) > 0 || settings.step > 4, // Step 4 completed if models selected
+        settings.initialized ?? false, // Step 0 is always completable
+        Boolean(settings.chrome_path), // chrome path exists
+        env !== "", // env vars loaded
+        Boolean(settings.storage_mode), // Step 3 completed if storage mode selected
+        (settings.selected_models?.length ?? 0) > 0, // Step 4 completed if models selected
       ]);
     }
-  }, [settings?.chrome_path, settings?.step, settings?.storage_mode, settings?.selected_models]);
+    console.log(stepCompletion)
+  }, [settings?.chrome_path, settings?.storage_mode, settings?.selected_models, env]);
 
-  // if user goes back, only update current
   useEffect(() => {
     if (!api) {
       return;
     }
 
     setCurrent(api.selectedScrollSnap());
+    console.log('[CAROUSEL] Initial current index:', api.selectedScrollSnap());
 
     api.on("select", () => {
-      setCurrent(api.selectedScrollSnap());
+      const newIndex = api.selectedScrollSnap();
+      console.log('[CAROUSEL] Select event - new index:', newIndex);
+      setCurrent(newIndex);
     });
   }, [api]);
 
-  // allow for custom forward/backward func
+  // Log the carousel position when it initializes
   useEffect(() => {
-    if (api && settings) {
-      api.scrollTo(settings.step);
+    if (api) {
+      console.log('[CAROUSEL INIT] Carousel initialized at position:', api.selectedScrollSnap());
     }
-  }, [api, settings?.step]);
+  }, [api]);
 
-  const handleCompletionChange = useCallback((stepIndex: number, isCompleted: boolean) => {
+  const handleStepCompleted = useCallback((stepIndex: number, isCompleted: boolean) => {
     setStepCompletion((prev) => {
       const newState = [...prev];
       newState[stepIndex] = isCompleted;
@@ -93,12 +113,10 @@ export default function Home() {
 
   if (!settings) return <div>Loading...</div>;
 
-  // only update settings if moving forward
-  const handleStepComplete = async (nextStep: number) => {
-    await updateSettings({
-      ...settings,
-      step: nextStep,
-    });
+  // Move to next step in carousel
+  const handleForward = (nextStep: number) => {
+    console.log('[HANDLE FORWARD] Called with nextStep:', nextStep);
+    console.trace('[HANDLE FORWARD] Stack trace');
     if (api) {
       api.scrollTo(nextStep);
     }
@@ -112,6 +130,8 @@ export default function Home() {
 
   const canGoBack = current > 0;
   const canGoNext = current < 4 && stepCompletion[current];
+
+  console.log('[RENDER] current:', current, 'canGoBack:', canGoBack, 'canGoNext:', canGoNext);
 
   return (
     <div className="flex flex-col justify-center items-center min-h-screen p-8">
@@ -128,45 +148,41 @@ export default function Home() {
             <StartStep
               settings={settings}
               updateSettings={updateSettings}
-              onComplete={() => handleStepComplete(1)}
-              onBack={handleBack}
-              onCompletionChange={(isCompleted) => handleCompletionChange(0, isCompleted)}
+              onComplete={() => handleForward(1)}
+              onCompletionChange={(isCompleted) => handleStepCompleted(0, isCompleted)}
             />
           </CarouselItem>
           <CarouselItem>
             <ChromeStep
               settings={settings}
               updateSettings={updateSettings}
-              onComplete={() => handleStepComplete(2)}
-              onBack={handleBack}
-              onCompletionChange={(isCompleted) => handleCompletionChange(1, isCompleted)}
+              onComplete={() => handleForward(2)}
+              onCompletionChange={(isCompleted) => handleStepCompleted(1, isCompleted)}
             />
           </CarouselItem>
           <CarouselItem>
             <EnvVarsStep
               settings={settings}
               updateSettings={updateSettings}
-              onComplete={() => handleStepComplete(3)}
-              onBack={handleBack}
-              onCompletionChange={(isCompleted) => handleCompletionChange(2, isCompleted)}
+              onComplete={() => handleForward(3)}
+              onCompletionChange={(isCompleted) => handleStepCompleted(2, isCompleted)}
+              env={env}
             />
           </CarouselItem>
           <CarouselItem>
             <StorageStep
               settings={settings}
               updateSettings={updateSettings}
-              onComplete={() => handleStepComplete(4)}
-              onBack={handleBack}
-              onCompletionChange={(isCompleted) => handleCompletionChange(3, isCompleted)}
+              onComplete={() => handleForward(4)}
+              onCompletionChange={(isCompleted) => handleStepCompleted(3, isCompleted)}
             />
           </CarouselItem>
           <CarouselItem>
             <ProviderModelsStep
               settings={settings}
               updateSettings={updateSettings}
-              onComplete={() => handleStepComplete(5)}
-              onBack={handleBack}
-              onCompletionChange={(isCompleted) => handleCompletionChange(4, isCompleted)}
+              onComplete={() => router.push("/dashboard")}
+              onCompletionChange={(isCompleted) => handleStepCompleted(4, isCompleted)}
             />
           </CarouselItem>
         </CarouselContent>
@@ -186,13 +202,22 @@ export default function Home() {
   );
 }
 
-function StartStep({ onComplete }: StepProps) {
+function StartStep({ settings, updateSettings, onComplete }: StepProps) {
+  const handleStart = async () => {
+    // Set initialized to true when user starts onboarding
+    await updateSettings({
+      ...settings,
+      initialized: true,
+    });
+    onComplete();
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
       <h1 className="text-2xl font-bold text-center">
         Welcome to Bro, the free, open source, web browser agent dashboard!
       </h1>
-      <Button variant="outline" aria-label="Submit" onClick={onComplete}>
+      <Button variant="outline" aria-label="Submit" onClick={handleStart}>
         Start Onboarding Now!
       </Button>
     </div>
@@ -205,7 +230,7 @@ function ChromeStep({ settings, updateSettings, onComplete, onCompletionChange }
 
   useEffect(() => {
     const chromeFound = Boolean(detectedPath);
-    onCompletionChange?.(chromeFound);
+    onCompletionChange(chromeFound);
   }, [detectedPath]);
 
   const autoDetect = useCallback(async () => {
@@ -246,7 +271,6 @@ function ChromeStep({ settings, updateSettings, onComplete, onCompletionChange }
     await updateSettings({
       ...settings,
       chrome_path: detectedPath || settings.chrome_path,
-      step: Math.max(settings.step, 1),
     });
     onComplete();
   };
@@ -280,37 +304,20 @@ function ChromeStep({ settings, updateSettings, onComplete, onCompletionChange }
   );
 }
 
-function EnvVarsStep({ settings, updateSettings, onComplete, onCompletionChange }: StepProps) {
-  const [envText, setEnvText] = useState<string>("");
+function EnvVarsStep({ onComplete, onCompletionChange, env }: StepProps) {
+  const [envText, setEnvText] = useState<string>(env ?? "");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     // Step is completed if there's content in envText
     const isCompleted = envText.trim().length > 0;
-    onCompletionChange?.(isCompleted);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    onCompletionChange(isCompleted);
   }, [envText]);
-
-  useEffect(() => {
-    async function loadEnvVars() {
-      try {
-        const content = await readEnvFile();
-        setEnvText(content);
-      } catch (error) {
-        toast.error("Failed to load environment variables. You can still add them manually.");
-      }
-    }
-    void loadEnvVars();
-  }, []);
 
   const handleContinue = async () => {
     setLoading(true);
     try {
       await writeEnvFile(envText);
-      await updateSettings({
-        ...settings,
-        step: Math.max(settings.step, 2),
-      });
       toast.success("Environment variables saved successfully");
       onComplete();
     } catch (error) {
@@ -331,8 +338,8 @@ function EnvVarsStep({ settings, updateSettings, onComplete, onCompletionChange 
         onChange={(e) => setEnvText(e.target.value)}
         className="w-full max-w-2xl h-64 text-sm"
         placeholder="OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_API_KEY=..."
+        ANTHROPIC_API_KEY=sk-ant-...
+        GOOGLE_API_KEY=..."
       />
       <Button
         variant="outline"
@@ -347,7 +354,7 @@ GOOGLE_API_KEY=..."
 }
 
 function StorageStep({ settings, updateSettings, onComplete, onCompletionChange }: StepProps) {
-  const [storageMode, setStorageMode] = useState<string>(settings.storage_mode || "local");
+  const [storageMode, setStorageMode] = useState<string>(settings.storage_mode || "");
   const [supabaseUrl, setSupabaseUrl] = useState<string>(settings.supabase_url || "");
   const [supabaseApiKey, setSupabaseApiKey] = useState<string>(settings.supabase_api_key || "");
 
@@ -355,7 +362,7 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
     const isCompleted =
       storageMode === "local" ||
       (storageMode === "cloud" && supabaseUrl.trim() !== "" && supabaseApiKey.trim() !== "");
-    onCompletionChange?.(isCompleted);
+    onCompletionChange(isCompleted);
   }, [storageMode, supabaseUrl, supabaseApiKey]);
 
   const handleContinue = async () => {
@@ -365,7 +372,6 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
         storage_mode: storageMode,
         supabase_url: storageMode === "cloud" ? supabaseUrl : undefined,
         supabase_api_key: storageMode === "cloud" ? supabaseApiKey : undefined,
-        step: Math.max(settings.step, 3),
       });
       toast.success(`Storage mode set to ${storageMode === "local" ? "local" : "cloud"}`);
       onComplete();
@@ -388,9 +394,8 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
         className="w-full max-w-2xl space-y-4"
       >
         <Card
-          className={`cursor-pointer transition-colors ${
-            storageMode === "local" ? "border-primary" : ""
-          }`}
+          className={`cursor-pointer transition-colors ${storageMode === "local" ? "border-primary" : ""
+            }`}
           onClick={() => setStorageMode("local")}
         >
           <CardHeader>
@@ -407,9 +412,8 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
         </Card>
 
         <Card
-          className={`cursor-pointer transition-colors ${
-            storageMode === "cloud" ? "border-primary" : ""
-          }`}
+          className={`cursor-pointer transition-colors ${storageMode === "cloud" ? "border-primary" : ""
+            }`}
           onClick={() => setStorageMode("cloud")}
         >
           <CardHeader>
@@ -475,7 +479,7 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
   useEffect(() => {
     // Step is completed if models are selected or there's an error
     const isCompleted = selectedModels.length > 0 || error !== null;
-    onCompletionChange?.(isCompleted);
+    onCompletionChange(isCompleted);
   }, [selectedModels, error]);
 
 
@@ -507,10 +511,8 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
     await updateSettings({
       ...settings,
       selected_models: selectedModels,
-      step: Math.max(settings.step, 3),
     });
     onComplete();
-    onCompletionChange?.(true);
   };
 
   if (loading) {
@@ -545,25 +547,33 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
           : "No models found. Please check your API keys in the previous step."}
       </p>
       {validModels.length > 0 && (
-        <ScrollArea className="w-full h-96 border rounded-md p-4">
-          <div className="space-y-3">
-            {validModels.map((model) => (
-              <div key={model} className="flex items-center space-x-2">
-                <Checkbox
-                  id={model}
-                  checked={selectedModels.includes(model)}
-                  onCheckedChange={() => handleModelToggle(model)}
-                />
-                <Label
-                  htmlFor={model}
-                  className="text-sm font-normal cursor-pointer flex-1"
+        <Command className="border rounded-md w-full max-w-2xl">
+          <CommandInput placeholder="Search models..." />
+          <CommandList className="max-h-96">
+            <CommandEmpty>No models found.</CommandEmpty>
+            <CommandGroup>
+              {validModels.map((model) => (
+                <CommandItem
+                  key={model}
+                  onSelect={() => handleModelToggle(model)}
+                  className="flex items-center space-x-2 cursor-pointer"
                 >
-                  {model}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
+                  <Checkbox
+                    checked={selectedModels.includes(model)}
+                    onCheckedChange={() => handleModelToggle(model)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <Label
+                    htmlFor={model}
+                    className="text-sm font-normal cursor-pointer flex-1"
+                  >
+                    {model}
+                  </Label>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
       )}
       <Button
         variant="outline"

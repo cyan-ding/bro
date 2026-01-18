@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import { useAgentStore } from "@/store/useAgentStore";
+import { useConfigStore } from "@/store/useConfigStore";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon } from "lucide-react";
@@ -11,17 +12,24 @@ import { createRun, getRunList } from "@/lib/api";
 export default function Dashboard() {
   const router = useRouter();
   const { model, setModel, setRunId, setError, setRuns } = useAgentStore();
+  const { settings, loadSettings } = useConfigStore();
 
   const [prompt, setPrompt] = useState("");
   const [models, setModels] = useState({});
 
   useEffect(() => {
-    fetch("/models.json")
-      .then((res) => res.json())
-      .then((data) => {
-        setModels(data);
-      });
-  }, []);
+    loadSettings();
+  }, [loadSettings]);
+
+  useEffect(() => {
+    if (settings?.selected_models) {
+      const modelsRecord = settings.selected_models.reduce((acc, model) => {
+        acc[model] = model;
+        return acc;
+      }, {} as Record<string, string>);
+      setModels(modelsRecord);
+    }
+  }, [settings?.selected_models]);
 
   useEffect(() => {
     const fetchRuns = async () => {

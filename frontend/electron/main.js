@@ -146,7 +146,7 @@ async function getSettings() {
       selected_models: [],
       preferred_model: null,
       chrome_path: null,
-      step: 0,
+      initialized: false,
     };
   }
 }
@@ -206,11 +206,11 @@ ipcMain.handle('get-settings', async () => {
   return await getSettings();
 });
 
-ipcMain.handle('update-settings', async (event, settings) => {
+ipcMain.handle('update-settings', async (_event, settings) => {
   return await updateSettings(settings);
 });
 
-ipcMain.handle('write-env-file', async (event, envContent) => {
+ipcMain.handle('write-env-file', async (_event, envContent) => {
   try {
     return await writeEnvFile(envContent);
   } catch (error) {
