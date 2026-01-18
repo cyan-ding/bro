@@ -556,22 +556,40 @@ async def get_valid_models():
     Get valid models based on environment variables.
     Uses LiteLLM's get_valid_models() to check which models are accessible
     with the current API keys.
-    
+
     Returns:
         Dictionary with list of valid model names
     """
+    import os
+    from pathlib import Path
     from litellm import get_valid_models
     from utils.env_loader import load_env_files
-    
-    # Load environment variables (repo .env and ~/.bro/.env)
+
+
+    user_env = Path.home() / ".bro" / ".env"
+    local_env = Path(__file__).parent.parent.parent / ".env" # lwk not sure why this fixes a bug but it does :sob:
+
+    env_paths = [user_env] + ([local_env] if local_env.exists() else [])
+    for env_path in env_paths:
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key = line.split("=", 1)[0].strip()
+                        # Clear all keys that were previously defined in .env files
+                        # This ensures removed keys don't persist from previous loads
+                        os.environ.pop(key, None)
+
+    # Load environment variables fresh (~/.bro/.env)
     load_env_files()
-    
+
     try:
         valid_models = get_valid_models(check_provider_endpoint=True)
         return {"models": valid_models}
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Failed to get valid models: {str(e)}"
         )
 

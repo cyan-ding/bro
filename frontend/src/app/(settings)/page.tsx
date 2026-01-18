@@ -293,6 +293,13 @@ function EnvVarsStep({ onComplete, onCompletionChange, env }: StepProps) {
   const [envText, setEnvText] = useState<string>(env ?? "");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => { // resolves problem that EnvVarsStep component was loading in along with all other components in the carousel
+    // but the env argument was null when passed in (current != 2)
+    if (env) {
+      setEnvText(env);
+    }
+  }, [env]);
+
   const handleContinue = async () => {
     setLoading(true);
     try {
@@ -323,11 +330,11 @@ function EnvVarsStep({ onComplete, onCompletionChange, env }: StepProps) {
       />
       <Button
         variant="outline"
-        aria-label="Continue"
+        aria-label="Save and Continue"
         onClick={handleContinue}
         disabled={loading}
       >
-        {loading ? "Saving..." : "Continue"}
+        {loading ? "Saving..." : "Save and Continue"}
       </Button>
     </div>
   );

@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 
 class UserSettings(BaseModel):
-    preferred_model: Optional[str] = None
     selected_models: List[str] = []
     chrome_path: Optional[str] = None
     storage_mode: Optional[str] = None

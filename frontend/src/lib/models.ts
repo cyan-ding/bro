@@ -116,7 +116,6 @@ export interface RunState {
 
 export interface UserSettings {
   selected_models: string[];
-  preferred_model: string | null;
   chrome_path: string | null;
   storage_mode?: string;
   supabase_url?: string;

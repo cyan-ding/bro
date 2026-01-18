@@ -144,7 +144,6 @@ async function getSettings() {
     // File doesn't exist or is invalid, return defaults
     return {
       selected_models: [],
-      preferred_model: null,
       chrome_path: null,
       initialized: false,
     };
