@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { ArrowLeft } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -118,12 +119,24 @@ export default function Home() {
   const canGoNext = current < 4 && stepCompletion[current];
 
   return (
-    <div className="flex flex-col justify-center items-center min-h-screen p-8">
+    <div className="relative flex flex-col justify-center items-center min-h-screen p-8">
+      {isEditMode && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-4 left-4"
+          onClick={() => router.push("/dashboard")}
+          aria-label="Go back to dashboard"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+      )}
       <Carousel
         setApi={setApi}
         opts={{
           align: "start",
           dragFree: false,
+          watchDrag: false,
         }}
         className="w-full max-w-4xl"
       >
@@ -178,11 +191,6 @@ export default function Home() {
           <CarouselNext className="right-4" disabled={!stepCompletion[current]} onClick={() => api?.scrollNext()} /> // override normal carousel behavior with api
         )}
       </Carousel>
-      {isEditMode ?
-        <Button onClick={() => router.push("/dashboard")}>
-          Go back
-        </Button> : <div></div>
-      }
     </div>
   );
 }
@@ -271,7 +279,7 @@ function ChromeStep({ settings, updateSettings, onComplete, onCompletionChange }
           : "We couldn't find Chrome automatically."}
       </p>
       {!chromeFound && (
-        <div className="space-y-2">
+        <div className="flex flex-col items-center space-y-2">
           <Button variant="outline" aria-label="Pick Chrome" onClick={handlePick}>
             {detecting ? "Scanning..." : "Pick Chrome manually"}
           </Button>
@@ -345,13 +353,6 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
   const [supabaseUrl, setSupabaseUrl] = useState<string>(settings.supabase_url || "");
   const [supabaseApiKey, setSupabaseApiKey] = useState<string>(settings.supabase_api_key || "");
 
-  useEffect(() => {
-    const isCompleted =
-      storageMode === "local" ||
-      (storageMode === "cloud" && supabaseUrl.trim() !== "" && supabaseApiKey.trim() !== "");
-    onCompletionChange(isCompleted);
-  }, [storageMode, supabaseUrl, supabaseApiKey]);
-
   const handleContinue = async () => {
     try {
       await updateSettings({
@@ -362,6 +363,7 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
       });
       toast.success(`Storage mode set to ${storageMode === "local" ? "local" : "cloud"}`);
       onComplete();
+      onCompletionChange(true);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save storage settings");
     }
@@ -447,11 +449,11 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
 
       <Button
         variant="outline"
-        aria-label="Continue"
+        aria-label="Save and Continue"
         onClick={handleContinue}
         disabled={storageMode === "cloud" && (!supabaseUrl.trim() || !supabaseApiKey.trim())}
       >
-        Continue
+        Save and Continue
       </Button>
     </div>
   );

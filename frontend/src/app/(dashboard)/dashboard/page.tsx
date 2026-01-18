@@ -1,10 +1,14 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 import { Combobox } from "@/components/ui/combobox";
 import { useAgentStore } from "@/store/useAgentStore";
 import { useConfigStore } from "@/store/useConfigStore";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon } from "lucide-react";
 import { createRun, getRunList } from "@/lib/api";
@@ -66,36 +70,39 @@ export default function Dashboard() {
   return (
     <div className="flex justify-center items-center">
       <div className="w-1/2">
-        <Textarea
-          className="resize-none border-none max-h-48"
-          onInput={e => {
-            const target = e.currentTarget;
-            target.style.height = "auto"
-            target.style.height = `${target.scrollHeight}px`
-          }}
-          rows={4}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Message Bro"
-        />
-        <div className="bottom-0 w-full flex items-center">
-            <div className="ml-auto flex items-center">
-              <Combobox
-                options={models}
-                display={"Select a model"}
-                empty={"No model selected"}
-                setter={setModel}
-              />
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Submit"
-                onClick={() => handleStart(prompt)}
-              >
-                <ArrowUpIcon />
-              </Button>
-            </div>
-        </div>
+        <InputGroup>
+          <InputGroupTextarea
+            className="resize-none max-h-48"
+            onInput={e => {
+              const target = e.currentTarget;
+              target.style.height = "auto"
+              target.style.height = `${target.scrollHeight}px`
+            }}
+            rows={4}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Message Bro"
+          />
+          <InputGroupAddon align="block-end">
+            <Combobox
+              options={models}
+              display={"Select a model"}
+              empty={"No model selected"}
+              setter={setModel}
+              className="ml-auto"
+            />
+            <InputGroupButton
+              variant="default"
+              className="rounded-full"
+              size="icon-xs"
+              aria-label="Submit"
+              disabled={prompt == ""}
+              onClick={() => handleStart(prompt)}
+            >
+              <ArrowUpIcon />
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
       </div>
     </div>
   );

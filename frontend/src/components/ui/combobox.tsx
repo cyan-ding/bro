@@ -46,12 +46,14 @@ export function Combobox({
           aria-expanded={open}
           className={cn("w-[200px] justify-between", className)}
         >
-          {displayedValue
-            ? Object.entries(options).find(
-                ([key]) => key === displayedValue
-              )?.[0]
-            : display}
-          <ChevronsUpDown className="opacity-50" />
+          <span className="truncate mr-2">
+            {displayedValue
+              ? Object.entries(options)
+                  .find(([key]) => key === displayedValue)?.[0]
+                  ?.replace(/^[^/]*\//, "")
+              : display}
+          </span>
+          <ChevronsUpDown className="opacity-50 flex-shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className={cn("w-[200px] p-0")}>
