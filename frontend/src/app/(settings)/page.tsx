@@ -39,6 +39,7 @@ interface StepProps extends Settings {
   onComplete: () => void;
   onCompletionChange: (isCompleted: boolean) => void;
   env?: string | undefined;
+  isActive?: boolean;
 }
 
 export default function Home() {
@@ -47,7 +48,7 @@ export default function Home() {
   const searchParams = useSearchParams();
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
-  const [stepCompletion, setStepCompletion] = useState<boolean[]>([true, false, false, false, false]);
+  const [stepCompletion, setStepCompletion] = useState<boolean[]>([false, false, false, false, false]);
   const [env, setEnv] = useState("")
   const isEditMode = searchParams.get("edit") === "true";
   useEffect(() => {
@@ -64,8 +65,8 @@ export default function Home() {
         toast.error("Failed to load environment variables. You can still add them manually.");
       }
     }
-    void loadEnvVars();
-  }, []);
+    if (current === 2) void loadEnvVars();
+  }, [current]);
 
   // Initialize completion state based on existing settings
   useEffect(() => {
@@ -78,29 +79,16 @@ export default function Home() {
         (settings.selected_models?.length ?? 0) > 0, // Step 4 completed if models selected
       ]);
     }
-    console.log(stepCompletion)
-  }, [settings?.chrome_path, settings?.storage_mode, settings?.selected_models, env]);
+  }, [settings?.initialized, settings?.chrome_path, settings?.storage_mode, settings?.selected_models, env]);
 
   useEffect(() => {
     if (!api) {
       return;
     }
 
-    setCurrent(api.selectedScrollSnap());
-    console.log('[CAROUSEL] Initial current index:', api.selectedScrollSnap());
-
     api.on("select", () => {
-      const newIndex = api.selectedScrollSnap();
-      console.log('[CAROUSEL] Select event - new index:', newIndex);
-      setCurrent(newIndex);
+      setCurrent(api.selectedScrollSnap());
     });
-  }, [api]);
-
-  // Log the carousel position when it initializes
-  useEffect(() => {
-    if (api) {
-      console.log('[CAROUSEL INIT] Carousel initialized at position:', api.selectedScrollSnap());
-    }
   }, [api]);
 
   const handleStepCompleted = useCallback((stepIndex: number, isCompleted: boolean) => {
@@ -115,8 +103,6 @@ export default function Home() {
 
   // Move to next step in carousel
   const handleForward = (nextStep: number) => {
-    console.log('[HANDLE FORWARD] Called with nextStep:', nextStep);
-    console.trace('[HANDLE FORWARD] Stack trace');
     if (api) {
       api.scrollTo(nextStep);
     }
@@ -131,8 +117,6 @@ export default function Home() {
   const canGoBack = current > 0;
   const canGoNext = current < 4 && stepCompletion[current];
 
-  console.log('[RENDER] current:', current, 'canGoBack:', canGoBack, 'canGoNext:', canGoNext);
-
   return (
     <div className="flex flex-col justify-center items-center min-h-screen p-8">
       <Carousel
@@ -144,7 +128,7 @@ export default function Home() {
         className="w-full max-w-4xl"
       >
         <CarouselContent>
-          <CarouselItem>
+          <CarouselItem key={0}>
             <StartStep
               settings={settings}
               updateSettings={updateSettings}
@@ -152,7 +136,7 @@ export default function Home() {
               onCompletionChange={(isCompleted) => handleStepCompleted(0, isCompleted)}
             />
           </CarouselItem>
-          <CarouselItem>
+          <CarouselItem key={1}>
             <ChromeStep
               settings={settings}
               updateSettings={updateSettings}
@@ -160,7 +144,7 @@ export default function Home() {
               onCompletionChange={(isCompleted) => handleStepCompleted(1, isCompleted)}
             />
           </CarouselItem>
-          <CarouselItem>
+          <CarouselItem key={2}>
             <EnvVarsStep
               settings={settings}
               updateSettings={updateSettings}
@@ -169,7 +153,7 @@ export default function Home() {
               env={env}
             />
           </CarouselItem>
-          <CarouselItem>
+          <CarouselItem key={3}>
             <StorageStep
               settings={settings}
               updateSettings={updateSettings}
@@ -177,12 +161,13 @@ export default function Home() {
               onCompletionChange={(isCompleted) => handleStepCompleted(3, isCompleted)}
             />
           </CarouselItem>
-          <CarouselItem>
+          <CarouselItem key={4}>
             <ProviderModelsStep
               settings={settings}
               updateSettings={updateSettings}
               onComplete={() => router.push("/dashboard")}
               onCompletionChange={(isCompleted) => handleStepCompleted(4, isCompleted)}
+              isActive={current === 4}
             />
           </CarouselItem>
         </CarouselContent>
@@ -308,17 +293,12 @@ function EnvVarsStep({ onComplete, onCompletionChange, env }: StepProps) {
   const [envText, setEnvText] = useState<string>(env ?? "");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    // Step is completed if there's content in envText
-    const isCompleted = envText.trim().length > 0;
-    onCompletionChange(isCompleted);
-  }, [envText]);
-
   const handleContinue = async () => {
     setLoading(true);
     try {
       await writeEnvFile(envText);
       toast.success("Environment variables saved successfully");
+      onCompletionChange(true)
       onComplete();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save environment variables");
@@ -470,7 +450,7 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
   );
 }
 
-function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletionChange }: StepProps) {
+function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletionChange, isActive }: StepProps) {
   const [validModels, setValidModels] = useState<string[]>([]);
   const [selectedModels, setSelectedModels] = useState<string[]>(settings.selected_models || []);
   const [loading, setLoading] = useState(true);
@@ -482,24 +462,27 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
     onCompletionChange(isCompleted);
   }, [selectedModels, error]);
 
-
   useEffect(() => {
-    async function fetchValidModels() {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await getValidModels();
-        setValidModels(response.models || []);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to load models";
-        setError(errorMessage);
-        toast.error(errorMessage);
-      } finally {
-        setLoading(false);
+    // Only fetch models when this step becomes active and we haven't fetched yet
+    if (isActive) {
+      async function fetchValidModels() {
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await getValidModels();  
+          setValidModels(response.models || []);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : "Failed to load models";
+          setError(errorMessage);
+          toast.error(errorMessage);
+        } finally {
+          setLoading(false);
+        }
       }
+      void fetchValidModels();
     }
-    void fetchValidModels();
-  }, []);
+  }, [isActive]);
+
 
   const handleModelToggle = (model: string) => {
     setSelectedModels((prev) =>
