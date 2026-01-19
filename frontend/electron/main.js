@@ -6,7 +6,7 @@ const os = require('os');
 const { execSync } = require('child_process');
 
 const isDev = process.env.NODE_ENV === 'development';
-const iconPath = path.join(__dirname, "../../assets/bro_256.png")
+const iconPath = path.join(__dirname, "../../assets/bro_512.png")
 
 let mainWindow;
 
@@ -22,6 +22,11 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     }
   });
+
+  // Set dock icon on macOS
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(iconPath);
+  }
 
   const startUrl = isDev 
     ? 'http://localhost:3000' 
