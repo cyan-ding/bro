@@ -465,6 +465,13 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Sync selectedModels with settings when they load
+  useEffect(() => {
+    if (settings.selected_models) {
+      setSelectedModels(settings.selected_models);
+    }
+  }, [settings.selected_models]);
+
   useEffect(() => {
     // Step is completed if models are selected or there's an error
     const isCompleted = selectedModels.length > 0 || error !== null;

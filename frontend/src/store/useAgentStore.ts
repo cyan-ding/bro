@@ -7,7 +7,7 @@ import type {
   ChatMessage,
   ListRunsResponse,
   RunState
-} from "@/lib/api";
+} from "@/lib/models";
 import { createLogStream } from "@/lib/api";
 
 interface AgentStore {

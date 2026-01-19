@@ -1,4 +1,4 @@
-import { MoreVerticalIcon } from "lucide-react";
+import { MoreVerticalIcon, PlusIcon } from "lucide-react";
 
 import {
   Sidebar,
@@ -16,11 +16,19 @@ import {
 import { ListRunsResponse } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
+import { useAgentStore } from "@/store/useAgentStore";
+import { useRouter } from "next/navigation";
 
 export function AppSidebar({ runs }: { runs: ListRunsResponse[] }) {
-
+  const router = useRouter();
+  const { clearAll } = useAgentStore();
   const { theme, resolvedTheme } = useTheme();
-  const isDark = (theme ? (theme === "dark") : resolvedTheme === "dark")
+  const isDark = (theme ? (theme === "dark") : resolvedTheme === "dark");
+
+  const handleNewRun = () => {
+    clearAll();
+    router.push("/dashboard");
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -41,6 +49,18 @@ export function AppSidebar({ runs }: { runs: ListRunsResponse[] }) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <Button
+              onClick={handleNewRun}
+              className="w-full justify-start"
+              variant="default"
+            >
+              <PlusIcon className="h-4 w-4" />
+              New Run
+            </Button>
+          </SidebarGroupContent>
+        </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Recent Runs</SidebarGroupLabel>
           <SidebarGroupContent>

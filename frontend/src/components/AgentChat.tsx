@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { LogEvent, AgentStateResponse } from "@/lib/api";
+import { LogEvent, AgentStateResponse } from "@/lib/models";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAgentStore } from "@/store/useAgentStore";
-import { ChatMessage } from "@/lib/api";
+import { ChatMessage } from "@/lib/models";
 import Link from "next/link";
 
 interface AgentChatProps {
