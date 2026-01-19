@@ -56,6 +56,11 @@ export default function Home() {
     loadSettings();
   }, [loadSettings]);
 
+  useEffect(() => {
+    if (settings?.completed && !isEditMode) router.push("/dashboard")
+
+  }, [settings, isEditMode])
+
   // pull the env variables so we can make sure the user has them
   useEffect(() => {
     async function loadEnvVars() {
@@ -485,7 +490,7 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
         setLoading(true);
         setError(null);
         try {
-          const response = await getValidModels();  
+          const response = await getValidModels();
           setValidModels(response.models || []);
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : "Failed to load models";
@@ -510,6 +515,7 @@ function ProviderModelsStep({ settings, updateSettings, onComplete, onCompletion
     await updateSettings({
       ...settings,
       selected_models: selectedModels,
+      completed: true
     });
     onComplete();
   };

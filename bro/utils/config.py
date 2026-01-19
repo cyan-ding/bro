@@ -12,6 +12,7 @@ class UserSettings(BaseModel):
     supabase_url: Optional[str] = None
     supabase_api_key: Optional[str] = None
     initialized: bool = False
+    completed: bool = False
 
     def save(self) -> str:
         """save settings to file"""

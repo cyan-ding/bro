@@ -121,4 +121,5 @@ export interface UserSettings {
   supabase_url?: string;
   supabase_api_key?: string;
   initialized?: boolean;
+  completed?: boolean;
 }
