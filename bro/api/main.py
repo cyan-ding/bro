@@ -333,13 +333,54 @@ async def stop_run(run_id: str):
     return StopRunResponse(status=RunStatus.STOPPED, message="Run stopped successfully")
 
 
+@app.delete("/runs/{run_id}")
 async def delete_run(run_id: str):
-    try:
-        supabase = await get_supabase()
+    """
+    Delete a run from storage.
 
-        await supabase.table("runs").delete().eq("id", run_id).execute()
+    Args:
+        run_id: Run identifier
+
+    Returns:
+        Confirmation of deletion
+    """
+    from utils.db import get_storage_mode, delete_local_run
+
+    storage_mode = get_storage_mode()
+
+    try:
+        if storage_mode == "local":
+            success = await delete_local_run(run_id)
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Run not found or could not be deleted"
+                )
+        else:
+            supabase = await get_supabase()
+
+            # Delete run logs first (foreign key constraint)
+            await supabase.table("run_logs").delete().eq("run_id", run_id).execute()
+
+            # Delete the run
+            result = await supabase.table("runs").delete().eq("id", run_id).execute()
+
+            if not result.data:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Run not found"
+                )
+
+        return {"status": "success", "message": "Run deleted successfully"}
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print("Warning, Failed to delete run: ", e)
+        print(f"Error deleting run: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete run: {str(e)}"
+        )
 
 
 @app.post("/browser/close", response_model=CloseBrowserResponse)

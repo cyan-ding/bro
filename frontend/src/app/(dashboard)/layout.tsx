@@ -11,12 +11,12 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { runs } = useAgentStore();
+  const { runs, setRuns } = useAgentStore();
 
   return (
     <SidebarProvider>
       <div className="grid grid-cols-[auto_1fr] grid-rows-1 min-h-svh w-screen">
-        <AppSidebar runs={runs}/>
+        <AppSidebar runs={runs} setRuns={setRuns}/>
         <div className="grid grid-rows-[auto_1fr]">
           <div className="flex justify-between items-center">
             <SidebarTrigger />

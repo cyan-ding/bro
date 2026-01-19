@@ -106,6 +106,27 @@ async def list_local_runs() -> List[dict]:
     return runs
 
 
+async def delete_local_run(run_id: str) -> bool:
+    """Delete a run from local storage"""
+    storage_path = get_local_storage_path()
+    run_file = storage_path / f"{run_id}.json"
+    log_file = storage_path / f"{run_id}_logs.jsonl"
+
+    try:
+        # Delete run file
+        if run_file.exists():
+            run_file.unlink()
+
+        # Delete log file
+        if log_file.exists():
+            log_file.unlink()
+
+        return True
+    except Exception as e:
+        print(f"Error deleting local run: {e}")
+        return False
+
+
 async def save_logs(run_id: str, log_event: LogEvent):
     storage_mode = get_storage_mode()
 

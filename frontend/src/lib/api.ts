@@ -115,6 +115,19 @@ export async function stopRun(runId: string): Promise<void> {
 }
 
 /**
+ * Delete a run from storage.
+ */
+export async function deleteRun(runId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/runs/${runId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete run: ${response.statusText}`);
+  }
+}
+
+/**
  * Close the Chrome browser subprocess.
  */
 export async function closeBrowser(): Promise<void> {
@@ -151,7 +164,7 @@ export async function getRunList(): Promise<ListRunsResponse[]> {
 }
 
 export async function getRun(runId: string): Promise<RunState> {
-  const response = await fetch(`${API_BASE_URL}/${runId}`, {
+  const response = await fetch(`${API_BASE_URL}/runs/${runId}`, {
     method: "GET",
   });
 

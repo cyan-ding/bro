@@ -1,4 +1,5 @@
-import { MoreVerticalIcon, PlusIcon } from "lucide-react";
+import { MoreVerticalIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { useState } from "react";
 
 import {
   Sidebar,
@@ -12,22 +13,65 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { ListRunsResponse } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import { useAgentStore } from "@/store/useAgentStore";
 import { useRouter } from "next/navigation";
+import { deleteRun } from "@/lib/api";
 
-export function AppSidebar({ runs }: { runs: ListRunsResponse[] }) {
+interface SidebarProps {
+  runs: ListRunsResponse[],
+  setRuns: (runs: ListRunsResponse[]) => void;
+}
+
+export function AppSidebar({ runs, setRuns }: SidebarProps) {
   const router = useRouter();
   const { clearAll } = useAgentStore();
   const { theme, resolvedTheme } = useTheme();
   const isDark = (theme ? (theme === "dark") : resolvedTheme === "dark");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [runToDelete, setRunToDelete] = useState<string | null>(null);
 
   const handleNewRun = () => {
     clearAll();
     router.push("/dashboard");
+  };
+
+  const handleDeleteClick = (runId: string) => {
+    setRunToDelete(runId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!runToDelete) return;
+
+    try {
+      await deleteRun(runToDelete);
+      setRuns(runs.filter(run => run.id !== runToDelete))
+      setDeleteDialogOpen(false);
+      setRunToDelete(null);
+      router.refresh();
+    } catch (error) {
+      alert(`Failed to delete run: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   };
 
   return (
@@ -67,15 +111,28 @@ export function AppSidebar({ runs }: { runs: ListRunsResponse[] }) {
             <SidebarMenu>
               {runs.map((run) => (
                 <SidebarMenuItem key={run.id}>
-                  <div className="relative flex items-center">
-                    <SidebarMenuButton asChild>
+                  <div className="relative flex items-center w-full">
+                    <SidebarMenuButton asChild className="flex-1">
                       <a href={`/runs?runId=${run.id}`}>
                         <span>{run.title}</span>
                       </a>
                     </SidebarMenuButton>
-                    <Button size="icon">
-                      <MoreVerticalIcon />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVerticalIcon className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem tabIndex={-1}
+                          onClick={() => handleDeleteClick(run.id)}
+                          className="text-destructive"
+                        >
+                          <TrashIcon className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </SidebarMenuItem>
               ))}
@@ -84,6 +141,26 @@ export function AppSidebar({ runs }: { runs: ListRunsResponse[] }) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarRail/>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Run</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this run? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sidebar>
   );
 }
