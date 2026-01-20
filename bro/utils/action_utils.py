@@ -138,30 +138,12 @@ def generate_action_description(
         else:
             return f"You searched for '{query}'"
     elif action_name == "extract":
-        use_rag = arguments.get("use_rag", False)
-        file_name = arguments.get("file_name", "content")
-        description = arguments.get("description", "")
-        if use_rag:
-            return f"You extracted content using RAG processing ('{description}')"
-        else:
-            return (
-                f"You extracted content and saved it to '{file_name}' ('{description}')"
-            )
-    elif action_name == "file_system":
-        action_type = arguments.get("action", "")
-        filename = arguments.get("filename", "")
-        if action_type == "read":
-            return f"You read the file '{filename}'"
-        elif action_type == "write":
-            return f"You wrote content to file '{filename}'"
-        elif action_type == "list_files":
-            return "You listed files in the ~/.bro directory"
-        else:
-            return f"You performed file system action '{action_type}'"
-    elif action_name == "search_rag":
-        query = arguments.get("query", "")
-        top_k = arguments.get("top_k", 5)
-        return f"You searched the RAG database for '{query}' (top {top_k} results)"
+        return "You extracted the page content and converted it to markdown"
+    elif action_name == "todo_edit":
+        todo_items = arguments.get("todo_items", [])
+        num_items = len(todo_items)
+        completed_count = sum(1 for item in todo_items if item.get("completed", False))
+        return f"You updated the todo list with {num_items} items ({completed_count} completed)"
     elif action_name == "done":
         reason = arguments.get("reason", "task completed")
         return f"You marked the task as done with reason: '{reason}'"
