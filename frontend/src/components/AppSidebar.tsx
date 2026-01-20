@@ -109,7 +109,7 @@ export function AppSidebar({ runs, setRuns }: SidebarProps) {
           <SidebarGroupLabel>Recent Runs</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {runs.map((run) => (
+              {runs.slice().sort((a, b) => new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime()).map((run) => (
                 <SidebarMenuItem key={run.id}>
                   <div className="relative flex items-center w-full">
                     <SidebarMenuButton asChild className="flex-1">
