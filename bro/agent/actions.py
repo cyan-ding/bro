@@ -399,7 +399,7 @@ async def search(
         target_page = next((p for p in context.pages if p.url == target_tab.url), None)
         if target_page:
             await target_page.bring_to_front()
-            await agent_state.set_current_tab_index(tab_index)
+            agent_state.set_current_tab_index(tab_index)
             return
         else:
             print(
@@ -426,7 +426,7 @@ async def search(
                 page_to_use.url, await page_to_use.title(), is_active=True
             )
             await page_to_use.bring_to_front()
-            await agent_state.set_current_tab_index(len(agent_state.tabs) - 1)
+            agent_state.set_current_tab_index(len(agent_state.tabs) - 1)
         except Exception as e:
             print(f"⚠️ Failed to update agent state for new tab: {e}")
 
