@@ -8,6 +8,9 @@ const { execSync } = require('child_process');
 const isDev = process.env.NODE_ENV === 'development';
 const iconPath = path.join(__dirname, "../../assets/bro_512.png")
 
+// Set the application name for macOS
+app.setName('Bro');
+
 let mainWindow;
 
 function createWindow() {
@@ -15,6 +18,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    title: 'Bro',
     icon: iconPath,
     webPreferences: {
       nodeIntegration: false,

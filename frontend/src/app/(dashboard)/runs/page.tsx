@@ -208,7 +208,6 @@ export default function Run() {
 
   return (
     <div className="container mx-auto px-4 py-4">
-      <h1 className="text-4xl font-bold mb-2">Bro</h1>
 
       {error && (
         <div className="mb-4 p-4 bg-destructive/10 border border-destructive rounded-lg">
@@ -218,7 +217,7 @@ export default function Run() {
 
       <div
         className="grid grid-cols-1 lg:grid-cols-3 gap-6 grid-rows-1"
-        style={{ height: "calc(100vh - 120px)" }}
+        style={{ height: "calc(100vh - 70px)" }}
       >
         {/* Left column: Chat Interface */}
         <div className="lg:col-span-1">
