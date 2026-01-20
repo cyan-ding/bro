@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Input } from "./ui/input";
 
 interface ScreencastViewerProps {
   currentUrl?: string;
@@ -374,7 +375,7 @@ export default function ScreencastViewer({
               clipRule="evenodd"
             />
           </svg>
-          <input
+          <Input
             className="text-muted-foreground truncate outline-none border-none"
             value={localUrl}
             onChange={(e) => setLocalUrl(e.target.value)}

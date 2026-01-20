@@ -157,6 +157,10 @@ export const useAgentStore = create<AgentStore>()(
           error: null,
           eventSource: null,
           chatMessages: [],
+          viewedRunId: null,
+          viewedRunData: null,
+          viewedRunLogs: [],
+          // Keep runs and model - these are useful across sessions
         });
       },
     }),
@@ -165,6 +169,7 @@ export const useAgentStore = create<AgentStore>()(
       partialize: (state) => ({
         runId: state.runId,
         runs: state.runs,
+        model: state.model
         // Don't persist logs, runStatus, agentState as they'll be fetched fresh
       }),
     }

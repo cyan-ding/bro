@@ -47,6 +47,10 @@ export default function Dashboard() {
 
   const handleStart = useCallback(
     async (prompt: string, url?: string) => {
+      if (!model) {
+        return;
+      }
+
       try {
         const response = await createRun({
           user_prompt: prompt,
@@ -54,17 +58,22 @@ export default function Dashboard() {
           max_iterations: 100,
           take_screenshot: true,
           enable_logging: true,
-          model: model || "gemini/gemini-2.5-flash-preview-09-2025",
+          model: model,
         });
         const run_id = response.run_id;
         setRunId(run_id);
-        setModel(model || "gemini/gemini-2.5-flash-preview-09-2025");
+        setModel(model);
+
+        // Refresh the runs list to include the new run
+        const updatedRuns = await getRunList();
+        setRuns(updatedRuns);
+
         router.push(`/runs?runId=${run_id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to start agent");
       }
     },
-    [model, router, setModel, setRunId, setError]
+    [model, router, setModel, setRunId, setError, setRuns]
   );
 
   return (
@@ -89,6 +98,7 @@ export default function Dashboard() {
               display={"Select a model"}
               empty={"No model selected"}
               setter={setModel}
+              value={model}
               className="ml-auto"
             />
             <InputGroupButton
@@ -96,7 +106,7 @@ export default function Dashboard() {
               className="rounded-full"
               size="icon-xs"
               aria-label="Submit"
-              disabled={prompt == ""}
+              disabled={prompt === "" || !model}
               onClick={() => handleStart(prompt)}
             >
               <ArrowUpIcon />

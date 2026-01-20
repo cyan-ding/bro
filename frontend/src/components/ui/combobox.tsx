@@ -25,6 +25,7 @@ interface ComboBoxParams {
   empty: string;
   setter: (value: string) => void;
   className?: string;
+  value?: string | null;
 }
 
 export function Combobox({
@@ -33,9 +34,17 @@ export function Combobox({
   empty,
   setter,
   className,
+  value,
 }: ComboBoxParams) {
   const [open, setOpen] = React.useState(false);
   const [displayedValue, setDisplayedValue] = React.useState("");
+
+  React.useEffect(() => {
+    if (value) {
+      setDisplayedValue(value);
+      setter(value);
+    }
+  }, [value, setter]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -7,13 +7,13 @@ using Server-Sent Events.
 
 import asyncio
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Dict
 from .run_manager import RunInfo
 from .models import LogEvent, RunStatus
 from utils.db import save_logs
 
 
-async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
+async def stream_logs(run_info: RunInfo) -> AsyncGenerator[Dict, None]:
     """
     Stream log events from an agent run as Server-Sent Events.
 
@@ -81,7 +81,7 @@ async def stream_logs(run_info: RunInfo) -> AsyncGenerator[str, None]:
         yield format_sse(error_event)
 
 
-def format_sse(event: LogEvent) -> str:
+def format_sse(event: LogEvent) -> Dict:
     """
     Format a log event as an SSE message.
 
@@ -89,7 +89,7 @@ def format_sse(event: LogEvent) -> str:
         event: LogEvent to format
 
     Returns:
-        SSE-formatted string
+        SSE-formatted dictionary
     """
     event_dict = event.model_dump()
     return {"event": "message", "data": json.dumps(event_dict)}

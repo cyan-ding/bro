@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import AgentChat from "@/components/AgentChat";
 import ScreencastViewer from "@/components/ScreencastViewer";
@@ -23,6 +24,9 @@ import { useAgentStore } from "@/store/useAgentStore";
  * Main dashboard page for controlling and monitoring the Bro agent.
  */
 export default function Run() {
+  const searchParams = useSearchParams();
+  const urlRunId = searchParams.get("runId");
+
   const {
     runId,
     logs,
@@ -32,14 +36,55 @@ export default function Run() {
     setRunStatus,
     setAgentState,
     setError,
+    setRuns,
+    setViewedRunId,
     setViewedRunData,
     setViewedRunLogs,
     viewedRunData,
     viewedRunLogs,
   } = useAgentStore();
 
+  // Determine if we're viewing a historical run or a live run
+  const isViewingHistoricalRun = urlRunId && urlRunId !== runId;
   const isRunning = runStatus === "running";
   const isAwaitingDecision = runStatus === "awaiting_decision";
+
+  // Fetch runs list on mount to ensure sidebar is up to date
+  useEffect(() => {
+    const fetchRuns = async () => {
+      try {
+        const runs = await getRunList();
+        setRuns(runs);
+      } catch (err) {
+        console.error("Failed to fetch runs list:", err);
+      }
+    };
+
+    fetchRuns();
+  }, [setRuns]);
+
+  // Fetch historical run data when viewing a previous run from URL
+  useEffect(() => {
+    // If there's a runId in the URL and it's different from the current live run
+    if (urlRunId && urlRunId !== runId) {
+      const fetchHistoricalRun = async () => {
+        try {
+          setViewedRunId(urlRunId);
+          const [runData, logsData] = await Promise.all([
+            getRun(urlRunId),
+            getLogs(urlRunId)
+          ]);
+          setViewedRunData(runData);
+          setViewedRunLogs(logsData);
+        } catch (err) {
+          console.error("Failed to fetch historical run:", err);
+          setError(err instanceof Error ? err.message : "Failed to load run");
+        }
+      };
+
+      fetchHistoricalRun();
+    }
+  }, [urlRunId, runId, setViewedRunId, setViewedRunData, setViewedRunLogs, setError]);
 
   // Fetch run status periodically, only when it started
   useEffect(() => {
@@ -178,15 +223,15 @@ export default function Run() {
         {/* Left column: Chat Interface */}
         <div className="lg:col-span-1">
           <AgentChat
-            isRunning={isRunning}
+            isRunning={isRunning && !isViewingHistoricalRun}
             onStop={handleStop}
             onCloseBrowser={handleCloseBrowser}
             onSendInput={handleSendInput}
             onSendDecision={handleSendDecision}
-            isAwaitingDecision={isAwaitingDecision}
-            logs={isRunning ? logs : viewedRunLogs}
-            runId={runId}
-            agentState={isRunning ? agentState : viewedRunData?.metadata as AgentStateResponse | null} // unsafe but works in prod??
+            isAwaitingDecision={isAwaitingDecision && !isViewingHistoricalRun}
+            logs={isViewingHistoricalRun ? viewedRunLogs : logs}
+            runId={isViewingHistoricalRun ? urlRunId : runId}
+            agentState={isViewingHistoricalRun ? (viewedRunData?.metadata as AgentStateResponse | null) : agentState}
           />
         </div>
 

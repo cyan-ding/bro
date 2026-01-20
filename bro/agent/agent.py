@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from api.models import RunState
 from utils.env_loader import load_env_files
 from patchright.async_api import Page, async_playwright
 from utils.db import save_run_state
@@ -642,7 +641,7 @@ class Agent:
                     await self.agent_state.update_tab_state(page)
 
                     if self.run_info:
-                        await save_run_state(RunState(self.run_info))
+                        await save_run_state(self.run_info)
                     # Update iteration in run_info
                     if self.run_info:
                         self.run_info.update_iteration()

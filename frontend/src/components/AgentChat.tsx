@@ -147,13 +147,13 @@ export default function AgentChat({
           if (actionName === "done") {
             content = `✅ ${log.action_context?.result || "Task completed"}`;
           } else if (actionName) {
-            content = `🔧 Action: ${actionName}${log.action_context?.result ? `\n${log.action_context.result}` : ""}`;
+            content = `Action: ${actionName}${log.action_context?.result ? `\n${log.action_context.result}` : ""}`;
           }
           break;
         case "thinking":
           const thinking = log.action_context?.structured_output;
           if (thinking?.next_goal) {
-            content = `💭 Next goal: ${thinking.next_goal}`;
+            content = `Next goal: ${thinking.next_goal}`;
           }
           break;
         case "user_input":
@@ -161,7 +161,7 @@ export default function AgentChat({
           messageType = "user";
           break;
         case "final_status":
-          content = "🎉 Run completed";
+          content = "Run completed";
           messageType = "system";
           break;
         case "agent_state_update":

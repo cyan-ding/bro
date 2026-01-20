@@ -74,10 +74,17 @@ async def get_local_logs(run_id: str) -> List[dict]:
 
     logs = []
     try:
+        import uuid
         with open(log_file, "r") as f:
             for line in f:
                 if line.strip():
-                    logs.append(json.loads(line))
+                    log_data = json.loads(line)
+                    # Ensure required fields exist (backward compatibility)
+                    if "id" not in log_data:
+                        log_data["id"] = str(uuid.uuid4())
+                    if "run_id" not in log_data:
+                        log_data["run_id"] = run_id
+                    logs.append(log_data)
     except Exception as e:
         print(f"Error reading local logs: {e}")
 
@@ -135,8 +142,14 @@ async def save_logs(run_id: str, log_event: LogEvent):
         log_file = storage_path / f"{run_id}_logs.jsonl"
 
         try:
+            # Add required fields for LogEventDB
+            import uuid
+            log_data = log_event.model_dump(mode="json")
+            log_data["id"] = str(uuid.uuid4())
+            log_data["run_id"] = run_id
+
             with open(log_file, "a") as f:
-                json.dump(log_event.model_dump(mode="json"), f)
+                json.dump(log_data, f)
                 f.write("\n")
         except Exception as e:
             print(f"Warning, Failed to save logs locally: {e}")
