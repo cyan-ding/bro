@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import type { LogEvent } from "@/lib/api";
+import type { LogEvent } from "@/lib/models";
 
 interface LogStreamProps {
   logs: LogEvent[];

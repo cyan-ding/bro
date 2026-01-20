@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { ArrowLeft, RotateCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useAgentStore } from "@/store/useAgentStore";
 
 interface ScreencastViewerProps {
   currentUrl?: string;
@@ -34,6 +36,10 @@ export default function ScreencastViewer({
     useState(false);
   const chromeClosedRef = useRef(false);
   const [localUrl, setLocalUrl] = useState(currentUrl ?? "");
+  const router = useRouter();
+  const {
+    runId
+  } = useAgentStore();
 
   // Sync localUrl with currentUrl prop changes
   useEffect(() => {
@@ -285,35 +291,41 @@ export default function ScreencastViewer({
           {/* Connection status*/}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? "bg-green-500" : "bg-red-500"
-              }`}
+              className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"
+                }`}
             />
             <span>{fps} FPS</span>
           </div>
         </div>
-        {/* Manual button */}
-        <Button
-          onClick={() =>
-            setManualInterventionEnabled(!manualInterventionEnabled)
-          }
-          className={`px-3 py-1 text-sm rounded-md font-medium transition-colors ${
-            manualInterventionEnabled
-              ? "bg-green-600 hover:bg-green-700 text-white"
-              : "bg-secondary hover:bg-secondary/80"
-          }`}
-        >
-          {manualInterventionEnabled ? "Manual: ON" : "Manual: OFF"}
-        </Button>
+        <div className="flex ml-auto">
+          {/* Manual button */}
+          <Button
+            onClick={() =>
+              setManualInterventionEnabled(!manualInterventionEnabled)
+            }
+            className={`py-1 text-sm rounded-md font-medium transition-colors ${manualInterventionEnabled
+                ? "bg-green-600 hover:bg-green-700 text-white"
+                : "bg-secondary hover:bg-secondary/80"
+              }`}
+          >
+            {manualInterventionEnabled ? "Manual: ON" : "Manual: OFF"}
+          </Button>
+
+          <Button
+            onClick={() => router.push(`/logs?runId=${runId}`)}
+            variant="link">
+            View Logs
+          </Button>
+        </div>
+
       </div>
 
       {error && (
         <div
-          className={`mb-3 p-3 rounded text-sm flex-shrink-0 ${
-            error.includes("Waiting")
+          className={`mb-3 p-3 rounded text-sm flex-shrink-0 ${error.includes("Waiting")
               ? "bg-blue-500/10 border border-blue-500 text-blue-700 dark:text-blue-300"
               : "bg-destructive/10 border border-destructive text-destructive"
-          }`}
+            }`}
         >
           {error}
         </div>
@@ -351,7 +363,7 @@ export default function ScreencastViewer({
 
         {/* Lock Icon + URL */}
         <div className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1 bg-background rounded">
-          
+
           <Input
             className="text-muted-foreground truncate outline-none border-none"
             value={localUrl}

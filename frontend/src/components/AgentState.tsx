@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { AgentStateResponse } from "@/lib/api";
+import type { AgentStateResponse } from "@/lib/models";
 
 interface AgentStateProps {
   state: AgentStateResponse | null;
