@@ -9,7 +9,6 @@ import type { AgentStateResponse } from "@/lib/models";
 interface AgentStateProps {
   state: AgentStateResponse | null;
   runStatus: string | null;
-  max_iterations: number | null;
 }
 
 /**
@@ -18,7 +17,6 @@ interface AgentStateProps {
 export default function AgentState({
   state,
   runStatus,
-  max_iterations,
 }: AgentStateProps) {
   if (!state) {
     return (
@@ -61,7 +59,7 @@ export default function AgentState({
               <div>
                 <span className="text-sm font-medium">Progress</span>
                 <div className="mt-1 text-sm">
-                  {lastAction.iteration} / {max_iterations || 0}
+                  {lastAction.iteration} / {state.max_iterations || 0}
                 </div>
               </div>
             </div>
@@ -87,9 +85,9 @@ export default function AgentState({
               <div className="text-sm text-muted-foreground">No tabs open</div>
             ) : (
               <div className="space-y-2">
-                {state.tabs.map((tab) => (
+                {state.tabs.map((tab, mapIndex) => (
                   <div
-                    key={tab.url + "-" + tab.index}
+                    key={`tab-${mapIndex}`}
                     className={`p-3 rounded-lg border ${
                       tab.index === state.current_tab_index
                         ? "border-primary bg-muted"
@@ -132,7 +130,7 @@ export default function AgentState({
             ) : (
               <div className="space-y-2">
                 {state.todo_list.map((todo, index) => (
-                  <div key={index} className="flex items-start gap-2">
+                  <div key={`todo-${index}`} className="flex items-start gap-2">
                     <div
                       className={`w-4 h-4 mt-0.5 rounded border ${
                         todo.completed
@@ -182,7 +180,7 @@ export default function AgentState({
                     const extractionObj = !isString ? extraction : null;
 
                     return (
-                      <div key={index}>
+                      <div key={`extraction-${index}`}>
                         <div className="text-xs text-muted-foreground mb-1">
                           Extraction {index + 1}
                           {extractionObj?.source_title && (
@@ -223,7 +221,7 @@ export default function AgentState({
                     .slice()
                     .reverse()
                     .map((action, index) => (
-                      <div key={index}>
+                      <div key={`action-${index}`}>
                         <div className="flex items-start gap-2">
                           <Badge variant="outline" className="mt-0.5">
                             #{action.iteration}

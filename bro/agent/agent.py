@@ -25,6 +25,9 @@ from .schemas import StructuredOutput
 
 if TYPE_CHECKING:
     from api.run_info import RunInfo
+    from api.models import RunStatus
+else:
+    from api.models import RunStatus
 
 from .models import LiteLLMResponse
 
@@ -664,6 +667,12 @@ class Agent:
                         reason = await_decision_messages[0].replace(
                             "AWAIT_USER_DECISION: ", ""
                         )
+
+                        # Set status to awaiting_decision before waiting for user input
+                        if self.run_info:
+                            self.run_info.set_status(RunStatus.AWAITING_DECISION)
+                            await save_run_state(self.run_info)
+
                         decision, user_input = await self._handle_user_decision(
                             reason, self.input_manager
                         )
@@ -679,9 +688,17 @@ class Agent:
                             print(
                                 f"🔄 Continuing with additional instructions: {user_input}"
                             )
+                            # Set status back to running
+                            if self.run_info:
+                                self.run_info.set_status(RunStatus.RUNNING)
+                                await save_run_state(self.run_info)
                             # Continue with the loop - the new instructions will be included in the next iteration
                         elif decision == "intervene":
                             print("🛠️  Continuing after manual intervention...")
+                            # Set status back to running
+                            if self.run_info:
+                                self.run_info.set_status(RunStatus.RUNNING)
+                                await save_run_state(self.run_info)
                             # Continue with the loop - user made manual changes
 
                     print("=" * 100)
