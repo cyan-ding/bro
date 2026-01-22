@@ -6,18 +6,13 @@ import { useSearchParams } from "next/navigation";
 import AgentChat from "@/components/AgentChat";
 import ScreencastViewer from "@/components/ScreencastViewer";
 import {
-  getRunStatus,
-  getAgentState,
   sendInput,
   sendDecision,
   stopRun,
   closeBrowser,
   getRunList,
-  getLogs,
-  getRun,
 } from "@/lib/api";
 
-import { AgentStateResponse } from "@/lib/models";
 import { useAgentStore } from "@/store/useAgentStore";
 
 /**
@@ -34,18 +29,11 @@ export default function Run() {
     agentState,
     error,
     setRunStatus,
-    setAgentState,
     setError,
     setRuns,
-    setViewedRunId,
-    setViewedRunData,
-    setViewedRunLogs,
-    viewedRunData,
-    viewedRunLogs,
+    loadRun,
   } = useAgentStore();
 
-  // Determine if we're viewing a historical run or a live run
-  const isViewingHistoricalRun = urlRunId && urlRunId !== runId;
   const isRunning = runStatus === "running";
   const isAwaitingDecision = runStatus === "awaiting_decision";
 
@@ -63,95 +51,13 @@ export default function Run() {
     fetchRuns();
   }, [setRuns]);
 
-  // Fetch historical run data when viewing a previous run from URL
+  // Load run data when URL changes
   useEffect(() => {
-    // If there's a runId in the URL and it's different from the current live run
-    if (urlRunId && urlRunId !== runId) {
-      const fetchHistoricalRun = async () => {
-        try {
-          setViewedRunId(urlRunId);
-          const [runData, logsData] = await Promise.all([
-            getRun(urlRunId),
-            getLogs(urlRunId)
-          ]);
-          setViewedRunData(runData);
-          setViewedRunLogs(logsData);
-        } catch (err) {
-          console.error("Failed to fetch historical run:", err);
-          setError(err instanceof Error ? err.message : "Failed to load run");
-        }
-      };
-
-      fetchHistoricalRun();
+    if (urlRunId) {
+      loadRun(urlRunId);
     }
-  }, [urlRunId, runId, setViewedRunId, setViewedRunData, setViewedRunLogs, setError]);
+  }, [urlRunId, loadRun]);
 
-  // Fetch run status periodically, only when it started
-  useEffect(() => {
-    if (!runId) return;
-
-    const fetchStatus = async () => {
-      try {
-        const status = await getRunStatus(runId);
-        setRunStatus(status);
-
-        // Stop polling and optionally clear runId if run is complete
-        if (
-          status === "completed" ||
-          status === "stopped" ||
-          status === "error"
-        ) {
-          // pull the data once so it can be shown(the run is complete)
-          const runs = await getRun(runId)
-          setViewedRunData(runs)
-          const logs = await getLogs(runId)
-          setViewedRunLogs(logs)
-          clearInterval(interval);
-        }
-      } catch (err) {
-        console.error("Failed to fetch run status:", err);
-      }
-    };
-
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 2000);
-    return () => clearInterval(interval);
-  }, [runId, isRunning, setRunStatus]);
-
-  // Fetch agent state periodically
-  useEffect(() => {
-    if (!runId || !isRunning) return;
-
-    const fetchState = async () => {
-      try {
-        const state = await getAgentState(runId);
-        setAgentState(state);
-      } catch (err) {
-        console.error("Failed to fetch agent state:", err);
-      }
-    };
-
-    fetchState();
-    const interval = setInterval(fetchState, 3000);
-    return () => clearInterval(interval);
-  }, [runId, isRunning, runStatus, setAgentState]);
-
-  // Set up log streaming using Zustand store
-  useEffect(() => {
-    if (!runId || !isRunning) {
-      useAgentStore.getState().closeEventSource();
-      return;
-    }
-
-    // Start log streaming via Zustand store
-    useAgentStore.getState().startLogStreaming(runId);
-
-    // Cleanup on unmount or runId change
-    return () => {
-      // Don't close when component unmounts - let the store manage it
-      // This allows streaming to continue when navigating between pages
-    };
-  }, [runId, isRunning]);
 
   const handleStop = useCallback(async () => {
     if (!runId) return;
@@ -222,15 +128,15 @@ export default function Run() {
         {/* Left column: Chat Interface */}
         <div className="lg:col-span-1">
           <AgentChat
-            isRunning={isRunning && !isViewingHistoricalRun}
+            isRunning={isRunning}
             onStop={handleStop}
             onCloseBrowser={handleCloseBrowser}
             onSendInput={handleSendInput}
             onSendDecision={handleSendDecision}
-            isAwaitingDecision={isAwaitingDecision && !isViewingHistoricalRun}
-            logs={isViewingHistoricalRun ? viewedRunLogs : logs}
-            runId={isViewingHistoricalRun ? urlRunId : runId}
-            agentState={isViewingHistoricalRun ? (viewedRunData?.metadata as AgentStateResponse | null) : agentState}
+            isAwaitingDecision={isAwaitingDecision}
+            logs={logs}
+            runId={runId}
+            agentState={agentState}
           />
         </div>
 

@@ -5,10 +5,9 @@ import type {
   RunStatus,
   AgentStateResponse,
   ChatMessage,
-  ListRunsResponse,
-  RunState
+  ListRunsResponse
 } from "@/lib/models";
-import { createLogStream } from "@/lib/api";
+import { createLogStream, getRunStatus, getRun, getLogs, getAgentState } from "@/lib/api";
 
 interface AgentStore {
   // State
@@ -21,10 +20,7 @@ interface AgentStore {
   eventSource: EventSource | null;
   chatMessages: ChatMessage[];
   model: string | null;
-  viewedRunId: string | null; // we have to to track currently viewed run, without overriding the runId that could be for a live run
-  viewedRunData: RunState | null; 
-  viewedRunLogs: LogEvent[]; 
-
+  pollingInterval: NodeJS.Timeout | null;
 
   // Actions
   setModel: (model: string | null) => void;
@@ -41,9 +37,8 @@ interface AgentStore {
   addChatMessage: (message: ChatMessage) => void;
   setChatMessages: (messages: ChatMessage[]) => void;
   clearAll: () => void;
-  setViewedRunId: (runId: string | null) => void;
-  setViewedRunData: (data: RunState | null) => void;
-  setViewedRunLogs: (logs: LogEvent[]) => void;
+  loadRun: (runId: string) => Promise<void>;
+  stopPolling: () => void;
 }
 
 export const useAgentStore = create<AgentStore>()(
@@ -59,9 +54,7 @@ export const useAgentStore = create<AgentStore>()(
       eventSource: null,
       chatMessages: [],
       model: null,
-      viewedRunId: null,
-      viewedRunData: null,
-      viewedRunLogs: [],
+      pollingInterval: null,
 
       // Actions
       setModel: (model) => set({ model }),
@@ -76,9 +69,14 @@ export const useAgentStore = create<AgentStore>()(
       addChatMessage: (message) =>
         set((state) => ({ chatMessages: [...state.chatMessages, message] })),
       setChatMessages: (chatMessages) => set({ chatMessages }),
-      setViewedRunId: (runId: string | null) => set({ viewedRunId: runId }),
-      setViewedRunData: (data: RunState | null) => set({ viewedRunData: data }),
-      setViewedRunLogs: (logs: LogEvent[]) => set({ viewedRunLogs: logs }),
+
+      stopPolling: () => {
+        const state = get();
+        if (state.pollingInterval) {
+          clearInterval(state.pollingInterval);
+          set({ pollingInterval: null });
+        }
+      },
       
       closeEventSource: () => {
         const state = get();
@@ -86,6 +84,9 @@ export const useAgentStore = create<AgentStore>()(
           state.eventSource.close();
           set({ eventSource: null });
         }
+        // Also stop polling when closing event source
+        const actions = get();
+        actions.stopPolling();
       },
 
       startLogStreaming: (runId: string) => {
@@ -149,6 +150,8 @@ export const useAgentStore = create<AgentStore>()(
         if (state.eventSource) {
           state.eventSource.close();
         }
+        const actions = get();
+        actions.stopPolling();
         set({
           runId: null,
           logs: [],
@@ -157,11 +160,86 @@ export const useAgentStore = create<AgentStore>()(
           error: null,
           eventSource: null,
           chatMessages: [],
-          viewedRunId: null,
-          viewedRunData: null,
-          viewedRunLogs: [],
+          pollingInterval: null,
           // Keep runs and model - these are useful across sessions
         });
+      },
+
+      loadRun: async (runId: string) => {
+        const state = get();
+
+        // Close any existing event source and stop polling
+        if (state.eventSource) {
+          state.eventSource.close();
+        }
+        const actions = get();
+        actions.stopPolling();
+
+        // Clear existing data and set the new runId
+        set({
+          runId,
+          logs: [],
+          agentState: null,
+          runStatus: null,
+          eventSource: null,
+          error: null
+        });
+
+        try {
+          // Fetch run status first
+          const status = await getRunStatus(runId);
+          set({ runStatus: status });
+
+          const isComplete = status === "completed" || status === "stopped" || status === "error";
+
+          if (isComplete) {
+            // For completed runs, fetch data once (no streaming/polling)
+            const [runData, logsData] = await Promise.all([
+              getRun(runId),
+              getLogs(runId)
+            ]);
+
+            set({
+              logs: logsData,
+              agentState: runData.metadata as AgentStateResponse | null
+            });
+          } else {
+            // For running runs, start streaming and polling
+            actions.startLogStreaming(runId);
+
+            // Start polling for status and agent state
+            const pollRunData = async () => {
+              try {
+                const [status, state] = await Promise.all([
+                  getRunStatus(runId),
+                  getAgentState(runId)
+                ]);
+
+                set({ runStatus: status, agentState: state });
+
+                // If run completed, reload to get final data
+                if (status === "completed" || status === "stopped" || status === "error") {
+                  const currentActions = get();
+                  currentActions.stopPolling();
+                  // Reload to get final data from storage
+                  currentActions.loadRun(runId);
+                }
+              } catch (err) {
+                console.error("Failed to poll run data:", err);
+              }
+            };
+
+            // Poll immediately and then every 2 seconds
+            pollRunData();
+            const interval = setInterval(pollRunData, 1000);
+            set({ pollingInterval: interval });
+          }
+        } catch (err) {
+          console.error("Failed to load run:", err);
+          set({
+            error: err instanceof Error ? err.message : "Failed to load run"
+          });
+        }
       },
     }),
     {

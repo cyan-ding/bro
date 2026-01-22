@@ -54,7 +54,6 @@ export default function AgentChat({
   const [showModifyInput, setShowModifyInput] = useState(false);
   const [showStopDialog, setShowStopDialog] = useState(false);
   const [showExtractions, setShowExtractions] = useState(false);
-  const [hasShownExtractions, setHasShownExtractions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const processedLogIds = useRef(new Set<string>());
   const lastTodoListRef = useRef<string>("");
@@ -66,26 +65,6 @@ export default function AgentChat({
   useEffect(() => {
     scrollToBottom();
   }, [chatMessages]);
-
-  // Detect when run ends and show extractions if available
-  useEffect(() => {
-    if (
-      !isRunning &&
-      !hasShownExtractions &&
-      agentState?.extractions &&
-      agentState.extractions.length > 0
-    ) {
-      // Run has ended and we have extractions
-      setShowExtractions(true);
-      setHasShownExtractions(true);
-    }
-
-    // Reset flag when new run starts
-    if (isRunning && hasShownExtractions) {
-      setHasShownExtractions(false);
-      setShowExtractions(false);
-    }
-  }, [isRunning, agentState, hasShownExtractions]);
 
   // Detect todo list changes and display them
   useEffect(() => {
@@ -144,16 +123,24 @@ export default function AgentChat({
           break;
         case "action":
           const actionName = log.action_context?.action_name;
+          const thinking = log.action_context?.structured_output?.thinking;
+
+          // Create separate message for thinking if it exists
+          if (thinking) {
+            newMessages.push({
+              id: `${logId}-thinking`,
+              type: "agent",
+              content: `💭 ${thinking}`,
+              timestamp: new Date(log.timestamp),
+            });
+          }
+
+          // Create message for the action
           if (actionName === "done") {
             content = `✅ ${log.action_context?.result || "Task completed"}`;
           } else if (actionName) {
             content = `Action: ${actionName}${log.action_context?.result ? `\n${log.action_context.result}` : ""}`;
-          }
-          break;
-        case "thinking":
-          const thinking = log.action_context?.structured_output;
-          if (thinking?.next_goal) {
-            content = `Next goal: ${thinking.next_goal}`;
+            if (actionName === "extract") content = content.slice(0, 50);
           }
           break;
         case "user_input":
@@ -163,10 +150,6 @@ export default function AgentChat({
         case "final_status":
           content = "Run completed";
           messageType = "system";
-          break;
-        case "agent_state_update":
-          // Show todo list updates
-          content = log.message || "Agent updated its state";
           break;
         // no default; we want to silently ignore unknown types
       }
@@ -178,6 +161,10 @@ export default function AgentChat({
           content,
           timestamp: new Date(log.timestamp),
         });
+      }
+
+      // Mark log as processed after handling all messages from it
+      if (content || log.event_type === "action") {
         processedLogIds.current.add(logId);
       }
     });
@@ -275,14 +262,6 @@ export default function AgentChat({
                 View Extractions ({agentState.extractions.length})
               </Button>
             )}
-          {runId && isRunning && (
-            <Link
-              href={`/logs?runId=${runId}`}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Detailed logs →
-            </Link>
-          )}
         </div>
       </div>
 
