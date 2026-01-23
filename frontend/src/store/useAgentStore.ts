@@ -221,8 +221,7 @@ export const useAgentStore = create<AgentStore>()(
                 if (status === "completed" || status === "stopped" || status === "error") {
                   const currentActions = get();
                   currentActions.stopPolling();
-                  // Reload to get final data from storage
-                  currentActions.loadRun(runId);
+                  currentActions.closeEventSource();
                 }
               } catch (err) {
                 console.error("Failed to poll run data:", err);

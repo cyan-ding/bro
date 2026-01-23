@@ -47,39 +47,35 @@ export default function LogStream({ logs }: LogStreamProps) {
       case "thinking":
         return (
           <div className="space-y-2 text-sm">
-            {event.action_context?.structured_output?.thinking && (
+            {event.thinking_context?.thinking && (
               <div>
                 <span className="font-medium">Thinking: </span>
                 <span className="text-muted-foreground">
-                  {event.action_context?.structured_output?.thinking}
+                  {event.thinking_context.thinking}
                 </span>
               </div>
             )}
-            {event.action_context?.structured_output
-              ?.evaluation_previous_actions && (
+            {event.thinking_context?.evaluation_previous_actions && (
               <div>
                 <span className="font-medium">Evaluation: </span>
                 <span className="text-muted-foreground">
-                  {
-                    event.action_context?.structured_output
-                      ?.evaluation_previous_actions
-                  }
+                  {event.thinking_context.evaluation_previous_actions}
                 </span>
               </div>
             )}
-            {event.action_context?.structured_output?.memory && (
+            {event.thinking_context?.memory && (
               <div>
                 <span className="font-medium">Memory: </span>
                 <span className="text-muted-foreground">
-                  {event.action_context?.structured_output?.memory}
+                  {event.thinking_context.memory}
                 </span>
               </div>
             )}
-            {event.action_context?.structured_output?.next_goal && (
+            {event.thinking_context?.next_goal && (
               <div>
                 <span className="font-medium">Next Goal: </span>
                 <span className="text-muted-foreground">
-                  {event.action_context?.structured_output?.next_goal}
+                  {event.thinking_context.next_goal}
                 </span>
               </div>
             )}
@@ -96,11 +92,11 @@ export default function LogStream({ logs }: LogStreamProps) {
               </code>
             </div>
             {event.action_context?.arguments &&
-              Object.keys(event.action_context?.arguments).length > 0 && (
+              Object.keys(event.action_context.arguments || {}).length > 0 && (
                 <div>
                   <span className="font-medium">Arguments: </span>
                   <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                    {JSON.stringify(event.action_context?.arguments)}
+                    {JSON.stringify(event.action_context.arguments)}
                   </code>
                 </div>
               )}
@@ -108,7 +104,7 @@ export default function LogStream({ logs }: LogStreamProps) {
               <div>
                 <span className="font-medium">Result: </span>
                 <span className="text-muted-foreground">
-                  {event.action_context?.result}
+                  {event.action_context.result}
                 </span>
               </div>
             )}

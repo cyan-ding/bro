@@ -55,7 +55,6 @@ export default function AgentChat({
   const [showStopDialog, setShowStopDialog] = useState(false);
   const [showExtractions, setShowExtractions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const processedLogIds = useRef(new Set<string>());
   const lastTodoListRef = useRef<string>("");
 
   const scrollToBottom = () => {
@@ -103,11 +102,7 @@ export default function AgentChat({
     const newMessages: ChatMessage[] = [];
 
     logs.forEach((log) => {
-      const logId = `${log.timestamp}-${log.event_type}-${log.iteration}`;
-
-      if (processedLogIds.current.has(logId)) {
-        return;
-      }
+      const logId = crypto.randomUUID();
 
       let content = "";
       let messageType: "user" | "agent" | "system" = "agent";
@@ -121,19 +116,13 @@ export default function AgentChat({
           content = `Error: ${log.error || log.message || "Unknown error"}`;
           messageType = "system";
           break;
+        case "thinking":
+          if (log.thinking_context?.thinking) {
+            content = `💭 ${log.thinking_context.thinking}`;
+          }
+          break;
         case "action":
           const actionName = log.action_context?.action_name;
-          const thinking = log.action_context?.structured_output?.thinking;
-
-          // Create separate message for thinking if it exists
-          if (thinking) {
-            newMessages.push({
-              id: `${logId}-thinking`,
-              type: "agent",
-              content: `💭 ${thinking}`,
-              timestamp: new Date(log.timestamp),
-            });
-          }
 
           // Create message for the action
           if (actionName === "done") {
@@ -161,11 +150,6 @@ export default function AgentChat({
           content,
           timestamp: new Date(log.timestamp),
         });
-      }
-
-      // Mark log as processed after handling all messages from it
-      if (content || log.event_type === "action") {
-        processedLogIds.current.add(logId);
       }
     });
 

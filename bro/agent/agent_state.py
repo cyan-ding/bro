@@ -127,9 +127,17 @@ class AgentState(BaseModel):
             structured_output=structured_output,
         )
 
-        # Call logger if provided
+        # Call logger if provided, but strip structured_output from log (thinking is logged separately)
         if logger is not None:
-            await logger("action", action_context)
+            log_action_context = ActionContext(
+                action_name=action_name,
+                arguments=arguments,
+                result=result,
+                iteration=iteration,
+                description=description,
+                structured_output=None,
+            )
+            await logger("action", log_action_context)
 
         self.action_history.append(action_context)
 

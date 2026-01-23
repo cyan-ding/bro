@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
-from agent.models import Extraction, TabState, TodoItem, ActionContext
+from agent.models import Extraction, TabState, TodoItem, ActionContext, StructuredOutputContext
 
 
 class RunStatus(str, Enum):
@@ -127,6 +127,7 @@ class LogType(str, Enum):
     FINAL_STATUS = "final_status"
     USER_INPUT = "user_input"
     USER_DECISION = "user_decision"
+    THINKING = "thinking"
 
 
 class LogEvent(BaseModel):
@@ -138,6 +139,7 @@ class LogEvent(BaseModel):
     message: Optional[str] = None
     error: Optional[str] = None
     action_context: Optional[ActionContext] = None
+    thinking_context: Optional[StructuredOutputContext] = None
     decision: Optional[SendDecisionRequest] = None
 
 

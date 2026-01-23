@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from agent.models import ActionContext
+from agent.models import ActionContext, StructuredOutputContext
 
 from .models import LogType, RunStatus, LogEvent, SendDecisionRequest
 
@@ -81,6 +81,7 @@ class RunInfo:
         self,
         event_type: LogType,
         action_context: Optional[ActionContext] = None,
+        thinking_context: Optional[StructuredOutputContext] = None,
         message: Optional[str] = None,
         error: Optional[str] = None,
         decision: Optional[SendDecisionRequest] = None,
@@ -91,6 +92,7 @@ class RunInfo:
         Args:
             event_type: Type of event (action, thinking, result, error, status)
             action_context: Optional action context for action events
+            thinking_context: Optional thinking context for thinking events
             message: Optional message text
             error: Optional error message
             decision: Optional decision request data
@@ -100,6 +102,7 @@ class RunInfo:
             iteration=self.current_iteration,
             event_type=event_type,
             action_context=action_context,
+            thinking_context=thinking_context,
             message=message,
             error=error,
             decision=decision,

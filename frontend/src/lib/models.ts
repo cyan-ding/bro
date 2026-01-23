@@ -91,6 +91,7 @@ export interface LogEvent {
   message?: string;
   error?: string;
   action_context?: ActionContext;
+  thinking_context?: StructuredOutput;
   decision?: SendDecisionRequest;
 }
 
