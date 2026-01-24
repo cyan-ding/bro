@@ -84,7 +84,6 @@ async def format_elements_text(highlighted_elements: List[Dict]) -> str:
     """
     if not highlighted_elements:
         return "No interactive elements found on the page."
-    print("Formatting elements...")
     lines: List[str] = []
 
     # Keep provided order; they are already sorted by highlightIndex

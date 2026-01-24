@@ -116,7 +116,6 @@ class RunManager:
                 traceback.print_exc()
 
         run_info.task.add_done_callback(task_done_callback)
-        print("Agent running with model ", model)
         return run_info
 
     async def _run_agent(

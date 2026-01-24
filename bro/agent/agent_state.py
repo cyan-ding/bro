@@ -141,22 +141,6 @@ class AgentState(BaseModel):
 
         self.action_history.append(action_context)
 
-        # Print the action result if requested
-        if print_result:
-            action_str = (
-                f" | Action description: {description}"
-                if description
-                else f" | Action arguments: {arguments}"
-            )
-            thinking_str = (
-                f" | Thinking: {structured_output.thinking}"
-                if structured_output and structured_output.thinking
-                else ""
-            )
-            print(
-                f"📊 [Iteration {iteration}] | {action_name}{action_str}{thinking_str} | {result}"
-            )
-
         # Keep only the most recent actions
         if len(self.action_history) > self.max_action_history:
             self.action_history = self.action_history[-self.max_action_history :]

@@ -57,9 +57,6 @@ class InputManager:
         # Only start stdin listener if enabled (disabled for API/web server mode)
         if self._enable_stdin:
             self._listener_task = asyncio.create_task(self._input_listener())
-            print(
-                "🎤 Input listener started. You can send messages to the agent anytime."
-            )
 
     async def stop(self) -> None:
         """Stop the input listener background task."""

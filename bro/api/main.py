@@ -48,7 +48,6 @@ from .run_manager import RunManager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """run before api starts"""
-    print("Starting application...")
     use_cdp()
 
     yield
@@ -454,7 +453,6 @@ async def websocket_screencast(websocket: WebSocket):
     global _chrome_intentionally_closed, _screencast_client, _screencast_websocket
 
     await websocket.accept()
-    print("🎥 WebSocket client connected for screencast")
 
     # Check if Chrome was intentionally closed
     if _chrome_intentionally_closed:
@@ -479,8 +477,6 @@ async def websocket_screencast(websocket: WebSocket):
         # Check if screencast client already exists
         if _screencast_client is None:
             try:
-                print("📡 Creating CDP screencast client")
-
                 # Create and connect CDP client
                 client = ScreencastClient()
                 await client.connect()
@@ -511,7 +507,6 @@ async def websocket_screencast(websocket: WebSocket):
                 )
 
                 _screencast_client = client
-                print("✅ Screencast client started")
 
             except Exception as e:
                 error_msg = f"Failed to initialize CDP screencast: {str(e)}"

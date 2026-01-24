@@ -28,8 +28,6 @@ def use_cdp() -> None:
     global _chrome_process
 
     if not is_chrome_running():
-        print("Starting Chrome with CDP...")
-        
         # Get Chrome path from UserSettings (guaranteed to exist from onboarding)
         settings = UserSettings.load()
         if not settings.chrome_path:
@@ -75,13 +73,9 @@ def use_cdp() -> None:
             if is_chrome_running():
                 break
 
-        if is_chrome_running():
-            print("✅ Chrome is running with CDP enabled")
-        else:
+        if not is_chrome_running():
             print("❌ Failed to start Chrome with CDP after 30 seconds")
             raise TimeoutError("Chrome failed to start with CDP")
-    else:
-        print("✅ Chrome is already running with CDP enabled")
 
 
 def close_chrome() -> bool:
@@ -98,18 +92,15 @@ def close_chrome() -> bool:
         return False
 
     try:
-        print("Closing Chrome subprocess...")
         _chrome_process.terminate()
 
         # Wait for process to terminate gracefully
         try:
             _chrome_process.wait(timeout=5)
-            print("✅ Chrome subprocess terminated successfully")
         except subprocess.TimeoutExpired:
             print("⚠️ Chrome didn't terminate gracefully, forcing kill...")
             _chrome_process.kill()
             _chrome_process.wait()
-            print("✅ Chrome subprocess killed")
 
         _chrome_process = None
         return True

@@ -51,7 +51,6 @@ class ScreencastClient:
 
         # Connect to WebSocket
         self.ws = await self.session.ws_connect(ws_url)
-        print(f"✅ Connected to CDP WebSocket: {ws_url}")
 
     async def _send_command(
         self, method: str, params: Optional[Dict[str, Any]] = None
@@ -111,10 +110,6 @@ class ScreencastClient:
             },
         )
 
-        print(
-            f"✅ Screencast started (quality={quality}, every {every_nth_frame}th frame)"
-        )
-
         # Start listening for frames
         asyncio.create_task(self._listen_for_frames())
 
@@ -170,7 +165,6 @@ class ScreencastClient:
 
         self.running = False
         await self._send_command("Page.stopScreencast")
-        print("✅ Screencast stopped")
 
     async def dispatch_mouse_click(self, x: int, y: int, button: str = "left") -> None:
         """
@@ -202,8 +196,6 @@ class ScreencastClient:
             },
         )
 
-        print(f"🖱️  Mouse click dispatched at ({x}, {y}) with {button} button")
-
     async def dispatch_key_event(self, key: str, text: str = "") -> None:
         """
         Dispatch a keyboard event.
@@ -225,8 +217,6 @@ class ScreencastClient:
             "Input.dispatchKeyEvent", {"type": "keyUp", "key": key, "text": text}
         )
 
-        print(f"⌨️  Key event dispatched: {key}")
-
     async def dispatch_scroll(self, x: int, y: int, delta_y: int) -> None:
         """
         Dispatch a scroll event using mouseWheel.
@@ -245,8 +235,6 @@ class ScreencastClient:
             {"type": "mouseWheel", "x": x, "y": y, "deltaX": 0, "deltaY": delta_y},
         )
 
-        print(f"📜 Scroll dispatched at ({x}, {y}) with delta {delta_y}")
-
     async def navigate_back(self) -> None:
         """
         Navigate back in browser history.
@@ -259,8 +247,6 @@ class ScreencastClient:
             "Runtime.evaluate", {"expression": "window.history.back()"}
         )
 
-        print("⬅️  Navigated back")
-
     async def reload_page(self) -> None:
         """
         Reload the current page.
@@ -269,8 +255,6 @@ class ScreencastClient:
             raise Exception("WebSocket not connected")
 
         await self._send_command("Page.reload", {"ignoreCache": False})
-
-        print("🔄 Page reloaded")
 
     async def update_url(self, url) -> None:
         if not self.ws:
@@ -286,4 +270,3 @@ class ScreencastClient:
             await self.ws.close()
         if self.session:
             await self.session.close()
-        print("✅ CDP screencast client closed")

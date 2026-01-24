@@ -96,8 +96,6 @@ async def input_text(
 
     for strategy in strategies:
         if await strategy():
-            print(f"Successfully entered text using {strategy.__name__}")
-
             return
 
     raise Exception("All text input strategies failed")
@@ -322,8 +320,6 @@ async def extract(
         page_url = page.url
         page_title = await page.title()
 
-        print(f"🔄 Extracting content from: {page_url}")
-
         # Extract content using HTML to markdown conversion
         try:
             extracted_content = _html_to_markdown(html_content)
@@ -340,8 +336,6 @@ async def extract(
 
             if not extracted_content.strip():
                 extracted_content = "No content could be extracted from this page."
-
-        print(f"✅ Content extracted ({len(extracted_content)} characters)")
 
         # Add content to agent_state for tracking
         if agent_state:
@@ -453,7 +447,6 @@ async def todo_edit(todo_items: list, agent_state: Optional[AgentState] = None) 
             todo_items_dict = todo_items
 
         result = agent_state.update_todo_list(todo_items_dict)
-        print(f"📝 {result}")
         return result
     except Exception as e:
         error_msg = f"Error updating todo list: {str(e)}"
@@ -471,5 +464,4 @@ async def done(reason: str):
     """
     # This function serves as a signal to notify the user for decision
     # The actual user interaction logic is handled in the agent loop
-    print(f"🤖 Agent believes task is complete: {reason}")
     return f"AWAIT_USER_DECISION: {reason}"

@@ -163,8 +163,6 @@ class Agent:
             tool_name = tool_call.get("name")
             arguments = tool_call.get("arguments")
 
-            print(f"🔧 Executing tool: {tool_name} with arguments: {arguments}")
-
             try:
                 match tool_name:
                     case "click":
@@ -185,16 +183,12 @@ class Agent:
 
                         target_xpath = element["xpath"]
                         iframe_xpath = element.get("iframe_xpath")
-                        print(
-                            f"🎯 Clicking element at index {target_index} with xpath: {target_xpath}"
-                        )
 
                         await click(page, target_xpath, iframe_xpath)
 
                         success_msg = (
                             f"Successfully clicked on element at index {target_index}"
                         )
-                        print(f"✅ {success_msg}")
                         results.append(success_msg)
 
                     case "input_text":
@@ -222,9 +216,6 @@ class Agent:
 
                         target_xpath = element["xpath"]
                         iframe_xpath = element.get("iframe_xpath")
-                        print(
-                            f"📝 Entering text '{input_text_value}' into element at index {target_index} with xpath: {target_xpath}"
-                        )
                         await input_text(
                             page,
                             target_xpath,
@@ -234,7 +225,6 @@ class Agent:
                         )
 
                         success_msg = f"Successfully entered text '{input_text_value}' into element at index {target_index}"
-                        print(f"✅ {success_msg}")
                         results.append(success_msg)
 
                     case "scroll":
@@ -244,10 +234,8 @@ class Agent:
                             print(f"❌ {error_msg}")
                             results.append(error_msg)
                             continue
-                        print(f"📜 Scrolling by {how_much} pixels")
                         await scroll(page, how_much)
                         success_msg = f"Successfully scrolled by {how_much} pixels"
-                        print(f"✅ {success_msg}")
                         results.append(success_msg)
 
                     case "search":
@@ -260,11 +248,6 @@ class Agent:
                             results.append(error_msg)
                             continue
 
-                        if tab_index is not None:
-                            print(f"🔄 Switching to tab index: {tab_index}")
-                        else:
-                            print(f"🔍 Searching for: {query}")
-
                         await search(page, query or "", tab_index, self.agent_state)
 
                         if tab_index is not None:
@@ -273,26 +256,20 @@ class Agent:
                             )
                         else:
                             success_msg = f"Successfully searched for: {query}"
-                        print(f"✅ {success_msg}")
                         results.append(success_msg)
 
                     case "extract":
-                        print("📄 Extracting content from page")
-
                         result = await extract(
                             page,
                             agent_state=self.agent_state,
                         )
                         success_msg = "Successfully extracted content from page"
-                        print(f"✅ {success_msg}")
                         results.append(result)
 
                     case "todo_edit":
                         todo_items = arguments.get("todo_items", [])
-                        print(f"📝 Updating todo list with {len(todo_items)} items")
 
                         result = await todo_edit(todo_items, self.agent_state)
-                        print(f"✅ {result}")
                         results.append(result)
 
                     case "done":
@@ -302,10 +279,8 @@ class Agent:
                             print(f"❌ {error_msg}")
                             results.append(error_msg)
                             continue
-                        print(f"🏁 Agent believes task is complete: {reason}")
                         result = await done(reason)
                         results.append(result)
-                        print(f"✅ {result}")
 
                     case _:
                         error_msg = f"Unknown tool: {tool_name}"
@@ -336,16 +311,6 @@ class Agent:
         Returns:
             Tuple of (decision, user_input) where decision is 'done', 'modify', or 'intervene'
         """
-        print("\n" + "=" * 80)
-        print("🤖 AGENT COMPLETION NOTIFICATION")
-        print("=" * 80)
-        print(f"The agent believes the task is complete: {reason}")
-        print("\nWhat would you like to do?")
-        print("  ✅ [D] DONE - Accept completion and exit")
-        print("  🔄 [M] MODIFY - Provide additional instructions to continue")
-        print("  🛠️  [I] INTERVENE - Allow manual intervention then continue")
-        print("=" * 80)
-
         while True:
             try:
                 # Use input_manager if available, otherwise fall back to direct input
@@ -358,7 +323,6 @@ class Agent:
                 if choice in ["D", "DONE"]:
                     return "done", ""
                 elif choice in ["M", "MODIFY"]:
-                    print("\n📝 Please provide additional instructions for the agent:")
                     if input_manager:
                         user_input = await input_manager.get_decision()
                         user_input = user_input.strip()
@@ -368,30 +332,19 @@ class Agent:
                     if user_input:
                         return "modify", user_input
                     else:
-                        print("❌ Please provide some instructions.")
                         continue
                 elif choice in ["I", "INTERVENE"]:
-                    print("\n🛠️  MANUAL INTERVENTION MODE")
-                    print(
-                        "The browser will remain open for you to make manual changes."
-                    )
-                    print(
-                        "Press ENTER when you're done with manual changes to continue automation..."
-                    )
                     if input_manager:
                         await input_manager.get_decision()
                     else:
                         input()
                     return "intervene", ""
                 else:
-                    print("❌ Invalid choice. Please enter D, M, or I.")
                     continue
 
             except KeyboardInterrupt:
-                print("\n\n🛑 Exiting on user request...")
                 return "done", ""
             except EOFError:
-                print("\n\n🛑 EOF detected, exiting...")
                 return "done", ""
 
     async def run(
@@ -415,8 +368,6 @@ class Agent:
         Returns:
             None (action results are tracked in agent state and printed to console)
         """
-        print("Starting browser context...")
-
         # Initialize input manager if enabled
         # Disable stdin listener since we're running via API (uses queues directly)
         if enable_input_queue:
@@ -439,7 +390,6 @@ class Agent:
             )
             # If no URL provided, navigate to blank page to start
             if not url:
-                print("No initial URL provided, starting with blank page...")
                 await page.goto("about:blank")
             else:
                 await page.goto(url, wait_until="load")
@@ -447,7 +397,6 @@ class Agent:
             start_iteration = 0
 
             try:
-                print("Starting agentic cycle...")
                 last_signature: Optional[str] = None
 
                 for iteration in range(start_iteration, max_iterations):
@@ -539,7 +488,6 @@ class Agent:
                             [f"- {msg}" for msg in user_messages]
                         )
                         user_interrupt_text = f"\n\nUSER INTERRUPTS (New instructions from user):\n{interrupt_messages}\n"
-                        print(f"💬 Received {len(user_messages)} user message(s)")
 
                     enhanced_prompt = f"""
                             User prompt:
@@ -559,7 +507,6 @@ class Agent:
 
 							Please choose the next action to take to complete the task.
 							"""
-                    print(f"Sending LLM Query {iteration}...")
                     # Call the LLM
                     params = build_llm_prompt(
                         user_prompt=enhanced_prompt,
@@ -573,8 +520,6 @@ class Agent:
                     parsed = await self._parse_structured_json(llm_response)
 
                     if not parsed or not parsed.get("actions"):
-                        print(f"⚠️  Iteration {iteration}: No actions returned by LLM")
-                        print(parsed)
                         # Add no actions result to agent state
                         await self.agent_state.add_action_context(
                             action_name="no_actions",
@@ -586,9 +531,6 @@ class Agent:
                         break
 
                     tool_calls = parsed["actions"]
-                    print(
-                        f"🔄 Iteration {iteration}: Executing {len(tool_calls)} action(s)"
-                    )
                     # Execute the tool calls
                     result_messages = await self._execute_tool_call(
                         tool_calls,
@@ -685,32 +627,23 @@ class Agent:
                         )
 
                         if decision == "done":
-                            print(
-                                "🛑 User accepted task completion, stopping execution."
-                            )
                             break
                         elif decision == "modify":
                             # Add user's additional instructions to the original prompt
                             user_prompt = f"{user_prompt}\n\nADDITIONAL INSTRUCTIONS: {user_input}"
-                            print(
-                                f"🔄 Continuing with additional instructions: {user_input}"
-                            )
                             # Set status back to running
                             if self.run_info:
                                 self.run_info.set_status(RunStatus.RUNNING)
                                 await save_run_state(self.run_info)
                             # Continue with the loop - the new instructions will be included in the next iteration
                         elif decision == "intervene":
-                            print("🛠️  Continuing after manual intervention...")
                             # Set status back to running
                             if self.run_info:
                                 self.run_info.set_status(RunStatus.RUNNING)
                                 await save_run_state(self.run_info)
                             # Continue with the loop - user made manual changes
 
-                    print("=" * 100)
             finally:
-                print("Exiting browser...")
                 await browser_context.close()
                 if self.input_manager:
                     await self.input_manager.stop()

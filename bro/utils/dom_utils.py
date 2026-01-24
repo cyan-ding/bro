@@ -357,7 +357,6 @@ async def take_screenshot_with_bounding_boxes(
             # Best-effort wait; proceed even if waiting throws
             cached_signature = None
 
-    print("Walking DOM Tree...")
     # Load the JavaScript bundle
     domTreeInjected = await page.evaluate("window.domTreeInjected")
     if not domTreeInjected:
