@@ -45,7 +45,7 @@ class RunManager:
         self,
         user_prompt: str,
         url: Optional[str] = None,
-        max_iterations: int = 100,
+        max_iterations: int = 10,
         take_screenshot: bool = True,
         model: str = "gemini/gemini-2.5-flash-preview-09-2025",
         enable_logging: bool = True,
