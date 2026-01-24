@@ -715,17 +715,6 @@ class Agent:
                 if self.input_manager:
                     await self.input_manager.stop()
 
-    async def close_connection(self) -> None:
-        """
-        Close the browser connection (CDP connection only, does not kill Chrome process).
-        """
-        if self.browser:
-            await self.browser.close()
-            print("✅ Browser connection closed")
-            if self.input_manager:
-                await self.input_manager.stop()
-
-
 async def main():
     # Load the Bro system prompt
     system_prompt = Path("bro.txt").read_text(encoding="utf-8")
