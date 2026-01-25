@@ -117,8 +117,7 @@ export const useAgentStore = create<AgentStore>()(
             }
 
             const logEvent: LogEvent = JSON.parse(event.data);
-            const currentState = get();
-            set({ logs: [...currentState.logs, logEvent] });
+            set((state) => ({ logs: [...state.logs, logEvent] }));
 
             // Close event source when run ends
             if (logEvent.event_type === "final_status") {

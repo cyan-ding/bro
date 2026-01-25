@@ -560,14 +560,15 @@ class Agent:
                             next_goal=parsed.get("next_goal", ""),
                         )
 
+                    # Log thinking once per iteration (before processing tool calls)
+                    if self.run_info and structured_output_context:
+                        await self.run_info.add_log_event(
+                            LogType.THINKING,
+                            thinking_context=structured_output_context,
+                        )
+
                     # Add each tool call to agent state context with structured output
                     for i, tool_call in enumerate(tool_calls):
-                        # Log thinking separately before each action
-                        if self.run_info and structured_output_context:
-                            await self.run_info.add_log_event(
-                                LogType.THINKING,
-                                thinking_context=structured_output_context,
-                            )
 
                         result_message = (
                             result_messages[i]

@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import { useAgentStore } from "@/store/useAgentStore";
 import { ChatMessage } from "@/lib/models";
-import Link from "next/link";
 
 interface AgentChatProps {
   onStop: () => void;
@@ -63,7 +62,7 @@ export default function AgentChat({
 
   useEffect(() => {
     scrollToBottom();
-  }, [chatMessages]);
+  }, [chatMessages, logs]);
 
   // Detect todo list changes and display them
   useEffect(() => {
@@ -97,66 +96,57 @@ export default function AgentChat({
     lastTodoListRef.current = todoListStr;
   }, [agentState?.todo_list, addChatMessage]);
 
-  useEffect(() => {
-    // Filter and convert logs to chat messages
-    const newMessages: ChatMessage[] = [];
+  const formatLog = (log: LogEvent, index: number): ChatMessage | null => {
+    let content = "";
+    let messageType: "user" | "agent" | "system" = "agent";
 
-    logs.forEach((log) => {
-      const logId = crypto.randomUUID();
+    // Process different event types
+    switch (log.event_type) {
+      case "status":
+        content = log.message || "Status update";
+        break;
+      case "error":
+        content = `Error: ${log.error || log.message || "Unknown error"}`;
+        messageType = "system";
+        break;
+      case "thinking":
+        if (log.thinking_context?.thinking) {
+          content = `💭 ${log.thinking_context.thinking}`;
+        }
+        break;
+      case "action":
+        const actionName = log.action_context?.action_name;
 
-      let content = "";
-      let messageType: "user" | "agent" | "system" = "agent";
-
-      // Process different event types
-      switch (log.event_type) {
-        case "status":
-          content = log.message || "Status update";
-          break;
-        case "error":
-          content = `Error: ${log.error || log.message || "Unknown error"}`;
-          messageType = "system";
-          break;
-        case "thinking":
-          if (log.thinking_context?.thinking) {
-            content = `💭 ${log.thinking_context.thinking}`;
-          }
-          break;
-        case "action":
-          const actionName = log.action_context?.action_name;
-
-          // Create message for the action
-          if (actionName === "done") {
-            content = `✅ ${log.action_context?.result || "Task completed"}`;
-          } else if (actionName) {
-            content = `Action: ${actionName}${log.action_context?.result ? `\n${log.action_context.result}` : ""}`;
-            if (actionName === "extract") content = content.slice(0, 50);
-          }
-          break;
-        case "user_input":
-          content = log.message || "User sent additional instructions";
-          messageType = "user";
-          break;
-        case "final_status":
-          content = "Run completed";
-          messageType = "system";
-          break;
-        // no default; we want to silently ignore unknown types
-      }
-
-      if (content) {
-        newMessages.push({
-          id: logId,
-          type: messageType,
-          content,
-          timestamp: new Date(log.timestamp),
-        });
-      }
-    });
-
-    if (newMessages.length > 0) {
-      newMessages.forEach((msg) => addChatMessage(msg));
+        // Create message for the action
+        if (actionName === "done") {
+          content = `✅ ${log.action_context?.result || "Task completed"}`;
+        } else if (actionName) {
+          content = `Action: ${actionName}${log.action_context?.result ? `\n${log.action_context.result}` : ""}`;
+          if (actionName === "extract") content = content.slice(0, 50);
+        }
+        break;
+      case "user_input":
+        content = log.message || "User sent additional instructions";
+        messageType = "user";
+        break;
+      case "final_status":
+        content = "Run completed";
+        messageType = "system";
+        break;
+      // no default; we want to silently ignore unknown types
     }
-  }, [logs, addChatMessage]);
+
+    if (!content) {
+      return null;
+    }
+
+    return {
+      id: `log-${log.timestamp}-${index}`,
+      type: messageType,
+      content,
+      timestamp: new Date(log.timestamp),
+    };
+  };
 
   const handleSendAdditionalInput = () => {
     if (!input.trim() || !onSendInput) return;
@@ -251,12 +241,24 @@ export default function AgentChat({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {chatMessages.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8">
-            <p className="mb-2">Run starting...</p>
-          </div>
-        ) : (
-          chatMessages.map((message) => (
+        {(() => {
+          const formattedLogs = logs
+            .map((log, index) => formatLog(log, index))
+            .filter((msg): msg is ChatMessage => msg !== null);
+          
+          const allMessages = [...chatMessages, ...formattedLogs].sort(
+            (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+          );
+
+          if (allMessages.length === 0) {
+            return (
+              <div className="text-center text-muted-foreground py-8">
+                <p className="mb-2">Run starting...</p>
+              </div>
+            );
+          }
+
+          return allMessages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
@@ -273,8 +275,8 @@ export default function AgentChat({
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
               </div>
             </div>
-          ))
-        )}
+          ));
+        })()}
         <div ref={messagesEndRef} />
       </div>
 
