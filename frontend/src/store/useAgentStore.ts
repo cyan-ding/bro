@@ -21,6 +21,7 @@ interface AgentStore {
   chatMessages: ChatMessage[];
   model: string | null;
   pollingInterval: NodeJS.Timeout | null;
+  isLoadingRun: boolean;
 
   // Actions
   setModel: (model: string | null) => void;
@@ -55,6 +56,7 @@ export const useAgentStore = create<AgentStore>()(
       chatMessages: [],
       model: null,
       pollingInterval: null,
+      isLoadingRun: false,
 
       // Actions
       setModel: (model) => set({ model }),
@@ -77,16 +79,18 @@ export const useAgentStore = create<AgentStore>()(
           set({ pollingInterval: null });
         }
       },
-      
+
       closeEventSource: () => {
         const state = get();
         if (state.eventSource) {
-          state.eventSource.close();
+          const oldEventSource = state.eventSource;
+          oldEventSource.onmessage = null;
+          oldEventSource.onerror = null;
+          oldEventSource.close();
           set({ eventSource: null });
         }
         // Also stop polling when closing event source
-        const actions = get();
-        actions.stopPolling();
+        state.stopPolling();
       },
 
       startLogStreaming: (runId: string) => {
@@ -94,19 +98,17 @@ export const useAgentStore = create<AgentStore>()(
 
         // Don't create a new connection if we already have one for this runId
         if (state.eventSource && state.runId === runId) {
-          console.log("[LogStream] Already connected to runId:", runId);
           return;
         }
 
         // Close existing event source if any
         if (state.eventSource) {
-          console.log("[LogStream] Closing existing connection");
-          state.eventSource.close();
+          state.closeEventSource();
         }
 
-        console.log("[LogStream] Starting new connection for runId:", runId);
         const newEventSource = createLogStream(runId);
-
+        const eventSourceRunId = runId;
+        
         newEventSource.onmessage = (event) => {
           try {
             // Skip empty or keepalive messages
@@ -115,16 +117,17 @@ export const useAgentStore = create<AgentStore>()(
             }
 
             const logEvent: LogEvent = JSON.parse(event.data);
-            console.log("[LogStream]", logEvent);
-
-            // Add log to store
             const currentState = get();
             set({ logs: [...currentState.logs, logEvent] });
 
             // Close event source when run ends
             if (logEvent.event_type === "final_status") {
+              newEventSource.onmessage = null;
+              newEventSource.onerror = null;
               newEventSource.close();
               set({ eventSource: null });
+              const finalState = get();
+              finalState.stopPolling();
             }
           } catch (err) {
             console.error(
@@ -137,21 +140,27 @@ export const useAgentStore = create<AgentStore>()(
         };
 
         newEventSource.onerror = (err) => {
-          console.error("EventSource error:", err);
+          const currentState = get();
+          // Only log if this EventSource is still active
+          if (currentState.eventSource === newEventSource) {
+            console.error("EventSource error:", err);
+          }
+          newEventSource.onmessage = null;
+          newEventSource.onerror = null;
           newEventSource.close();
           set({ eventSource: null });
         };
-
-        set({ eventSource: newEventSource });
+        
+        state.setEventSource(newEventSource);
       },
 
       clearAll: () => {
         const state = get();
         if (state.eventSource) {
-          state.eventSource.close();
+          state.closeEventSource();
+        } else {
+          state.stopPolling();
         }
-        const actions = get();
-        actions.stopPolling();
         set({
           runId: null,
           logs: [],
@@ -161,6 +170,7 @@ export const useAgentStore = create<AgentStore>()(
           eventSource: null,
           chatMessages: [],
           pollingInterval: null,
+          isLoadingRun: false,
           // Keep runs and model - these are useful across sessions
         });
       },
@@ -168,12 +178,20 @@ export const useAgentStore = create<AgentStore>()(
       loadRun: async (runId: string) => {
         const state = get();
 
+        // Prevent concurrent loads of the same run
+        if (state.isLoadingRun && state.runId === runId) {
+          return;
+        }
+
+        // Set loading flag immediately to prevent concurrent calls
+        set({ isLoadingRun: true });
+
         // Close any existing event source and stop polling
         if (state.eventSource) {
-          state.eventSource.close();
+          state.closeEventSource();
+        } else {
+          state.stopPolling();
         }
-        const actions = get();
-        actions.stopPolling();
 
         // Clear existing data and set the new runId
         set({
@@ -181,7 +199,6 @@ export const useAgentStore = create<AgentStore>()(
           logs: [],
           agentState: null,
           runStatus: null,
-          eventSource: null,
           error: null
         });
 
@@ -201,34 +218,45 @@ export const useAgentStore = create<AgentStore>()(
 
             set({
               logs: logsData,
-              agentState: runData.metadata as AgentStateResponse | null
+              agentState: runData.metadata as AgentStateResponse | null,
+              isLoadingRun: false
             });
           } else {
             // For running runs, start streaming and polling
-            actions.startLogStreaming(runId);
+            state.startLogStreaming(runId);
 
             // Start polling for status and agent state
+            let hasStopped = false;
             const pollRunData = async () => {
               try {
-                const [status, state] = await Promise.all([
+                const currentState = get();
+                // Don't poll if we're no longer loading this run or already stopped
+                if (currentState.runId !== runId || hasStopped) {
+                  return;
+                }
+
+                const [status, agentState] = await Promise.all([
                   getRunStatus(runId),
                   getAgentState(runId)
                 ]);
 
-                set({ runStatus: status, agentState: state });
+                set({ runStatus: status, agentState });
 
-                // If run completed, reload to get final data
                 if (status === "completed" || status === "stopped" || status === "error") {
-                  const currentActions = get();
-                  currentActions.stopPolling();
-                  currentActions.closeEventSource();
+                  hasStopped = true;
+                  const finalState = get();
+                  if (finalState.eventSource) {
+                    finalState.closeEventSource();
+                  } else {
+                    finalState.stopPolling();
+                  }
+                  set({ isLoadingRun: false });
                 }
               } catch (err) {
                 console.error("Failed to poll run data:", err);
               }
             };
 
-            // Poll immediately and then every 2 seconds
             pollRunData();
             const interval = setInterval(pollRunData, 1000);
             set({ pollingInterval: interval });
@@ -236,7 +264,8 @@ export const useAgentStore = create<AgentStore>()(
         } catch (err) {
           console.error("Failed to load run:", err);
           set({
-            error: err instanceof Error ? err.message : "Failed to load run"
+            error: err instanceof Error ? err.message : "Failed to load run",
+            isLoadingRun: false
           });
         }
       },
