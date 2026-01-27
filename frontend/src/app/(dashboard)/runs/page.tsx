@@ -101,15 +101,25 @@ export default function Run() {
     ) => {
       if (!runId) return;
 
+      // Optimistically update status immediately for instant UI feedback
+      if (decision === "done") {
+        setRunStatus("completed");
+      } else {
+        // For "modify" or "intervene", set back to running
+        setRunStatus("running");
+      }
+
       try {
         await sendDecision(runId, decision, instructions);
+        // Polling will eventually confirm the status, but UI updates immediately
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to send decision"
         );
+        // On error, status will be corrected by next poll or user can retry
       }
     },
-    [runId, setError]
+    [runId, setError, setRunStatus]
   );
 
   return (
