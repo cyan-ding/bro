@@ -62,14 +62,22 @@ class AgentState(BaseModel):
         In theory this should be able to take all current open URLs and update internal state based on that.
         """
 
+        if page is None:
+            return
+
         context = page.context
         pages = context.pages
 
         try:
             # Compare the number of browser pages with the number of tracked tabs
             if update_url:
-                self.tabs[self.current_tab_index].url = update_url
+                if (
+                    self.current_tab_index is not None
+                    and 0 <= self.current_tab_index < len(self.tabs)
+                ):
+                    self.tabs[self.current_tab_index].url = update_url
             else:
+                # Check for new tabs first
                 if len(pages) > len(self.tabs):
                     # Find the index where new tabs start
                     start_idx = len(self.tabs)
@@ -82,7 +90,24 @@ class AgentState(BaseModel):
                         )
                         self.set_current_tab_index(len(self.tabs) - 1)
 
-            # if no new tabs/agent just switched tabs, that should be covered in the search tool already
+                # Update current tab's URL and title if navigation occurred within the same tab
+                # Use the page parameter directly - it's the active page passed from the agent
+                if (
+                    self.current_tab_index is not None
+                    and 0 <= self.current_tab_index < len(self.tabs)
+                ):
+                    current_tab = self.tabs[self.current_tab_index]
+                    current_page_url = page.url
+                    # Check if URL has changed
+                    if current_tab.url != current_page_url:
+                        current_tab.url = current_page_url
+                        # Also update title in case it changed
+                        try:
+                            current_tab.title = await page.title()
+                        except Exception:
+                            # If title fetch fails, continue without updating title
+                            pass
+
         except Exception as e:
             print(f"⚠️ Failed to update page state: {e}")
 
