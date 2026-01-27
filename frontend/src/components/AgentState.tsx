@@ -32,7 +32,9 @@ export default function AgentState({
       </Card>
     );
   }
-  const lastAction = state.action_history[state.action_history.length - 1];
+  const lastAction = state.action_history.length > 0 
+    ? state.action_history[state.action_history.length - 1] 
+    : null;
   return (
     <Card className="h-[calc(100vh-12rem)]">
       <CardHeader>
@@ -59,7 +61,7 @@ export default function AgentState({
               <div>
                 <span className="text-sm font-medium">Progress</span>
                 <div className="mt-1 text-sm">
-                  {lastAction.iteration} / {state.max_iterations || 0}
+                  {lastAction?.iteration ?? 0} / {state.max_iterations || 0}
                 </div>
               </div>
             </div>
@@ -68,7 +70,7 @@ export default function AgentState({
               <span className="text-sm font-medium">Last Action</span>
               <div className="mt-1">
                 <code className="text-sm bg-muted px-2 py-1 rounded">
-                  {lastAction?.action_name ?? ""}
+                  {lastAction?.action_name ?? "No actions yet"}
                 </code>
               </div>
             </div>
@@ -224,7 +226,7 @@ export default function AgentState({
                       <div key={`action-${index}`}>
                         <div className="flex items-start gap-2">
                           <Badge variant="outline" className="mt-0.5">
-                            #{action.iteration}
+                            #{action.iteration ?? 0}
                           </Badge>
                           <div className="flex-1 space-y-1">
                             <div className="flex items-center gap-2">
