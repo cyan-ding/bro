@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { LogEvent, AgentStateResponse } from "@/lib/models";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,8 +46,6 @@ export default function AgentChat({
 }: AgentChatProps) {
   const { model, chatMessages, addChatMessage } = useAgentStore();
   const [input, setInput] = useState("");
-  const [url, setUrl] = useState("");
-  const [showUrlInput, setShowUrlInput] = useState(false);
   const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [showModifyInput, setShowModifyInput] = useState(false);
   const [showStopDialog, setShowStopDialog] = useState(false);
@@ -348,22 +345,6 @@ export default function AgentChat({
         {/* Main Input Form */}
         {!isAwaitingDecision && (
           <form className="space-y-2">
-            {/* URL Input (optional, collapsible) */}
-            {!isRunning && showUrlInput && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Starting URL (optional)
-                </label>
-                <Input
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://example.com"
-                  className="mt-1"
-                />
-              </div>
-            )}
-
             {/* Main textarea and buttons */}
             <div className="flex gap-2">
               <Textarea

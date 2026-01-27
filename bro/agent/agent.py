@@ -352,7 +352,6 @@ class Agent:
         user_prompt: str,
         url: str = "",
         max_iterations: int = 10,
-        take_screenshot: bool = False,
         enable_input_queue: bool = True,
     ) -> None:
         """
@@ -362,12 +361,12 @@ class Agent:
             user_prompt: The user's task description
             url: The URL to navigate to (optional)
             max_iterations: Maximum number of iterations to prevent infinite loops
-            take_screenshot: Whether to take screenshots during execution
             enable_input_queue: Whether to enable the input queue for real-time user messages
 
         Returns:
             None (action results are tracked in agent state and printed to console)
         """
+        self.agent_state.max_iterations = max_iterations
         # Initialize input manager if enabled
         # Disable stdin listener since we're running via API (uses queues directly)
         if enable_input_queue:
@@ -432,7 +431,6 @@ class Agent:
                             page,
                             wait_for_change=should_wait_for_change,
                             previous_signature=last_signature,
-                            take_screenshot=take_screenshot,
                         )
                     except Exception as e:
                         # Add screenshot error to agent state so agent can react
@@ -670,7 +668,6 @@ async def main():
         user_prompt=prompts[0],
         # url="https://arxiv.org/list/cs.AI/recent",
         max_iterations=100,
-        take_screenshot=True,
     )
 
 

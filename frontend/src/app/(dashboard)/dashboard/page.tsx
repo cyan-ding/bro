@@ -10,16 +10,29 @@ import { Combobox } from "@/components/ui/combobox";
 import { useAgentStore } from "@/store/useAgentStore";
 import { useConfigStore } from "@/store/useConfigStore";
 import { useRouter } from "next/navigation";
-import { ArrowUpIcon } from "lucide-react";
+import { ArrowUpIcon, Settings } from "lucide-react";
 import { createRun, getRunList } from "@/lib/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const router = useRouter();
-  const { model, setModel, setRunId, setError, setRuns } = useAgentStore();
+  const { model, setModel, setRunId, setError, setRuns, runConfig, setRunConfig } = useAgentStore();
   const { settings, loadSettings } = useConfigStore();
 
   const [prompt, setPrompt] = useState("");
   const [models, setModels] = useState({});
+  const [showSettings, setShowSettings] = useState(false);
+  const [tempMaxIterations, setTempMax] = useState(runConfig.maxIterations | 1);
 
   useEffect(() => {
     loadSettings();
@@ -46,7 +59,7 @@ export default function Dashboard() {
   }, [setRuns]);
 
   const handleStart = useCallback(
-    async (prompt: string, url?: string) => {
+    async (prompt: string) => {
       if (!model) {
         return;
       }
@@ -54,10 +67,8 @@ export default function Dashboard() {
       try {
         const response = await createRun({
           user_prompt: prompt,
-          url: url || "", // Keep URL in code but use empty string as default
-          max_iterations: 100,
-          take_screenshot: true,
-          enable_logging: true,
+          url: runConfig.url || "",
+          max_iterations: runConfig.maxIterations,
           model: model,
         });
         const run_id = response.run_id;
@@ -73,7 +84,7 @@ export default function Dashboard() {
         setError(err instanceof Error ? err.message : "Failed to start agent");
       }
     },
-    [model, router, setModel, setRunId, setError, setRuns]
+    [model, router, setModel, setRunId, setError, setRuns, runConfig]
   );
 
 
@@ -113,6 +124,14 @@ export default function Dashboard() {
               className="ml-auto"
             />
             <InputGroupButton
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Settings"
+              onClick={() => setShowSettings(true)}
+            >
+              <Settings />
+            </InputGroupButton>
+            <InputGroupButton
               variant="default"
               className="rounded-full"
               size="icon-xs"
@@ -125,6 +144,47 @@ export default function Dashboard() {
           </InputGroupAddon>
         </InputGroup>
       </div>
+
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Run Settings</DialogTitle>
+            <DialogDescription>
+              Configure settings for the agent run
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="url">Starting URL (optional)</Label>
+              <Input
+                id="url"
+                type="text"
+                value={runConfig.url}
+                onChange={(e) => setRunConfig({ url: e.target.value })}
+                placeholder="https://example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="maxIterations">Max Iterations</Label>
+              <Input
+                id="maxIterations"
+                type="number"
+                value={String(tempMaxIterations)}
+                onChange={
+                  (e) => {
+                    const val = parseInt(e.target.value);
+                    setTempMax(val)
+                    if (val > 0) setRunConfig({ maxIterations: val})
+                  }
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowSettings(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

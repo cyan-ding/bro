@@ -9,6 +9,11 @@ import type {
 } from "@/lib/models";
 import { createLogStream, getRunStatus, getRun, getLogs, getAgentState } from "@/lib/api";
 
+interface RunConfig {
+  url: string;
+  maxIterations: number;
+}
+
 interface AgentStore {
   // State
   runId: string | null;
@@ -22,6 +27,7 @@ interface AgentStore {
   model: string | null;
   pollingInterval: NodeJS.Timeout | null;
   isLoadingRun: boolean;
+  runConfig: RunConfig;
 
   // Actions
   setModel: (model: string | null) => void;
@@ -40,6 +46,7 @@ interface AgentStore {
   clearAll: () => void;
   loadRun: (runId: string) => Promise<void>;
   stopPolling: () => void;
+  setRunConfig: (config: Partial<RunConfig>) => void;
 }
 
 export const useAgentStore = create<AgentStore>()(
@@ -57,6 +64,10 @@ export const useAgentStore = create<AgentStore>()(
       model: null,
       pollingInterval: null,
       isLoadingRun: false,
+      runConfig: {
+        url: "",
+        maxIterations: 100,
+      },
 
       // Actions
       setModel: (model) => set({ model }),
@@ -71,6 +82,10 @@ export const useAgentStore = create<AgentStore>()(
       addChatMessage: (message) =>
         set((state) => ({ chatMessages: [...state.chatMessages, message] })),
       setChatMessages: (chatMessages) => set({ chatMessages }),
+      setRunConfig: (config) =>
+        set((state) => ({
+          runConfig: { ...state.runConfig, ...config },
+        })),
 
       stopPolling: () => {
         const state = get();
@@ -274,7 +289,8 @@ export const useAgentStore = create<AgentStore>()(
       partialize: (state) => ({
         runId: state.runId,
         runs: state.runs,
-        model: state.model
+        model: state.model,
+        runConfig: state.runConfig,
         // Don't persist logs, runStatus, agentState as they'll be fetched fresh
       }),
     }

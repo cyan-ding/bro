@@ -139,9 +139,7 @@ async def create_run(request: CreateRunRequest):
             user_prompt=request.user_prompt,
             url=request.url,
             max_iterations=request.max_iterations,
-            take_screenshot=request.take_screenshot,
             model=request.model,
-            enable_logging=request.enable_logging,
         )
 
         return CreateRunResponse(

@@ -29,13 +29,7 @@ class CreateRunRequest(BaseModel):
     user_prompt: str = Field(..., description="The task for the agent to complete")
     url: Optional[str] = Field(None, description="Optional starting URL")
     max_iterations: int = Field(100, description="Maximum number of iterations")
-    take_screenshot: Optional[bool] = Field(
-        True, description="Whether to take screenshots"
-    )
     model: str = Field("gpt-4o-mini", description="LLM model to use")
-    enable_logging: Optional[bool] = Field(
-        False, description="Whether to enable log streaming"
-    )
 
 
 class CreateRunResponse(BaseModel):

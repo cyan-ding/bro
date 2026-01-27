@@ -318,7 +318,6 @@ async def take_screenshot_with_bounding_boxes(
     previous_signature: Optional[str] = None,
     timeout_ms: int = 1500,
     poll_interval_ms: int = 100,
-    take_screenshot: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """
     Take a screenshot and analyze the DOM to get bounding boxes and element information.
@@ -367,7 +366,7 @@ async def take_screenshot_with_bounding_boxes(
     result = await page.evaluate(
         "(args) => window.buildDomTree(args)",
         {
-            "doHighlightElements": take_screenshot,
+            "doHighlightElements": True,
             "overlapThreshold": 0.7,
             "indexByPosition": True,
         },
@@ -387,12 +386,9 @@ async def take_screenshot_with_bounding_boxes(
             };
         }
     """)
-    # Take screenshot
-    if take_screenshot:
-        screenshot_bytes = await page.screenshot()
-        screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-    else:
-        screenshot_base64 = None
+    # Take screenshot (always enabled)
+    screenshot_bytes = await page.screenshot()
+    screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
     # Compute and return a stable signature for next-iteration comparisons (based on raw highlights)
     signature = (

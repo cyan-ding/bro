@@ -46,9 +46,7 @@ class RunManager:
         user_prompt: str,
         url: Optional[str] = None,
         max_iterations: int = 10,
-        take_screenshot: bool = True,
         model: str = "gemini/gemini-2.5-flash-preview-09-2025",
-        enable_logging: bool = True,
     ) -> RunInfo:
         run_id = str(uuid.uuid4())
 
@@ -86,11 +84,11 @@ class RunManager:
             title=title,
         )
 
-        # Create agent instance with run_info if logging is enabled
+        # Create agent instance with run_info (logging always enabled)
         agent = Agent(
             system_prompt=system_prompt,
             model=model,
-            run_info=run_info if enable_logging else None,
+            run_info=run_info,
         )
 
         # Set the agent in run_info
@@ -99,7 +97,7 @@ class RunManager:
         await self.set_run(run_id, run_info)
         # Start the agent in background
         run_info.task = asyncio.create_task(
-            self._run_agent(run_info, url, max_iterations, take_screenshot)
+            self._run_agent(run_info, url, max_iterations)
         )
 
         # callback to verify run succeeded
@@ -123,7 +121,6 @@ class RunManager:
         run_info: RunInfo,
         url: Optional[str],
         max_iterations: int,
-        take_screenshot: bool,
     ) -> None:
         """
         Run the agent in the background.
@@ -132,7 +129,6 @@ class RunManager:
             run_info: Run information object
             url: Optional starting URL
             max_iterations: Maximum iterations
-            take_screenshot: Whether to take screenshots
         """
         try:
             run_info.set_status(RunStatus.RUNNING)
@@ -146,7 +142,6 @@ class RunManager:
                 user_prompt=run_info.user_prompt,
                 url=url or "",
                 max_iterations=max_iterations,
-                take_screenshot=take_screenshot,
                 enable_input_queue=True,
             )
 
