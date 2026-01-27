@@ -45,7 +45,6 @@ export default function ScreencastViewer({
   useEffect(() => {
     if (currentUrl) {
       setLocalUrl(currentUrl);
-      console.log("URL Change", currentUrl)
     }
   }, [currentUrl]);
 
