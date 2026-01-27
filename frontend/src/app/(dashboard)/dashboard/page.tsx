@@ -76,6 +76,17 @@ export default function Dashboard() {
     [model, router, setModel, setRunId, setError, setRuns]
   );
 
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && prompt) {
+        handleStart(prompt)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [handleStart, prompt])
+
   return (
     <div className="flex justify-center items-center">
       <div className="w-1/2">
