@@ -19,6 +19,11 @@ export default function Logs() {
         if (urlRunId) {
             loadRun(urlRunId);
         }
+
+        return () => {
+            useAgentStore.getState().closeEventSource();
+            useAgentStore.setState({ isLoadingRun: false });
+        };
     }, [urlRunId, loadRun]);
 
     return (

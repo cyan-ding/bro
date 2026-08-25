@@ -21,7 +21,7 @@ class AgentState(BaseModel):
     max_extractions: int = 50
     current_tab_index: Optional[int] = None
     last_edited: str = Field(default_factory=lambda: datetime.now().isoformat())
-    max_iterations: int = 10
+    max_iterations: int = 100
 
     def add_extraction(
         self,

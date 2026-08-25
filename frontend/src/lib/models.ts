@@ -10,9 +10,7 @@ export interface CreateRunRequest {
   user_prompt: string;
   url?: string;
   max_iterations: number;
-  take_screenshot?: boolean;
-  model: string
-  enable_logging?: boolean;
+  model: string;
 }
 
 // for just the dashboard

@@ -351,7 +351,7 @@ class Agent:
         self,
         user_prompt: str,
         url: str = "",
-        max_iterations: int = 10,
+        max_iterations: int = 100,
         enable_input_queue: bool = True,
     ) -> None:
         """

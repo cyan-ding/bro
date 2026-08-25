@@ -56,6 +56,11 @@ export default function Run() {
     if (urlRunId) {
       loadRun(urlRunId);
     }
+
+    return () => {
+      useAgentStore.getState().closeEventSource();
+      useAgentStore.setState({ isLoadingRun: false });
+    };
   }, [urlRunId, loadRun]);
 
 

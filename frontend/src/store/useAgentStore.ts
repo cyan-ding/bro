@@ -132,6 +132,11 @@ export const useAgentStore = create<AgentStore>()(
             }
 
             const logEvent: LogEvent = JSON.parse(event.data);
+            const currentState = get();
+            if (currentState.runId !== eventSourceRunId) {
+              return;
+            }
+
             set((state) => ({ logs: [...state.logs, logEvent] }));
 
             // Close event source when run ends
@@ -273,7 +278,7 @@ export const useAgentStore = create<AgentStore>()(
 
             pollRunData();
             const interval = setInterval(pollRunData, 1000);
-            set({ pollingInterval: interval });
+            set({ pollingInterval: interval, isLoadingRun: false });
           }
         } catch (err) {
           console.error("Failed to load run:", err);

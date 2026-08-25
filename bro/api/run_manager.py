@@ -45,7 +45,7 @@ class RunManager:
         self,
         user_prompt: str,
         url: Optional[str] = None,
-        max_iterations: int = 10,
+        max_iterations: int = 100,
         model: str = "gemini/gemini-2.5-flash-preview-09-2025",
     ) -> RunInfo:
         run_id = str(uuid.uuid4())

@@ -32,7 +32,7 @@ export default function Dashboard() {
   const [prompt, setPrompt] = useState("");
   const [models, setModels] = useState({});
   const [showSettings, setShowSettings] = useState(false);
-  const [tempMaxIterations, setTempMax] = useState(runConfig.maxIterations | 1);
+  const [tempMaxIterations, setTempMax] = useState(runConfig.maxIterations || 1);
 
   useEffect(() => {
     loadSettings();
@@ -127,7 +127,10 @@ export default function Dashboard() {
               variant="ghost"
               size="icon-xs"
               aria-label="Settings"
-              onClick={() => setShowSettings(true)}
+              onClick={() => {
+                setTempMax(runConfig.maxIterations || 1);
+                setShowSettings(true);
+              }}
             >
               <Settings />
             </InputGroupButton>

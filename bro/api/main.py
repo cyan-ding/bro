@@ -16,7 +16,6 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import json
-from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -44,21 +43,11 @@ from .models import (
 )
 from .run_manager import RunManager
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """run before api starts"""
-    use_cdp()
-
-    yield
-
-
 # Initialize FastAPI app
 app = FastAPI(
     title="Bro Agent API",
     description="API for managing Bro web automation agent runs",
     version="0.1.0",
-    # lifespan=lifespan,
 )
 
 # Add CORS middleware
