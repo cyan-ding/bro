@@ -1,0 +1,236 @@
+[
+  {
+    "id": "Allrecipes--22",
+    "task": "Find a recipe for a healthy avocado salad on Allrecipes that has a preparation time of less than 20 minutes and more than 30 user reviews. Include the nutritional information per serving.",
+    "url": "https://www.allrecipes.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Allrecipes--32",
+    "task": "Find a high-rated beef stew recipe on Allrecipes that requires a slow cooker and has at least 30 reviews. Detail the cooking time and the first five ingredients listed in the recipe.",
+    "url": "https://www.allrecipes.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Apple--28",
+    "task": "On the Apple website, find out if the Mac Mini can be configured with a GPU larger than 16-core.",
+    "url": "https://www.apple.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Apple--41",
+    "task": "How much does it cost to buy an ipad mini with 64GB storage and Wi-Fi + Cellular connectivity? (no engraving, no apple pencil, no smart folio, no apple trade-in).",
+    "url": "https://www.apple.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "ArXiv--37",
+    "task": "Find the names of people in ArXiv's Leadership Team.",
+    "url": "https://arxiv.org/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "ArXiv--17",
+    "task": "Find the paper 'GPT-4 Technical Report', when was v3 submitted?",
+    "url": "https://arxiv.org/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "GitHub--5",
+    "task": "Find a Python repository on GitHub that has been updated in the past 2 days and has at least 500 stars.",
+    "url": "https://github.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "GitHub--26",
+    "task": "Find the Resolve merge conflicts course in GitHub Skills and what actions learners will perform in this course.",
+    "url": "https://github.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Cambridge Dictionary--40",
+    "task": "Look up the definition, pronunciation in UK English, and at least one example using the word 'mitigate'.",
+    "url": "https://dictionary.cambridge.org/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Cambridge Dictionary--20",
+    "task": "Look up the definition, pronunciation (both UK and US), and find one example sentence for the word \"altruism\" in the Cambridge Dictionary.",
+    "url": "https://dictionary.cambridge.org/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "BBC News--21",
+    "task": "Identify the top headline in the World News section on BBC News and describe the region it is related to.",
+    "url": "https://www.bbc.com/news/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "BBC News--39",
+    "task": "Check the Horse Racing results in Sport section, browse all the games that took place yesterday and see which one had the highest number of runners.",
+    "url": "https://www.bbc.com/news/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Coursera--33",
+    "task": "Find a beginner level Coursera course related to \"Internet of Things (IoT)\" with a high rating. Provide the course name, instructor's name, and a brief summary of the skills that will be taught.",
+    "url": "https://www.coursera.org/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Coursera--14",
+    "task": "Find a course on Coursera related to Introductory Project Management that includes modules on Agile methodology.",
+    "url": "https://www.coursera.org/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "ESPN--4",
+    "task": "Check ESPN for the final scores of NBA games that were played yesterday.",
+    "url": "https://www.espn.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "ESPN--11",
+    "task": "How many NBA teams are there and list all the teams with 'New' in their name.",
+    "url": "https://www.espn.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Huggingface--22",
+    "task": "Identify the steps to convert a PyTorch model to TensorFlow using the Hugging Face Transformers library as described in their documentation.",
+    "url": "https://huggingface.co/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Huggingface--18",
+    "task": "Look up TRL's forward modelling in the hugging face documentation on how to add a margin to a loss.",
+    "url": "https://huggingface.co/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Wolfram Alpha--28",
+    "task": "Identify the character in Unicode range 9632 to 9650 that represents a hollow parallelogram.",
+    "url": "https://www.wolframalpha.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Wolfram Alpha--2",
+    "task": "Calculate 3^71 and retain 5 significant figures in scientific notation.",
+    "url": "https://www.wolframalpha.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Amazon--9",
+    "task": "Find a dog bed on Amazon that is washable and has a length of at least 30 inches.",
+    "url": "https://www.amazon.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Amazon--16",
+    "task": "Find the Return Policy for Mens Rhinestone Skull Graphic Shirt on Amazon. Color: Black, Size: XX-Large. If Free return is avaliable, tell me how to return this item.",
+    "url": "https://www.amazon.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Google Search--23",
+    "task": "Retrieve a short biography of LeBron James.",
+    "url": "https://www.google.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Google Search--42",
+    "task": " Use Google Search to find an article that explains the major differences between American English and British English.",
+    "url": "https://www.google.com/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Google Map--22",
+    "task": "Find a Best Buy store near zip code 33139.",
+    "url": "https://www.google.com/maps/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  },
+  {
+    "id": "Google Map--23",
+    "task": "Determine the shortest walking route from The Metropolitan Museum of Art to Times Square in New York.",
+    "url": "https://www.google.com/maps/",
+    "check": "llm",
+    "expected": [
+      "a specific, concrete answer that satisfies every constraint in the task"
+    ]
+  }
+]

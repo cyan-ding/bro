@@ -451,7 +451,7 @@ export default function buildDomTree(
         if (seenByValue.has(valStr)) continue;
         seenByValue.set(valStr, key);
       }
-      out[key] = capText(valStr, 30);
+      out[key] = capText(valStr, key === "href" ? 120 : 30);
     }
     return out;
   }

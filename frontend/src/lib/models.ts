@@ -11,6 +11,7 @@ export interface CreateRunRequest {
   url?: string;
   max_iterations: number;
   model: string;
+  mode?: "fast" | "legacy";
 }
 
 // for just the dashboard

@@ -1,0 +1,256 @@
+[
+  {
+    "id": "arxiv_title",
+    "task": "What is the title of the arXiv paper with ID 1706.03762?",
+    "url": "https://arxiv.org",
+    "check": "contains",
+    "expected": [
+      "attention is all you need"
+    ]
+  },
+  {
+    "id": "arxiv_author",
+    "task": "Who is the first author of arXiv paper 2005.14165?",
+    "url": "https://arxiv.org",
+    "check": "contains",
+    "expected": [
+      "brown"
+    ]
+  },
+  {
+    "id": "arxiv_recent",
+    "task": "Open the arXiv cs.CL recent listing and report the title of the newest paper shown.",
+    "url": "https://arxiv.org",
+    "check": "llm",
+    "expected": [
+      "a plausible paper title taken from the cs.CL new submissions listing"
+    ]
+  },
+  {
+    "id": "wiki_eiffel",
+    "task": "According to Wikipedia, in what year was the Eiffel Tower completed?",
+    "url": "https://en.wikipedia.org",
+    "check": "contains",
+    "expected": [
+      "1889"
+    ]
+  },
+  {
+    "id": "wiki_python",
+    "task": "On Wikipedia, who created the Python programming language?",
+    "url": "https://en.wikipedia.org",
+    "check": "contains",
+    "expected": [
+      "van rossum"
+    ]
+  },
+  {
+    "id": "wiki_inception",
+    "task": "Use Wikipedia to find who directed the 2010 film Inception and what its running time is.",
+    "url": "https://en.wikipedia.org",
+    "check": "contains_all",
+    "expected": [
+      "nolan",
+      "148"
+    ]
+  },
+  {
+    "id": "github_license",
+    "task": "What license does the GitHub repository psf/requests use?",
+    "url": "https://github.com",
+    "check": "contains",
+    "expected": [
+      "apache"
+    ]
+  },
+  {
+    "id": "github_flask",
+    "task": "What is the short description of the GitHub repository pallets/flask?",
+    "url": "https://github.com",
+    "check": "contains",
+    "expected": [
+      "python"
+    ]
+  },
+  {
+    "id": "github_stars",
+    "task": "How many stars does the GitHub repository browser-use/browser-use have?",
+    "url": "https://github.com",
+    "check": "regex",
+    "expected": [
+      "\\d+(\\.\\d+)?\\s*k|\\d{2,3},\\d{3}"
+    ]
+  },
+  {
+    "id": "cambridge_def",
+    "task": "On Cambridge Dictionary, what is the first definition given for the word 'serendipity'?",
+    "url": "https://dictionary.cambridge.org",
+    "check": "regex",
+    "expected": [
+      "chance|luck|accident"
+    ]
+  },
+  {
+    "id": "cambridge_ipa",
+    "task": "On Cambridge Dictionary, what is the UK pronunciation (IPA) of the word 'schedule'?",
+    "url": "https://dictionary.cambridge.org",
+    "check": "regex",
+    "expected": [
+      "ʃed|ʃɛd|ˈʃ"
+    ]
+  },
+  {
+    "id": "hf_task",
+    "task": "On Hugging Face, what task (pipeline tag) is the model google-bert/bert-base-uncased for?",
+    "url": "https://huggingface.co",
+    "check": "contains",
+    "expected": [
+      "fill-mask"
+    ]
+  },
+  {
+    "id": "hf_license",
+    "task": "On Hugging Face, what license is the model Qwen/Qwen3-8B released under?",
+    "url": "https://huggingface.co",
+    "check": "contains",
+    "expected": [
+      "apache"
+    ]
+  },
+  {
+    "id": "pydocs_casefold",
+    "task": "On docs.python.org, what does the str.casefold() method return?",
+    "url": "https://docs.python.org/3/",
+    "check": "regex",
+    "expected": [
+      "caseless|casefold|lowercas"
+    ]
+  },
+  {
+    "id": "wolfram_integral",
+    "task": "Use Wolfram Alpha to compute the integral of x^2 from 0 to 3 and report the result.",
+    "url": "https://www.wolframalpha.com",
+    "check": "regex",
+    "expected": [
+      "\\b9\\b"
+    ]
+  },
+  {
+    "id": "wolfram_population",
+    "task": "Use Wolfram Alpha to find the population of Canada.",
+    "url": "https://www.wolframalpha.com",
+    "check": "regex",
+    "expected": [
+      "(3[89]|4\\d)(\\.\\d+)?\\s*million|(3[89]|4\\d),\\d{3},\\d{3}"
+    ]
+  },
+  {
+    "id": "allrecipes_banana",
+    "task": "On Allrecipes, find a banana bread recipe and report its name and star rating.",
+    "url": "https://www.allrecipes.com",
+    "check": "regex",
+    "expected": [
+      "banana.*\\d(\\.\\d)?|\\d(\\.\\d)?.*banana"
+    ]
+  },
+  {
+    "id": "allrecipes_cookie",
+    "task": "On Allrecipes, find a chocolate chip cookie recipe with a rating of at least 4.5 stars and report its name and total time.",
+    "url": "https://www.allrecipes.com",
+    "check": "llm",
+    "expected": [
+      "a named chocolate chip cookie recipe with a time such as '30 mins' or '1 hr'"
+    ]
+  },
+  {
+    "id": "apple_macmini",
+    "task": "On apple.com, what is the starting price of the Mac mini?",
+    "url": "https://www.apple.com",
+    "check": "regex",
+    "expected": [
+      "\\$\\s?\\d{3}"
+    ]
+  },
+  {
+    "id": "coursera_ml",
+    "task": "On Coursera, find the Machine Learning Specialization taught by Andrew Ng and report which organizations offer it.",
+    "url": "https://www.coursera.org",
+    "check": "regex",
+    "expected": [
+      "deeplearning|stanford"
+    ]
+  },
+  {
+    "id": "hn_top",
+    "task": "Go to Hacker News (news.ycombinator.com) and report the title of the current top story and how many points it has.",
+    "url": "https://news.ycombinator.com",
+    "check": "regex",
+    "expected": [
+      "\\d+\\s*point"
+    ]
+  },
+  {
+    "id": "httpbin_form",
+    "task": "On https://httpbin.org/forms/post enter 'Bro Agent' as the customer name, choose Large pizza size, and submit the form. Report the value of custname in the response.",
+    "url": "https://httpbin.org/forms/post",
+    "check": "contains",
+    "expected": [
+      "bro agent"
+    ]
+  },
+  {
+    "id": "amazon_cable",
+    "task": "Search Amazon for 'usb c cable' and report the name and price of the first result.",
+    "url": "https://www.amazon.com",
+    "check": "regex",
+    "expected": [
+      "\\$\\s?\\d+"
+    ]
+  },
+  {
+    "id": "espn_nba",
+    "task": "On ESPN, find the NBA standings and report which team is currently first in the Eastern Conference.",
+    "url": "https://www.espn.com",
+    "check": "llm",
+    "expected": [
+      "an NBA team name"
+    ]
+  },
+  {
+    "id": "bbc_headline",
+    "task": "On BBC News, report the main headline on the front page right now.",
+    "url": "https://www.bbc.com/news",
+    "check": "llm",
+    "expected": [
+      "a plausible news headline"
+    ]
+  },
+  {
+    "id": "gmaps_esb",
+    "task": "Use Google Maps to find the street address of the Empire State Building.",
+    "url": "https://www.google.com/maps",
+    "check": "regex",
+    "expected": [
+      "350|20 w|34th"
+    ]
+  },
+  {
+    "id": "wiki_multi",
+    "task": "Using Wikipedia, find the capital of Australia and the year that city was founded.",
+    "url": "https://en.wikipedia.org",
+    "check": "contains_all",
+    "expected": [
+      "canberra",
+      "1913"
+    ]
+  },
+  {
+    "id": "github_search",
+    "task": "On GitHub, search for repositories about 'browser agent' and report the full name of the top result.",
+    "url": "https://github.com",
+    "check": "regex",
+    "expected": [
+      "[\\w.-]+/[\\w.-]+"
+    ]
+  }
+]

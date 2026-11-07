@@ -12,6 +12,7 @@ import { createLogStream, getRunStatus, getRun, getLogs, getAgentState } from "@
 interface RunConfig {
   url: string;
   maxIterations: number;
+  mode: "fast" | "legacy";
 }
 
 interface AgentStore {
@@ -67,6 +68,7 @@ export const useAgentStore = create<AgentStore>()(
       runConfig: {
         url: "",
         maxIterations: 100,
+        mode: "fast",
       },
 
       // Actions

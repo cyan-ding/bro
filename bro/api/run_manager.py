@@ -11,9 +11,12 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from agent.agent import Agent
-from agent.ai import ai
-from agent.build_llm_prompt import build_llm_prompt
 from utils.db import save_run_state
+
+from bro.fast.llm import ChatModel
+from bro.fast.local_server import ensure_local_server
+
+from .fast_run import FastRun
 
 from .models import RunStatus, SendDecisionRequest
 from .run_info import RunInfo
@@ -47,6 +50,7 @@ class RunManager:
         url: Optional[str] = None,
         max_iterations: int = 100,
         model: str = "gemini/gemini-2.5-flash-preview-09-2025",
+        mode: str = "fast",
     ) -> RunInfo:
         run_id = str(uuid.uuid4())
 
@@ -56,23 +60,13 @@ class RunManager:
 
         # generate a 3-5 word summary of the user prompt to be the title of the run
 
-        summary_prompt = "Summarized the user's prompt concisely in 3-5 words"
-        title_response = await ai(
-            build_llm_prompt(
-                user_prompt=user_prompt,
-                system_prompt=summary_prompt,
-                model=model,
-                structured_format=False,
-            )
-        )
-        # Extract string content from ModelResponse
-        title = (
-            title_response.choices[0].message.content.strip()
-            if title_response
-            and title_response.choices
-            and len(title_response.choices) > 0
-            else user_prompt[:50]  # Fallback to first 50 chars of prompt
-        )
+        summary_prompt = "Summarize the user's prompt concisely in 3-5 words. Reply with the summary only."
+        try:
+            await asyncio.to_thread(ensure_local_server, model)
+            title = (await ChatModel(model, max_tokens=20).complete(summary_prompt, user_prompt)).text.strip()
+        except Exception:
+            title = ""
+        title = title or user_prompt[:50]
 
         # Create run info first (without agent)
         run_info = RunInfo(
@@ -84,12 +78,10 @@ class RunManager:
             title=title,
         )
 
-        # Create agent instance with run_info (logging always enabled)
-        agent = Agent(
-            system_prompt=system_prompt,
-            model=model,
-            run_info=run_info,
-        )
+        if mode == "legacy":
+            agent = Agent(system_prompt=system_prompt, model=model, run_info=run_info)
+        else:
+            agent = FastRun(model, run_info)
 
         # Set the agent in run_info
         run_info.agent = agent

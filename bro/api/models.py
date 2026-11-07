@@ -30,6 +30,7 @@ class CreateRunRequest(BaseModel):
     url: Optional[str] = Field(None, description="Optional starting URL")
     max_iterations: int = Field(100, description="Maximum number of iterations")
     model: str = Field("gpt-4o-mini", description="LLM model to use")
+    mode: str = Field("fast", description="Agent loop: 'fast' (text-only, short actions) or 'legacy'")
 
 
 class CreateRunResponse(BaseModel):

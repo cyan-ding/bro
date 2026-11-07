@@ -35,5 +35,8 @@ dependencies = [
     "supabase>=2.24.0",
 ]
 
+[project.optional-dependencies]
+local = ["mlx-lm>=0.32"]
+
 [tool.setuptools.packages.find]
 where = ["bro"]

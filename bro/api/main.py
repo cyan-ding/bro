@@ -24,6 +24,7 @@ from sse_starlette.sse import EventSourceResponse
 from utils.db import get_supabase
 from utils.screencast import ScreencastClient
 from utils.use_cdp import use_cdp
+from bro.fast.local_server import list_local_models
 
 from .log_streamer import stream_logs
 from .models import (
@@ -129,6 +130,7 @@ async def create_run(request: CreateRunRequest):
             url=request.url,
             max_iterations=request.max_iterations,
             model=request.model,
+            mode=request.mode,
         )
 
         return CreateRunResponse(
@@ -609,7 +611,7 @@ async def get_valid_models():
 
     try:
         valid_models = get_valid_models(check_provider_endpoint=True)
-        return {"models": valid_models}
+        return {"models": list_local_models() + valid_models}
     except Exception as e:
         raise HTTPException(
             status_code=500,

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
@@ -70,6 +71,7 @@ export default function Dashboard() {
           url: runConfig.url || "",
           max_iterations: runConfig.maxIterations,
           model: model,
+          mode: runConfig.mode,
         });
         const run_id = response.run_id;
         setRunId(run_id);
@@ -181,6 +183,18 @@ export default function Dashboard() {
                   }
                 }
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="classicLoop"
+                checked={runConfig.mode === "legacy"}
+                onCheckedChange={(checked) =>
+                  setRunConfig({ mode: checked ? "legacy" : "fast" })
+                }
+              />
+              <Label htmlFor="classicLoop">
+                Classic loop (screenshots and long reasoning, slower)
+              </Label>
             </div>
           </div>
           <DialogFooter>
