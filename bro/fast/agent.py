@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from typing import Awaitable, Callable, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus
 
 from patchright.async_api import BrowserContext, Page
@@ -13,6 +13,7 @@ from .llm import ChatModel, Completion
 from .observe import Element, Observation, format_elements, observe, observe_lean
 from .prompts import FINAL_STEP_SUFFIX, USER_TEMPLATE, VERIFY_SUFFIX, system_prompt
 from .settle import settle
+from .system1 import Decision, ideal_label
 
 PAGE_CHANGING = {"click", "goto", "search", "back", "press", "scroll", "select"}
 ALWAYS_RUN = {"done"}
@@ -33,6 +34,10 @@ class StepRecord(BaseModel):
     cached_tokens: int = 0
     completion_tokens: int = 0
     prompt_chars: int = 0
+    system: str = "s2"
+    s1: Dict[str, Any] = Field(default_factory=dict)
+    shadow: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    state: Optional[Dict[str, Any]] = None
 
 
 class RunResult(BaseModel):
@@ -44,6 +49,20 @@ class RunResult(BaseModel):
     steps: List[StepRecord] = Field(default_factory=list)
     notes: List[str] = Field(default_factory=list)
     total_ms: int = 0
+
+
+def _decision_summary(decision: Decision) -> Dict[str, Any]:
+    return {
+        "label": decision.choice.label if decision.choice else None,
+        "action": str(decision.choice.action) if decision.choice else None,
+        "confidence": round(decision.confidence, 4),
+        "latency_ms": decision.latency_ms,
+        "prompt_tokens": decision.prompt_tokens,
+        "escalate": decision.escalate,
+        "reason": decision.reason,
+        "top": {k: round(v, 4) for k, v in list(decision.distribution.items())[:5]},
+        "menu_size": len(decision.candidates),
+    }
 
 
 OnStep = Callable[[StepRecord, Observation], Awaitable[None]]
@@ -65,7 +84,13 @@ class FastAgent:
         get_messages: Optional[GetMessages] = None,
         verify: bool = False,
         observer: str = "lean",
+        system1: Optional[Any] = None,
+        shadow: Optional[Dict[str, Any]] = None,
+        log_states: bool = False,
     ):
+        self.log_states = log_states
+        self.system1 = system1
+        self.shadow = shadow or {}
         self.observer = observer
         self.verify = verify
         self.vetoes = 0
@@ -133,18 +158,44 @@ class FastAgent:
                 obs = await self._observe(page)
                 record.observe_ms = int((time.perf_counter() - observe_started) * 1000)
 
+                if self.log_states:
+                    record.state = {"obs": obs.model_dump(), "history": list(self.history), "notes": list(self.notes), "task": task}
                 user_prompt = self._build_user_prompt(task, obs)
                 if step == max_steps:
                     user_prompt += FINAL_STEP_SUFFIX
                 record.prompt_chars = len(self.system) + len(user_prompt)
-                completion = await self._complete(user_prompt)
-                record.output = completion.text
-                record.llm_ms = completion.latency_ms
-                record.prompt_tokens = completion.prompt_tokens
-                record.cached_tokens = completion.cached_tokens
-                record.completion_tokens = completion.completion_tokens
 
-                actions = parse(completion.text)
+                shadow_decisions: Dict[str, Decision] = {}
+                if step > 1:
+                    for name, scorer in self.shadow.items():
+                        shadow_decisions[name] = await scorer.decide(task, self.notes, self.history, obs)
+                reflex: Optional[Decision] = None
+                if self.system1 is not None and 1 < step < max_steps:
+                    reflex = await self.system1.decide(task, self.notes, self.history, obs)
+                    record.s1 = _decision_summary(reflex)
+                if reflex is not None and not reflex.escalate and reflex.choice is not None:
+                    record.system = "s1"
+                    record.llm_ms = reflex.latency_ms
+                    record.prompt_tokens = reflex.prompt_tokens
+                    record.output = f"{reflex.choice.label} ({reflex.confidence:.2f})"
+                    actions = [reflex.choice.action]
+                else:
+                    completion = await self._complete(user_prompt)
+                    record.output = completion.text
+                    record.llm_ms = completion.latency_ms + (reflex.latency_ms if reflex else 0)
+                    record.prompt_tokens = completion.prompt_tokens
+                    record.cached_tokens = completion.cached_tokens
+                    record.completion_tokens = completion.completion_tokens
+                    actions = parse(completion.text)
+                if shadow_decisions:
+                    first = actions[0] if actions else Action(name="none")
+                    for name, decision in shadow_decisions.items():
+                        summary = _decision_summary(decision)
+                        ideal = ideal_label(first, decision.candidates) if decision.candidates else ""
+                        summary["ideal"] = ideal
+                        summary["agrees"] = bool(decision.choice and decision.choice.label == ideal)
+                        summary["menu_covers"] = ideal not in {c.label for c in decision.candidates if c.action.name == "none"}
+                        record.shadow[name] = summary
                 if not actions:
                     parse_failures += 1
                     draft = " ".join(completion.text.split())[:300]

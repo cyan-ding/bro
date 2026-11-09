@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from bro.fast.agent import FastAgent, RunResult
 from bro.fast.browser import connect, fresh_page
+from bro.fast.local_server import server_for, shutdown_servers
+from bro.fast.system1 import make_system1
 from bro.utils.env_loader import load_env_files
 from bro.utils.use_cdp import use_cdp
 
@@ -81,6 +83,9 @@ async def run_task(args: argparse.Namespace, task: Task) -> RunResult:
             max_text_chars=args.max_text,
             verify=args.verify,
             observer=args.observer,
+            system1=make_system1(args.s1, args.s1_threshold) if args.s1 else None,
+            shadow={spec: make_system1(spec, args.s1_threshold) for spec in args.shadow},
+            log_states=args.log_states,
         )
         return await asyncio.wait_for(agent.run(context, page, task.task, task.url, args.max_steps), args.timeout)
     finally:
@@ -101,6 +106,10 @@ async def main() -> None:
     parser.add_argument("--reason", action="store_true")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--observer", choices=["lean", "legacy"], default="lean")
+    parser.add_argument("--s1", help="System 1 scorer: local/<model> or jev")
+    parser.add_argument("--s1-threshold", type=float, default=0.6)
+    parser.add_argument("--shadow", nargs="*", default=[], help="System 1 scorers to log without acting on")
+    parser.add_argument("--log-states", action="store_true", help="store each step's observation for offline replay")
     parser.add_argument("--max-elements", type=int, default=80)
     parser.add_argument("--max-text", type=int, default=800)
     args = parser.parse_args()
@@ -111,7 +120,11 @@ async def main() -> None:
     done_ids = set()
     if out.exists():
         done_ids = {json.loads(line)["task_id"] for line in out.read_text().splitlines() if line.strip()}
+    if args.model.startswith("local/"):
+        server_for(args.model)
     variant = args.variant or ("reason" if args.reason else "plain")
+    if args.s1 and not args.variant:
+        variant = f"s1={args.s1.split('/')[-1]}@{args.s1_threshold}"
     for task in tasks:
         if task.id in done_ids:
             continue
@@ -140,4 +153,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    finally:
+        shutdown_servers()

@@ -8,6 +8,7 @@ import litellm
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+
 LOCAL_PREFIX = "local/"
 LOCAL_BASE_URL = os.environ.get("BRO_LOCAL_BASE_URL", "http://127.0.0.1:8080/v1")
 

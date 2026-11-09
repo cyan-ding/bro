@@ -40,3 +40,19 @@ uv run python -m bro.bench.run --agent legacy --model openrouter/google/gemini-2
 | fast | local Qwen3.6-35B-A3B (4-bit) | 28/28 | 5.1 s | 16/26 | 10.2 s |
 
 The local model spends about 1.2 s per step in the LLM (almost all of it prompt prefill at roughly 1,300 tokens/s), 0.6 s acting and settling, and under 10 ms observing the page.
+
+### System 1 / System 2
+
+`bro/fast/system1.py` adds a reflex layer in the style of [Jev](https://docs.typesafe.ai/api/): before each planner step the page is turned into a fixed menu (click one of the listed elements, scroll, go back, or hand over to the planner) and a decision model returns a probability for every option. A confident pick is executed without calling the planner; anything else escalates to System 2. Decisions come either from a local model's first-token logprobs (`--s1 local/<model>`) or from Jev through OpenRouter's decisions endpoint (`--s1 jev`). `bro/bench/replay_s1.py` and `bro/bench/calib.py` score candidate System 1s offline on logged page states (`--log-states`), one model in memory at a time.
+
+What the calibration and live runs showed (28 tasks, GitHub tasks excluded because of an outage that night):
+
+| planner | System 1 | pass | median | s/step | S1 share |
+|---|---|---|---|---|---|
+| local Qwen3.6-35B-A3B | none | 23/24 | 4.9 s | 2.11 | |
+| local Qwen3.6-35B-A3B | Jev, threshold 0.7 | 23/24 | 4.6 s | 1.80 | 23% |
+| local Qwen3.6-35B-A3B | itself as reflex, 0.7 | 24/24 | 6.3 s | 2.14 | 30% |
+| Gemini 2.5 Flash | none | 21/24 | 3.1 s | 0.93 | |
+| Gemini 2.5 Flash | Jev, 0.8 | 22/24 | 3.3 s | 1.26 | 22% |
+
+Jev agrees with the planner on about 55% of click/scroll states at 180 ms per decision; Qwen3.5-0.8B and 2B pick at chance level, 4B and 9B are too weak and too slow to help. The reflex only pays off when the planner is expensive: it saves 15% per step with the local planner and loses time with the cloud one.
