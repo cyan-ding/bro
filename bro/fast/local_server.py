@@ -129,6 +129,10 @@ def server_for(model: str, wait_s: int = 180) -> str:
     model_id = model[len(LOCAL_PREFIX) :] if model.startswith(LOCAL_PREFIX) else model
     if model_id in _servers:
         return _servers[model_id]
+    if os.environ.get("BRO_LOCAL_EXTERNAL"):
+        # The server at BRO_LOCAL_BASE_URL is managed by someone else (e.g. Splash): never spawn.
+        _servers[model_id] = LOCAL_BASE_URL
+        return LOCAL_BASE_URL
     if not _is_up():
         ensure_local_server(f"{LOCAL_PREFIX}{model_id}", wait_s)
         return LOCAL_BASE_URL

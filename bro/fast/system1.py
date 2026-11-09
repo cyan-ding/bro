@@ -246,22 +246,33 @@ class LocalSystem1:
 
 
 class JevSystem1:
-    """Same menu, decided by TypeSafe's Jev through OpenRouter's decisions endpoint."""
+    """Same menu, decided through a System One HTTP endpoint (state + typed questions in, probabilities out).
 
-    def __init__(self, threshold: float = 0.6, max_text_chars: int = 500, model: str = "typesafe/jev-1.14", numeric: bool = False):
+    Defaults to TypeSafe's Jev on OpenRouter; `endpoint` points it at any compatible local
+    server instead, such as laya-serve or llama.cpp's /v1/systemone.
+    """
+
+    def __init__(
+        self,
+        threshold: float = 0.6,
+        max_text_chars: int = 500,
+        model: str = "typesafe/jev-1.14",
+        numeric: bool = False,
+        endpoint: Optional[str] = None,
+    ):
         import os
-
-        self.numeric = numeric
 
         from bro.utils.env_loader import load_env_files
 
         load_env_files()
+        self.numeric = numeric
         self.model = model
         self.threshold = threshold
         self.max_text_chars = max_text_chars
+        self._path = "/v1/systemone" if endpoint else "/alpha/decisions"
         self._client = httpx.AsyncClient(
-            base_url="https://openrouter.ai/api",
-            headers={"Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY', '')}"},
+            base_url=endpoint or "https://openrouter.ai/api",
+            headers={} if endpoint else {"Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY', '')}"},
             timeout=30,
         )
 
@@ -276,7 +287,7 @@ class JevSystem1:
             url=obs.url[:100],
             text=obs.text[: self.max_text_chars] or "(none)",
             options="\n".join(f"{c.label}. {c.line}" for c in candidates),
-        ).replace("\nOptions:", "\nOptions (described below):").split("\nAnswer:")[0]
+        ).split("\nOptions:")[0]
         body = {
             "model": self.model,
             "state": state,
@@ -284,13 +295,13 @@ class JevSystem1:
                 "next": {
                     "type": "choice",
                     "instructions": SYSTEM_PROMPT.replace("Reply with one letter only.", "Which option is the best next action?"),
-                    "criteria": {c.label: c.line[:200] for c in candidates},
+                    "criteria": {c.label: c.line[:160] for c in candidates},
                 }
             },
         }
         started = time.perf_counter()
         try:
-            http = await self._client.post("/alpha/decisions", json=body)
+            http = await self._client.post(self._path, json=body)
             http.raise_for_status()
             response = http.json()
         except Exception as exc:
@@ -330,9 +341,12 @@ def ideal_label(action: Action, candidates: List[Candidate]) -> str:
 
 
 def make_system1(spec: str, threshold: float = 0.6):
-    """`jev`, `local/<model>` (letter menu), `#num` (numeric menu over all elements), `#oj` (OpenJev shim layout)."""
+    """`jev`, `systemone@http://host:port[|model]`, `local/<model>`; flags `#num`, `#oj`, `#small`."""
     base, _, flags = spec.partition("#")
     numeric = "num" in flags
     if base == "jev":
         return JevSystem1(threshold, numeric=numeric)
+    if base.startswith("systemone@"):
+        endpoint, _, model = base[len("systemone@") :].partition("|")
+        return JevSystem1(threshold, numeric=numeric, endpoint=endpoint, model=model or "laya")
     return LocalSystem1(base, threshold, numeric=numeric, openjev_style="oj" in flags, small="small" in flags)
