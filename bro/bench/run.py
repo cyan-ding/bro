@@ -70,6 +70,11 @@ def summarize(result: RunResult, task: Task, agent: str, variant: str, verdict: 
 
 
 async def run_task(args: argparse.Namespace, task: Task) -> RunResult:
+    """Run one task; the browser connection and teardown are inside the deadline too."""
+    return await asyncio.wait_for(_run_task(args, task), args.timeout + 60)
+
+
+async def _run_task(args: argparse.Namespace, task: Task) -> RunResult:
     if args.agent == "legacy":
         use_cdp()
         return await asyncio.wait_for(run_legacy(args.model, task.task, task.url, args.max_steps), args.timeout)

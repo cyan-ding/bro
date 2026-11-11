@@ -56,3 +56,21 @@ What the calibration and live runs showed (28 tasks, GitHub tasks excluded becau
 | Gemini 2.5 Flash | Jev, 0.8 | 22/24 | 3.3 s | 1.26 | 22% |
 
 Jev agrees with the planner on about 55% of click/scroll states at 180 ms per decision; Qwen3.5-0.8B and 2B pick at chance level, 4B and 9B are too weak and too slow to help. The reflex only pays off when the planner is expensive: it saves 15% per step with the local planner and loses time with the cloud one.
+
+### Working while it works: memory budget
+
+MLX wires the whole model into memory (the 4-bit 35B planner holds about 21 GB), which leaves nothing for other apps on a 36 GB Mac. When the full model does not fit, Bro now serves a 2-bit build of the same model through [Splash](https://github.com/incoai/splash) with a memory cap (`BRO_SPLASH_CAP_GB`, default 10), which keeps the hot experts in RAM and streams the rest from SSD. Measured with ~16 GB of other apps open (28 tasks):
+
+| planner build | cap | pass | median task | per call (1.7k-token prompt) | peak wired | memory compressed |
+|---|---|---|---|---|---|---|
+| 4-bit, MLX, apps closed | none | 26/28 | 4.6 s | 1.08 s | ~22 GB | ~2 GB |
+| 4-bit, Splash | 14 GB | 28/28 | 10.3 s | 2.76 s | 17.3 GB | 5.4 GB |
+| 2-bit, Splash | 12 GB | 28/28 | 7.0 s | 1.17 s | 15.3 GB | 6.0 GB |
+| 2-bit, Splash | 10 GB | 28/28 | 7.2 s | 1.62 s | 13.4 GB | 3.2 GB |
+| 2-bit, Splash | 8 GB | 28/28 | 8.4 s | 4.02 s | 11.2 GB | 3.1 GB |
+
+The 2-bit build (`unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q2_K_XL`) lost no accuracy on either task set; capping the 4-bit build instead only starves it. `bro/bench/memsweep.py` prints this table from the per-run memory samples.
+
+### Emergence WebVoyager (535 tasks)
+
+One full pass with the memory-safe configuration above (2-bit planner, 12 GB cap, other apps open, no reflex, text-only LLM judge over the benchmark's own annotator questions, 15-step limit): **212/535 (39.6%)**, median 26 s per task, 5,486 page states logged for reflex training. Per site it ranges from Coursera 25/35 and Cambridge Dictionary 24/35 down to Booking 7/35 and Google Flights 0/35. For reference, the benchmark's authors report 68.6% for OpenAI's Operator and 81% for Agent-E on this set with human annotators. `bro/bench/tasks_emergence.json` is generated from the benchmark's templates by its own `instantiate_tasks.py`.

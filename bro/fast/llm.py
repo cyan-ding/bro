@@ -1,6 +1,5 @@
 """Minimal chat-completion client: local OpenAI-compatible server or any litellm model."""
 
-import os
 import time
 from typing import List, Optional
 
@@ -9,8 +8,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 
-LOCAL_PREFIX = "local/"
-LOCAL_BASE_URL = os.environ.get("BRO_LOCAL_BASE_URL", "http://127.0.0.1:8080/v1")
+from .local_server import LOCAL_PREFIX, server_for
 
 
 class Completion(BaseModel):
@@ -28,7 +26,7 @@ class ChatModel:
         self.temperature = temperature
         self._local: Optional[AsyncOpenAI] = None
         if model.startswith(LOCAL_PREFIX):
-            self._local = AsyncOpenAI(base_url=LOCAL_BASE_URL, api_key="local")
+            self._local = AsyncOpenAI(base_url=server_for(model), api_key="local")
 
     @property
     def is_local(self) -> bool:

@@ -1,14 +1,23 @@
 """Start the local MLX inference server on demand (macOS, Apple Silicon)."""
 
 import os
+import shutil
+import signal
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Dict, List, Optional
 
-from .llm import LOCAL_BASE_URL, LOCAL_PREFIX
+LOCAL_PREFIX = "local/"
+LOCAL_BASE_URL = os.environ.get("BRO_LOCAL_BASE_URL", "http://127.0.0.1:8080/v1")
+SPLASH_BASE_URL = "http://127.0.0.1:8001/v1"
+# Builds that an engine with a memory cap (Splash) can run when the full model does not fit.
+LOW_MEMORY_BUILDS: Dict[str, str] = {
+    "mlx-community/Qwen3.6-35B-A3B-4bit": "unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q2_K_XL",
+}
 
 _server_process: Optional[subprocess.Popen] = None
 _servers: Dict[str, str] = {}
@@ -47,6 +56,7 @@ def _spawn(model_id: str, port: str) -> subprocess.Popen:
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        start_new_session=True,
     )
 
 
@@ -104,8 +114,7 @@ def stop_server(model: str) -> None:
     model_id = model[len(LOCAL_PREFIX) :] if model.startswith(LOCAL_PREFIX) else model
     process = _processes.pop(model_id, None)
     if process is not None:
-        process.terminate()
-        process.wait(timeout=15)
+        _terminate(process)
     _servers.pop(model_id, None)
     _loaded_bytes.pop(model_id, None)
 
@@ -113,10 +122,35 @@ def stop_server(model: str) -> None:
 def shutdown_servers() -> None:
     """Stop every mlx_lm server this process started."""
     for process in list(_processes.values()):
-        process.terminate()
+        _terminate(process)
     _processes.clear()
     _servers.clear()
     _loaded_bytes.clear()
+
+
+def _spawn_splash(build: str, served_name: str, cap_gb: int) -> subprocess.Popen:
+    log = open(Path.home() / ".bro" / "splash.log", "w")
+    return subprocess.Popen(
+        [
+            "splash", "serve", "--model", build, "--max-memory", f"{cap_gb}G", "--idle-release", "5m",
+            "--served-model-name", served_name, "--announce-served-name", "--language-only",
+            "--port", SPLASH_BASE_URL.rsplit(":", 1)[-1].split("/")[0], "--no-webui",
+        ],
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
+def _terminate(process: subprocess.Popen) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
 
 
 def server_for(model: str, wait_s: int = 180) -> str:
@@ -135,7 +169,7 @@ def server_for(model: str, wait_s: int = 180) -> str:
         return LOCAL_BASE_URL
     if not _is_up():
         ensure_local_server(f"{LOCAL_PREFIX}{model_id}", wait_s)
-        return LOCAL_BASE_URL
+        return _servers.get(model_id, LOCAL_BASE_URL)
     _check_memory(model_id)
     base_url = f"http://127.0.0.1:{_next_port}/v1"
     _processes[model_id] = _spawn(model_id, str(_next_port))
@@ -166,7 +200,13 @@ def ensure_local_server(model: str, wait_s: int = 120) -> None:
     if not model.startswith(LOCAL_PREFIX) or _is_up():
         return
     model_id = model[len(LOCAL_PREFIX) :]
-    _check_memory(model_id)
+    try:
+        _check_memory(model_id)
+    except MemoryError:
+        if model_id not in LOW_MEMORY_BUILDS or shutil.which("splash") is None:
+            raise
+        _start_low_memory(model_id, wait_s)
+        return
     port = LOCAL_BASE_URL.rsplit(":", 1)[-1].split("/")[0]
     _server_process = _spawn(model_id, port)
     _processes[model_id] = _server_process
@@ -177,3 +217,25 @@ def ensure_local_server(model: str, wait_s: int = 120) -> None:
         if _is_up():
             return
     raise TimeoutError("local MLX server did not start")
+
+
+def _start_low_memory(model_id: str, wait_s: int) -> None:
+    """Serve a 2-bit build of `model_id` through Splash with a cap sized to the free memory.
+
+    Measured on an M4 Max: the 2-bit Qwen3.6-35B-A3B matched the 4-bit on accuracy at a 12 GB cap
+    and ran at near full speed; smaller caps stream experts from SSD and trade speed for memory.
+    """
+    # 10 GB was the measured sweet spot on a 36 GB M4 Max with ~16 GB of other apps open:
+    # same accuracy as higher caps, half the memory compression, ~10% slower tasks.
+    cap_gb = int(os.environ.get("BRO_SPLASH_CAP_GB", 0)) or max(8, min(10, int(_available_bytes() / 1024**3) - 1))
+    if _is_up(base_url=SPLASH_BASE_URL):
+        _servers[model_id] = SPLASH_BASE_URL
+        return
+    _processes[model_id] = _spawn_splash(LOW_MEMORY_BUILDS[model_id], model_id, cap_gb)
+    _servers[model_id] = SPLASH_BASE_URL
+    _loaded_bytes[model_id] = cap_gb * 1024**3
+    for _ in range(wait_s * 3):
+        time.sleep(1)
+        if _is_up(base_url=SPLASH_BASE_URL):
+            return
+    raise TimeoutError("Splash did not start (see ~/.bro/splash.log)")

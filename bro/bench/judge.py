@@ -45,7 +45,7 @@ async def judge(task: Task, answer: str) -> Verdict:
         "Reply with exactly one word: PASS or FAIL."
     )
     response = await litellm.acompletion(
-        model=JUDGE_MODEL, messages=[{"role": "user", "content": prompt}], max_tokens=5, temperature=0
+        model=JUDGE_MODEL, messages=[{"role": "user", "content": prompt}], max_tokens=5, temperature=0, timeout=60
     )
     verdict = (response.choices[0].message.content or "").strip().upper()
     return Verdict(success=verdict.startswith("PASS"), reason=f"llm judge: {verdict}")
