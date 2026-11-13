@@ -73,4 +73,27 @@ The 2-bit build (`unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q2_K_XL`) lost no accuracy on 
 
 ### Emergence WebVoyager (535 tasks)
 
-One full pass with the memory-safe configuration above (2-bit planner, 12 GB cap, other apps open, no reflex, text-only LLM judge over the benchmark's own annotator questions, 15-step limit): **212/535 (39.6%)**, median 26 s per task, 5,486 page states logged for reflex training. Per site it ranges from Coursera 25/35 and Cambridge Dictionary 24/35 down to Booking 7/35 and Google Flights 0/35. For reference, the benchmark's authors report 68.6% for OpenAI's Operator and 81% for Agent-E on this set with human annotators. `bro/bench/tasks_emergence.json` is generated from the benchmark's templates by its own `instantiate_tasks.py`.
+Two full passes with the memory-safe configuration above (2-bit planner, 12 GB cap, other apps open, no reflex, text-only LLM judge over the benchmark's own annotator questions). `bro/bench/tasks_emergence.json` is generated from the benchmark's templates by its own `instantiate_tasks.py`.
+
+| budget | pass | median task | tasks that hit the step cap |
+|---|---|---|---|
+| 15 steps, 20 s navigation timeout | 212/535 (39.6%) | 27 s | 274 |
+| 25 steps, 45 s navigation timeout | 218/535 (40.7%) | 38 s | 216 |
+
+Raising the budgets changed little: 67 tasks flipped to pass and 61 flipped to fail, which is the run-to-run noise of live websites, and most failing tasks still ran to the cap, so the limit is the agent (text-only, no vision), not the budget. Per site the range is Amazon and Cambridge Dictionary at 27/35 down to Booking 6/35 and Google Flights 0/35 (the site never loads in the automation browser). For reference, the benchmark's authors report 68.6% for OpenAI's Operator and 81% for Agent-E with human annotators.
+
+### Closing the feedback loop
+
+Two generic fixes to the agent loop, measured on a fixed 150-task Emergence subset (`tasks_emergence_150.json`, ten per site) against the previous night's run on the same tasks:
+
+- **Effect detection.** After every action the page is observed again; the model is told "nothing on the page changed" instead of "ok", elements that did nothing twice are dropped from the menu, two stalled steps trigger a replan prompt, four trigger a return to the start page. A click that only toggles the page back to a state already seen counts as no progress.
+- **A real browser.** `BRO_BROWSER=patchright` launches Chrome through Patchright instead of attaching to a bare `--remote-debugging-port` profile. Google properties never finished loading in the bare profile; they load normally this way.
+
+| arm | pass | tasks with 8+ identical repeated actions |
+|---|---|---|
+| previous loop, bare Chrome profile | 65/150 (43.3%) | 23 |
+| effect detection, bare profile | 72/150 (48.0%) | 7 |
+| effect detection, Patchright Chrome | 76/150 (50.7%) | 8 |
+| + oscillation detection, Patchright | 72/150 (48.0%) | 2 |
+
+The feedback loop is worth about five points and the browser about three (Google Flights went from 0/10 to 6/10). Oscillation detection removes the last loops but did not raise the pass rate: when the agent cannot find what it needs, it now explores instead of repeating, and still runs out of steps. Run-to-run noise on 150 live tasks is about four points, so smaller effects need repeated runs.

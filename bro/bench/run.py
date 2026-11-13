@@ -10,7 +10,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from bro.fast.agent import FastAgent, RunResult
-from bro.fast.browser import connect, fresh_page
+from bro.fast.browser import connect, disconnect, fresh_page
 from bro.fast.local_server import server_for, shutdown_servers
 from bro.fast.system1 import make_system1
 from bro.utils.env_loader import load_env_files
@@ -87,6 +87,7 @@ async def _run_task(args: argparse.Namespace, task: Task) -> RunResult:
             max_elements=args.max_elements,
             max_text_chars=args.max_text,
             verify=args.verify,
+            reject_hedged_done=args.reject_hedged_done,
             observer=args.observer,
             system1=make_system1(args.s1, args.s1_threshold) if args.s1 else None,
             shadow={spec: make_system1(spec, args.s1_threshold) for spec in args.shadow},
@@ -94,8 +95,7 @@ async def _run_task(args: argparse.Namespace, task: Task) -> RunResult:
         )
         return await asyncio.wait_for(agent.run(context, page, task.task, task.url, args.max_steps), args.timeout)
     finally:
-        await browser.close()
-        await playwright.stop()
+        await disconnect(playwright, browser, context)
 
 
 async def main() -> None:
@@ -110,6 +110,7 @@ async def main() -> None:
     parser.add_argument("--timeout", type=float, default=240)
     parser.add_argument("--reason", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--reject-hedged-done", action="store_true", help="refuse hedged non-answers while steps remain")
     parser.add_argument("--observer", choices=["lean", "legacy"], default="lean")
     parser.add_argument("--s1", help="System 1 scorer: local/<model> or jev")
     parser.add_argument("--s1-threshold", type=float, default=0.6)

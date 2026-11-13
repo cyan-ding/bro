@@ -68,6 +68,11 @@ class Element(BaseModel):
     iframe_xpath: Optional[str] = None
     attrs: Dict[str, Any] = {}
     text: str = ""
+    note: str = ""
+
+    def fingerprint(self) -> str:
+        """Identity that survives re-indexing between steps."""
+        return f"{self.tag}|{self.text[:40]}|{self.attrs.get('href', '')}|{self.attrs.get('aria-label', '')}"
 
 
 class Observation(BaseModel):
@@ -114,7 +119,8 @@ def _format_element(el: Element, page_url: str) -> str:
             continue
         parts.append(f'{key}="{val}"' if " " in val else f"{key}={val}")
     attrs = (" " + " ".join(parts)) if parts else ""
-    return f"[{el.index}]<{el.tag}{attrs}>{el.text[:80]}"
+    note = f" {el.note}" if el.note else ""
+    return f"[{el.index}]<{el.tag}{attrs}>{el.text[:80]}{note}"
 
 
 INTERACTIVE_TAGS = {"a", "button", "input", "select", "textarea", "summary", "option", "label"}
@@ -154,6 +160,12 @@ def collapse(elements: List[Element]) -> List[Element]:
         if text:
             kept.append(el.model_copy(update={"text": text}))
     return kept
+
+
+def signature(obs: Observation) -> str:
+    """Compact fingerprint of what the agent can see; equal before and after an action means it did nothing."""
+    body = "|".join(f"{e.tag}:{e.text[:30]}:{e.attrs.get('value', '')}:{e.attrs.get('checked', '')}" for e in obs.elements[:150])
+    return f"{obs.url}|{obs.title}|{obs.scroll_y}|{hash(body)}|{hash(obs.text[:600])}"
 
 
 def format_elements(obs: Observation, max_elements: int = 120) -> str:

@@ -1,0 +1,1352 @@
+[
+ {
+  "id": "EWV-001-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, provide a recipe for vegetarian lasagna with more than 100 reviews and a rating of at least 4.5 stars suitable for 6 people.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for (lacto-ovo) vegetarian lasagna? (2) Does the recipe have more than 100 reviews or ratings (exactly 100 does not meet the requirement)? (3) Is the rating of the recipe 4.5 stars or greater? (4) Is the recipe suitable for 6 or more people? (5) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-002-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, find a recipe for vegetarian lasagna that has at least a four-star rating and uses zucchini",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for a vegetarian lasagna? (2) Does the recipe have a rating of 4.0 stars or greater? (3) Does the recipe include zucchini as an ingredient? (4) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-003-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, search for a popular Pasta Sauce with more than 1000 reviews and a rating above 4 stars. Create a shopping list of ingredients for this recipe.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for pasta sauce? (2) Does the pasta sauce have more than 1000 reviews or ratings (exactly 1000 does not meet the requirement)? (3) Does the recipe have a rating of 4.0 stars or more? (4) Does the agent's answer contain a list of ingredients for the recipe? (5) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-004-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, search for a vegetarian lasagna recipe that has at least a four-star rating and over 500 reviews.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for (lacto-ovo) vegetarian lasagna? (2) Does the recipe have a rating of 4.0 stars or more? (3) Does the recipe have over 500 reviews or ratings (exactly 500 does not meet the requirement)? (4) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-005-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, search for a recipe for Beef Wellington that has at least 200 reviews and an average rating of 4.5 stars or higher. List the main ingredients required for the dish.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for Beef Wellington? (2) Does the recipe have 200 or more reviews or ratings? (3) Does the recipe have a rating of 4.5 stars or more? (4) Does the agent's answer provide atleast 2 main ingredients required for the recipe? (5) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-006-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, find a high-rated recipe for vegetarian lasagna, list the key ingredients required, and include the total preparation and cook time stated on the recipe.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for (lacto-ovo) vegetarian lasagna? (2) Does the recipe have a high rating (i.e rating of 4.0 stars or more)? (3) Does the agent's answer correctly provide atleast 2 key ingredients required for the recipe? (4) Does the agent's answer correctly provide total preparation time stated in the recipe? (5) Does the agent's answer correctly provide total cook time stated in the recipe? (6) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-007-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, find The Most Popular Recipes of the 1960s, noting the recipe name, preparation time and total time of the second recipe in this collection.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe returned by the agent 'Swedish Meatballs I', the second recipe in the collection 'The Most Popular Recipes of the 1960s'? (2) Does the agent's answer correctly provide preparation time of the recipe? (3) Does the agent's answer correctly provide total time of the recipe? (4) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/ Reference answer: 'Swedish Meatballs I', prep time 25 mins, total time 1 hour 25 mins"
+  ]
+ },
+ {
+  "id": "EWV-008-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, search for a popular cookie recipe with more than 1000 reviews and a rating of 4.5 stars or better. Provide the list of ingredients needed.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for a cookie? (2) Does the recipe have more than 1000 reviews or ratings (exactly 1000 does not meet the requirement)? (3) Does the cookie recipe have a rating of 4.5 stars or higher? (4) Is the list of ingredients for the recipe provided? (5) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-009-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, find a recipe with over 100 reviews for Fried Fish, list the Full Nutrition Label and tell me the amount of Iron per Serving.",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Is the recipe for Fried Fish? (2) Does the recipe have more than 100 reviews or ratings (exactly 100 does not meet the requirement)? (3) Does the agent answer correctly state atleast 3 nutrition label info for the recipe? (4) Does the agent's answer correctly mention the amount of Iron per serving in the recipe? (5) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-010-Allrecipes",
+  "task": "Using the website https://www.allrecipes.com/, search for a recipe that includes chicken breast and quinoa with preparation time under 30 minutes",
+  "url": "https://www.allrecipes.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the recipe include 'chicken breast' and 'quinoa'? (2) Does the recipe have a prep time of less than 30 minutes (exactly 30 mins does not meet the requirement)? Note: prep time is different than total time. (3) Was the task completed using the website mentioned in the prompt: https://www.allrecipes.com/"
+  ]
+ },
+ {
+  "id": "EWV-036-Amazon",
+  "task": "Using the website https://www.amazon.com/, search for women's golf polos in m size, priced between 50 to 75 dollars, and return top 3 search results sorted by Price: Low to High.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent respond with 3 golf polo shirt for women? (2) Are all the returned items available in size M? (3) Are all the returned items between 50 to 75 dollars (both inclusive)? (4) Are the returned items the top 3 results after sorting by price (lowest to highest)? (5) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-037-Amazon",
+  "task": "Using the website https://www.amazon.com/, find a gaming desktop with Windows 11 Home, and the disk size should be 1TB.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent respond with details of a gaming desktop (atleast one)? (2) Does the returned desktop(s) run on Windows 11 Home OS? (3) Does the returned desktop(s) have 1TB disk size? (4) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-038-Amazon",
+  "task": "Find the Nintendo Switch Lite on https://www.amazon.com/ then filter by 'Used - Good', tell me the cheapest one, excluding shipping, that is 'Used - Good'.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent respond with a Nintendo Switch Lite product? (2) Is the Nintendo Switch Lite listed as 'Used - Good'? (3) Is the price of the Nintendo Switch Lite the cheapest in the 'Used - Good' category excluding shipping? (Note: Finding cheapest would either require using sort by Price Low to High or browsing over many search results pages) (4) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-039-Amazon",
+  "task": "Using the website https://www.amazon.com/, find a Blue iPhone 12 Pro 128gb and add to cart.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent respond with a iPhone 12 Pro product that is blue in color (other aspects such as carrier lock, used/new does not matter)? (2) Does the product have a storage capacity of 128gb? (3) Has the product been successfully added to the cart? (4) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-040-Amazon",
+  "task": "Browse black strollers within $100 to $200 on https://www.amazon.com/. Then find one among these black strollers with over 20,000 reviews and a rating greater than 4 star.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does agent respond with a black stroller (2) Is the price range of the product between $100 and $200 (both inclusive)? (3) Does the product have more than 20000 reviews/ratings (exactly 20000 does not meet the requirement)? (4) Does the product have greater than 4.0 stars (exactly 4.0 stars does not meet the requirement)? (5) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-041-Amazon",
+  "task": "Browse the women's hiking boots on https://www.amazon.com/ and filter the results to show only those that are waterproof and have a rating of at least 4 stars and size 6.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the final page show Amazon search results for women's hiking boots after applying the specified filters? (2) Did the agent apply 'Waterproof' filter? (3) Did the agent apply filter for rating 4 stars and Up? (4) Did the agent apply the filter for size 6?"
+  ]
+ },
+ {
+  "id": "EWV-042-Amazon",
+  "task": "Find the cheapest Samsung-made Android tablet with screen between 10-10.9 inches and condition new on https://www.amazon.com/",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does agent respond with an Android tablet made by Samsung (2) Does the tablet have a screen size between 10 and 10.9 inches (both inclusive)? (3) Is the condition of the tablet New? (4) Is the tablet the cheapest option available among the search results? (This would typically require sorting by price or browsing the full search results) (5) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-043-Amazon",
+  "task": "Find the cheapest stainless steel kitchen sink with double bowls on https://www.amazon.com/ and includes FREE delivery.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent respond with a valid stainless steel kitchen sink with double bowls? (2) Is the kitchen sink cheapest based on search result and sort option applied? (3) Does the kitchen sink have FREE delivery? (4) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-044-Amazon",
+  "task": "Check reviews for a Ride On Car with 100+ reviews & 4+ stars rating on https://www.amazon.com/. Give me the top review about this Ride On Car.",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent find a Ride on car (toy car) with 100 or more reviews (2) Does the Ride On Car have a rating of 4 stars or higher? (3) Does the agent's answer include a summary of the top review for the product? (4) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-045-Amazon",
+  "task": "Find a best selling black hoodies available in mens size Big and Tall that is between $25 and $50 on https://www.amazon.com/",
+  "url": "https://www.amazon.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent find a Black Hoodie for men available in size 'Big & Tall' (2) Are the hoodies best selling items (either top results after sorting by Best Seller or has a Best Seller tag)? (3) Is the price of the hoodies between $25 and $50 (both inclusive)? (4) Was the task completed using the website mentioned in the prompt: https://www.amazon.com/"
+  ]
+ },
+ {
+  "id": "EWV-071-Apple",
+  "task": "Compare the prices of the current models of MacBook Air available on https://www.apple.com/",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain prices of all current models of MacBook Air? (2) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-072-Apple",
+  "task": "Using the website https://www.apple.com/, research the new features of the iOS 18 on https://www.apple.com/ and check its compatibility with the iPhone 12",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly include new features of iOS 18? (2) Does the agent's answer correctly mention that iOS 18 is compatible with iPhone 12? (3) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-073-Apple",
+  "task": "Using the website https://www.apple.com/, compare the prices and chips for the iPhone 16 Pro and iPhone 16 models",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly compare the prices for iPhone 16 Pro and iPhone 16? (2) Does the agent's answer correctly compare the chip details for iPhone 16 Pro and iPhone 16? (3) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-074-Apple",
+  "task": "Using the website https://www.apple.com/, find the latest model of the iPhone and compare the price and screen size between the pro and pro max.",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly mention the latest models of iphone (iPhone 16)? (2) Does the agent's answer correctly compare the specified attributes (price and screen size) between the Pro and Pro Max models of the latest iPhone? (3) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-075-Apple",
+  "task": "Using the website https://www.apple.com/, how much does it cost to buy a Macbook pro, 16-inch, Apple M4 Max chip with 16-core CPU, 40-core GPU, 64GB unified memory, 1TB SSD.",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the price for Macbook pro, 16-inch? (2) Does the specified model have Apple M4 Max chip with 16-core CPU and 40-core GPU (3) Is the Macbook Pro equipped with 64GB unified memory (this needs customisation)? (4) Does the Macbook Pro have a 1TB SSD? (5) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-076-Apple",
+  "task": "Using the website https://www.apple.com/, check the price for the latest version of the iPhone 16.",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details on the latest iPhone 16? (2) Does the agent's answer correctly provide details on the price of the iPhone 16? (3) Was the task completed using the website mentioned in the prompt?"
+  ]
+ },
+ {
+  "id": "EWV-077-Apple",
+  "task": "Find AirPods on https://www.apple.com/ and how many types are currently available",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly mention the types of Airpods currently available? (2) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-078-Apple",
+  "task": "Get information about the latest iPad mini model released by Apple, including its base storage capacity and starting price available on https://www.apple.com/.",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer provide details of the latest iPad Mini product? (2) Does the agent's answer contain details about base storage capacity of the product? (3) Does the agent's answer contain details about starting price of the product? (4) Was the task completed using the website mentioned in the prompt?"
+  ]
+ },
+ {
+  "id": "EWV-079-Apple",
+  "task": "Using the website https://www.apple.com/, how many colors does the latest MacBook Air come in?",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly specify how many colors does MacBook Air come in? (2) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-080-Apple",
+  "task": "Using the website https://www.apple.com/, identify the upgrade options available for the cheapest base model of the MacBook Pro 14-inch with M4 chip, and calculate the total price difference from the base model to the maximum upgrade (no Pre-Installed Software) offered by Apple.",
+  "url": "https://www.apple.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the base price of MacBook Pro 14-inch? (2) Does the agent's answer correctly state the maximum upgraded price of Macbook Pro 14-inch without any pre-installed software? (3) Was the task completed using the website mentioned in the prompt: https://www.apple.com/"
+  ]
+ },
+ {
+  "id": "EWV-106-ArXiv",
+  "task": "Using the website https://arxiv.org/, search for the latest research papers on quantum computing submitted within the last two days by using the sort feature",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search for 'quantum computing'? Note: A general search is sufficient. (2) Does the agent change the sort in the search result page to sort by submission date(newest first)'?  (3) Was the task completed using the website mentioned in the prompt: https://arxiv.org/"
+  ]
+ },
+ {
+  "id": "EWV-107-ArXiv",
+  "task": "Using the website https://arxiv.org/, look up the most recent papers related to cs.CL, select one and return its abstract",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain the title and abstract of a paper in cs.CL (Computation and Language) category? (2) Is the selected paper a recent paper related to the cs.CL (Computation and Language) category? (3) Was the task completed using the website mentioned in the prompt: https://arxiv.org/"
+  ]
+ },
+ {
+  "id": "EWV-108-ArXiv",
+  "task": "Using the website https://arxiv.org/, locate the most recent research paper about Algebraic Topology under Mathematics. Provide the title of the paper, the name of the authors, and the abstract of a paper.",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain the verbatim title of the most recent paper in math.AT (Algebraic Topology) category? (2) Does the agent's answer correctly state the name of atleast the primary author of the paper? (3) Does the agent answer correctly provide the abstract of the paper? (Note: while it is not necessary to provide a verbatim abstract, the abstract should closely match the original paper.) (4) Was the task completed using the website mentioned in the prompt: https://arxiv.org/"
+  ]
+ },
+ {
+  "id": "EWV-109-ArXiv",
+  "task": "Using the website https://arxiv.org/, find the most recent research papers in Astrophysics of Galaxies. How many papers were announced yesterday??",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the number of papers in Astrophysics of Galaxies category announced in the last day (Note that this can be zero)? (2) Was the task completed using the website mentioned in the prompt: https://arxiv.org/"
+  ]
+ },
+ {
+  "id": "EWV-110-ArXiv",
+  "task": "Using the website https://arxiv.org/, search papers about quantum computing which has been submitted to the Quantum Physics category. How many results in total. What if search is in all archives?",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search for 'quantum computing' specifically in the 'Quantum Physics' Category? (2) Does the agent perform a search for 'quantum computing' in all of archives? (3) Does the agent's answer correctly include the number of search results for both of the searches? (4) Was the task completed using the website mentioned in the prompt: https://arxiv.org/"
+  ]
+ },
+ {
+  "id": "EWV-111-ArXiv",
+  "task": "Using the website https://arxiv.org/, find how many figures and tables are in the paper 'On the Sentence Embeddings from Pre-trained Language Models'?",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully find the paper titled 'On the Sentence Embeddings from Pre-trained Language Models'? (2) Does the agent's answer correctly state the total count of figures and tables provided in the paper? (8 Tables and 2 Figures) (3) Was the task completed using the website mentioned in the prompt: https://arxiv.org/ Reference answer: 2 Figures, 8 Tables."
+  ]
+ },
+ {
+  "id": "EWV-112-ArXiv",
+  "task": "Using the website https://arxiv.org/, find most recent paper submitted on machine learning in the Computer Science category posted",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain details of a paper on machine learning in the Computer Science category? (2) Is the paper the most recent submission in the category? (3) Was the task completed using the website mentioned in the prompt: https://arxiv.org/"
+  ]
+ },
+ {
+  "id": "EWV-113-ArXiv",
+  "task": "Strictly using https://arxiv.org/, find ArXiv Blogs. What is the latest blog about?",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent navigate to the blog section from Arxiv home page without using external search engines (https://blog.arxiv.org/) (2) Does the agent's answer contain details of the latest blog post from Arxiv blogs"
+  ]
+ },
+ {
+  "id": "EWV-114-ArXiv",
+  "task": "Using the website https://arxiv.org/, find Arxiv store in arXiv Help section. Tell me how many styles of arXiv Logo Shirt are available",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly navigate to Arxiv store from the Arxiv info section? (2) Does agent's answer state the number of styles of arxiv logo shirt available in their Bonfire store?  (3) Was the task completed using the website mentioned in the prompt: https://arxiv.org/ Reference answer: 3 variants of arXiv Logo Shirt are available in the Arxiv store."
+  ]
+ },
+ {
+  "id": "EWV-115-ArXiv",
+  "task": "Using the website https://arxiv.org/, Find how many articles are there with 'SimCSE' in the title?",
+  "url": "https://arxiv.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly state the number of articles with SimCSE in title? (Note: This would require a search for 'SimCSE' in the title field or Perform a generic search for 'SimCSE' and iterate through the search results to count the number ones with SimCSE in title) (2) Was the task completed using the website mentioned in the prompt: https://arxiv.org/"
+  ]
+ },
+ {
+  "id": "EWV-141-BBCNews",
+  "task": "Using the website https://www.bbc.com/, find a report about recent developments in renewable energy technologies in the UK",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain details of report on recent developments in renewable energy technologies in the UK? (2) Was the task completed using the website mentioned in the prompt: https://www.bbc.com/"
+  ]
+ },
+ {
+  "id": "EWV-142-BBCNews",
+  "task": "Using the website https://www.bbc.com/, read the latest health-related news article published and summarize the key points discussed",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent find latest health related news on BBC? (2) Does the agent's answer correctly summarise key points of the article?"
+  ]
+ },
+ {
+  "id": "EWV-143-BBCNews",
+  "task": "Using only the website https://www.bbc.com/, read the latest article regarding the environmental impacts of deforestation published today or yesterday and summarise key points",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent find articles on environmental impacts of deforestation published within last 2 days?(Note: It is possible that BBC did not publish any articles on this topic in this timeframe, in which case, the correct answer is for agent to state it could not find any.) (2) Does the agent's answer summarise key points if it found an article? (3) Was the task completed using the website mentioned in the prompt: https://www.bbc.com/"
+  ]
+ },
+ {
+  "id": "EWV-144-BBCNews",
+  "task": "Using the website https://www.bbc.com/, check the leaderboard for Golf's DP World Tour in the SPORT section, what was the name of the most recent tournament, and how many players have a Total of -10 strokes below Par.",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully access the DP World Tour leaderboard in BBC? (2) Does the agent correctly state the most recent tournament? (3) Does the agent correctly state the number of players which has a total of -10 below par? (Note: This is the 'Total' column in the table)"
+  ]
+ },
+ {
+  "id": "EWV-145-BBCNews",
+  "task": "Using the website https://www.bbc.com/, Find the latest article regarding the economic implications of climate change in Europe and summarize the central points.",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent access the latest article on economic implications of climate change in Europe in BBC? (2) Does the agent's answer correctly summarise the central point(s) of the article?"
+  ]
+ },
+ {
+  "id": "EWV-146-BBCNews",
+  "task": "Using the website https://www.bbc.com/, find the article What is climate change? A really simple guide and use it to answer what human activities are causing climate change",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully access the article 'What is climate change? A really simple guide'? (2) Does the article answer correctly answer the question on human activities are causing climate change? (Answer: Widespread use of fossil fuels - coal, oil and gas - in homes, factories and transport)"
+  ]
+ },
+ {
+  "id": "EWV-147-BBCNews",
+  "task": "Using the website https://www.bbc.com/, find a AI-related story under Technology of Business. What is in the first picture in the story?",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent find a story tagged under the category 'Technology of Business' in BBC? (2) Does the agent correctly state what is in the first picture of the story?"
+  ]
+ },
+ {
+  "id": "EWV-148-BBCNews",
+  "task": "Using the website https://www.bbc.com/, get a brief overview of the economic implications of the UK's latest CPTPP trade deal and the date when the article was published.",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does agent's answer correctly state an overview of the article on economic implications of CPTPP trade deal? (2) Does agent's answer correctly state the date when the article was published? (3) Was the task completed using the website mentioned in the prompt: https://www.bbc.com/"
+  ]
+ },
+ {
+  "id": "EWV-149-BBCNews",
+  "task": "Using the website https://www.bbc.com/, Find out which musician made the headlines in Music section.",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly access the Music section on BBC? (2) Does the agent's answer correctly mention name of atleast one musician who is mentioned in the Music News section?"
+  ]
+ },
+ {
+  "id": "EWV-150-BBCNews",
+  "task": "Using the website https://www.bbc.com/, identify the main headlines covering the UK's plan to tackle climate change",
+  "url": "https://www.bbc.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state atleast one headlines regarding the UK's plan to tackle climate change? (2) Was the task completed using the website mentioned in the prompt: https://www.bbc.com/"
+  ]
+ },
+ {
+  "id": "EWV-176-Booking",
+  "task": "Using the website https://www.booking.com/, find a Mexico hotel with deals for January 10 2027-January 11 2027",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in Mexico for the provided dates? (2) Does the agent's answer contain a hotel which has a discounted rate for the provided dates? (3) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-177-Booking",
+  "task": "Using the website https://www.booking.com/, find a hotel in Ohio from December 26 2026 to December 29 2026 for 3 adults and 2 rooms.",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in Ohio for the provided dates? (2) Does the agent search for hotels for 3 adults and 2 rooms? (3) Does the agent correctly answer with atleast a hotel that satisfy the search conditions? (4) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-178-Booking",
+  "task": "Using the website https://www.booking.com/, find a hotel with 4 star and above rating in Los Angeles for 3 days from December 06 2026",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in Los Angeles for the provided dates? (2) Does the agent's answer contain a hotel that is available for the provided dates and has a star rating of 4.0 or above? (3) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-179-Booking",
+  "task": "Using the website https://www.booking.com/, search for the cheapest Hotel near Kashi Vishwanath Temple that offer breakfast from February 09 2027 - February 12 2027.",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels near Kashi Vishwanath Temple for the provided dates? (2) Does the agent's answer contain a hotel offers breakfast (either free or paid)? (3) Does the agent's answer contain the cheapest hotel the meets the above conditions? (4) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-180-Booking",
+  "task": "Using the website https://www.booking.com/, find a hotel with free WiFi and air conditioning in Bali from December 01 2026 to December 05 2026",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in Bali for the provided dates? (2) Does the agent's answer contain a hotel from the search result? (3) Does the agent's answer contain a hotel that offers free WiFi and air conditioning? (4) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-181-Booking",
+  "task": "Using the website https://www.booking.com/, Find a room which provides breakfast, and airport shuttle from March 11 2027 to March 14 2027 in Los Angeles",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in Los Angeles for the provided dates? (2) Does the agent's answer contain a hotel from the search result? (3) Does the agent's answer contain a hotel that offers breakfast, and airport shuttle (both free or paid meets the requirement)? (4) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-182-Booking",
+  "task": "Using the website https://www.booking.com/, find a hotel room on November 21 2026-November 24 2026 that is closest to National University of Singapore and costs less than $500 in total.",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels near National University of Singapore for the provided dates? (2) Does the agent's answer contain a hotel that costs less than $500 in total? (3) Does the agent's answer contain a hotel that is closest to University of Singapore (that also meets the above requirements)? (4) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-183-Booking",
+  "task": "Using the website https://www.booking.com/, Find a hotel with highest review score and free cancelation in Chennai for April 10 2027 - April 11 2027.",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in Chennai for the provided dates? (2) Does the agent's answer contain a hotel has free cancellation policy? (3) Does the agent's answer contain a hotel has the highest review score among the search results that also meets the above criterias? (4) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-184-Booking",
+  "task": "Using the website https://www.booking.com/, find hotels for 2 adults in London with a price less than 250 dollars for 4 days starting from May 30 2027. You must browse the page and offer at least 3 options.",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in London, for 2 adults for the provided dates? (2) Does the agent's answer provide details of atleast three hotels from the search result that is less than $250? (3) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-185-Booking",
+  "task": "Using the website https://www.booking.com/, find a well-reviewed hotel in Paris with available bookings suitable for a couple (2 adults) on Valentine's Day week, February 07-14, 2027 that offers free cancellation options",
+  "url": "https://www.booking.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for hotels in Paris, for 2 adults for the provided dates? (2) Does the agent's answer provide details of a hotel from the search result has free cancellation policy? (3) Does the agent's answer provide details of a hotel from the search result that can be considered well-reviewed? (Use atleast 100 reviews as the consideration) (4) Was the task completed using the website mentioned in the prompt: https://www.booking.com/"
+  ]
+ },
+ {
+  "id": "EWV-211-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, tell me the pronunciation in International Phonetic Alphabet, definition, and a sample sentence for the word serendipity",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the definition of the word 'serendipity'? (2) Does the agent's answer correctly state the pronunciation of the word 'serendipity' (in International Phonetic Alphabet)? (3) Does the agent's answer correctly provide a sample sentence for the word 'serendipity'? (4) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-212-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, look for the British English pronunciation of the word innovate and write down the International Phonetic Alphabet (IPA) notation, then find one example sentence that uses this word.",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the British English pronunciation of the word innovate in International Phonetic Alphabet (IPA) notation? (2) Does the agent's answer correctly state an example sentence  of the word innovate? (3) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-213-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, learn the UK and US pronunciation (phonetic notation) of the word procrastination, and find one example sentence that reflects its use in context.",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the UK pronunciation of the word 'procrastination' in International Phonetic Alphabet? (2) Does the agent's answer correctly state the US pronunciation of the word 'procrastination' in International Phonetic Alphabet? (3) Does the agent's answer correctly state provide an example sentence that uses the word 'procrastination'? (4) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-214-CambridgeDictionary",
+  "task": "Search for the word sustainability on the https://dictionary.cambridge.org/, what is the translation of sustainability into Chinese and French in the dictionary.",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for the word 'sustainability'? (2) Does the agent's answer correctly state the translation of 'sustainability' in Chinese? (3) Does the agent's answer correctly state the translation of 'sustainability' in French? (4) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/ Reference answer: Translation of the word sustainability to Chinese, and French: 可持续性; durabilité/viabilité"
+  ]
+ },
+ {
+  "id": "EWV-215-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, look up the meaning, pronunciation in International Phonetic Alphabet, and an example sentence of the word gestalt.",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the definition of the word 'gestalt'? (2) Does the agent's answer correctly state the (International Phonetic Alphabet) pronunciation of the word 'gestalt'? (3) Does the agent's answer correctly provide a sample sentence for the word 'gestalt'? (4) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-216-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, find three different meanings of dog.",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state three different meaning of the word 'dog'? (2) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-217-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, look up the British pronunciation in International Phonetic Alphabet (IPA) of the word \"euphoria\" and find an example sentence using that word.",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the British (International Phonetic Alphabet) pronunciation of the word 'euphoria'? (2) Does the agent's answer correctly provide a sample sentence for the word 'euphoria'? (3) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-218-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, look up the (IPA) pronunciation and definition of the word ameliorate, and provide an example sentence using the word.",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the definition of the word 'ameliorate'? (2) Does the agent's answer correctly state the (International Phonetic Alphabet) pronunciation of the word 'ameliorate'? (3) Does the agent's answer correctly provide a sample sentence for the word 'ameliorate'? (4) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-219-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, find one word, one phrase and one idiom related to euphoria",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state word related to euphoria? (2) Does the agent's answer correctly state a phrase related to euphoria? (3) Does the agent's answer correctly state an idiom related to euphoria? (4) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-220-CambridgeDictionary",
+  "task": "Using the website https://dictionary.cambridge.org/, find the pronunciation (International Phonetic Alphabet), definition, and one example sentence for the word concatenate",
+  "url": "https://dictionary.cambridge.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the definition of the word 'concatenate'? (2) Does the agent's answer correctly state the (International Phonetic Alphabet) pronunciation of the word 'concatenate'? (3) Does the agent's answer correctly provide a sample sentence for the word 'concatenate'? (4) Was the task completed using the website mentioned in the prompt: https://dictionary.cambridge.org/"
+  ]
+ },
+ {
+  "id": "EWV-246-Coursera",
+  "task": "Using the website https://www.coursera.org/, find a beginner-level online course or specialization on '3d printing' which lasts 1-3 months, and is provided by a renowned university",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a course or specialization on 3D printing? (2) Is the course offered by a university (as opposed to a company?) (3) Does the course lasts 1-3 months in duration? (4) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-247-Coursera",
+  "task": "Using the website https://www.coursera.org/, search for a beginner-level online course about Python programming, suitable for someone who has no programming experience",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain details of atleast a beginner level course on python? (Note: Coursera Specialization does not meet the requirement) (2) Does the course cater to individuals with no prior programming experience? (3) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-248-Coursera",
+  "task": "Using the website https://www.coursera.org/, perform a search for the term 'Data Science using Python', sort the courses by newest, what is the first course and which institution offers it?",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search on coursera for the term 'Data Science using Python'? (2) Does the agent apply sort by newest in the search result page? (3) Does the agent's answer correctly state the name of the first course and institution that offers it?"
+  ]
+ },
+ {
+  "id": "EWV-249-Coursera",
+  "task": "Using the website https://www.coursera.org/, identify a course or Specialization that helps business process management with a rating 4.7 or higher",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain details of atleast a course or specialization on business process management? (2) Does the course have a rating of 4.7 or higher? (3) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-250-Coursera",
+  "task": "Identify a course on https://www.coursera.org/ related to 'Artificial Intelligence for Healthcare' and note the course duration along with the number of quizzes in Assessments.",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a course on AI for healthcare? (Note: Coursera Specialization does not meet the requirement) (2) Does the agent's answer contain duration of course and number of quizzes as per the assessments section? (3) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-251-Coursera",
+  "task": "Find a course on https://www.coursera.org/ that teaches Reinforcement Learning for Intermediate with a rating of at least 4.5. Provide the name of the course, the institution offering it, and the number of reviews it has received.",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a course on Reinforcement learning for intermediate level? (Note: Coursera Specialization does not meet the requirement) (2) Does the course have a rating of 4.5 or above? (3) Does the agent's answer include name, insttitution and number of reviews received for the course? (Note: Exact number of reviews are not needed, approximate number is sufficient) (4) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-252-Coursera",
+  "task": "Search for a course related to 'R for Data Science' available on https://www.coursera.org/. Scroll to find a course with the Free tag. What language the course is taught in?",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search for courses related to 'R for Data Science'? (2) Does the agent's answer provide details of a course with Free tag from the search result? (Note: Agent may need to scroll further down for a FREE course to appear.) (3) Does the agent's answer correctly state the language the course is taught in? (4) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-253-Coursera",
+  "task": "Using the website https://www.coursera.org/, identify a Coursera course on artificial intelligence ethics that has a duration of less than 20 hours to complete and has been rated 4+ stars by participants",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a course on Artificial intelligence ethics? (Note: Coursera Specialization does not meet the requirement) (2) Does the course take less than 20 hours to complete? (3) Does the course have a rating of 4.0 or above? (4) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-254-Coursera",
+  "task": "Locate an introductory course related to artificial intelligence on https://www.coursera.org/, ensuring it's suitable for beginners and contains at least one module discussing Ethical Considerations",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a beginners course on Artificial intelligence? (Note: Coursera Specialization does not meet the requirement) (2) Does the course contain atleast one module which discusses Ethical Consideration? (Note: Even if discussion is not central to the module, it is acceptable) (3) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-255-Coursera",
+  "task": "Search for a Specialization on https://www.coursera.org/ about project management that is produced by a university, show a testimonial for this Specialization.",
+  "url": "https://www.coursera.org/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully search for courses about project management? (2) Does the agent find and open a specialization that is offered by a university? (Note: Coursera courses do not meet the requirement) (3) Does the agent navigate to the section on testimonials? (4) Was the task completed using the website mentioned in the prompt: https://www.coursera.org/"
+  ]
+ },
+ {
+  "id": "EWV-281-ESPN",
+  "task": "Using the website https://www.espn.com/, look up the current standings for the NBA Eastern Conference",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly navigate to the NBA standings on ESPN? (Answer:https://www.espn.com/nba/standings) (2) Does the agent's answer correctly state a brief summary  of the NBA standings for Eastern Conference?"
+  ]
+ },
+ {
+  "id": "EWV-282-ESPN",
+  "task": "Show the scores and main highlight of the Milwaukee Bucks game that took place within the last 2 days on https://www.espn.com/",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the scores of Milwaukee bucks game that happened within the last 2 days? (Note: It is possible that no games happened) (2) If a game happen, does the agent's answer correctly state the scores and main highlights? (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-283-ESPN",
+  "task": "Using the website https://www.espn.com/, retrieve the final score from the most recent NBA game, including the playing teams' names and the date of the match.",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state details of the most recent NBA game? (Note: If multiple games happened on same day, agent's answer should provide details of atleast one) (2) Does the agent's answer state the names of the teams, date of the match and the final score of the game? (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-284-ESPN",
+  "task": "check https://www.espn.com/ for the final scores of all NBA games that were played yesterday",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state final scores of all the NBA games that happened yesterday? (Note: If multiple games happened on same day, agent's answer should provide details all of them.) (2) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-285-ESPN",
+  "task": "Using the website https://www.espn.com/, identify the top scorer in the NBA from the latest completed game and note down the points scored, the team they play for, and their position on the team.",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the name of the top scorer of the most recently completed NBA Game? (Note: if multiple games happened in the day, any of the game meets the requirement of 'latest') (2) Does the agent's answer state the name of the player, points scored, teams they play for and their position? (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-286-ESPN",
+  "task": "Using the website https://www.espn.com/, find the result of the latest basketball game between Los Angeles Lakers and Boston Celtics, including the final score and top scorer from the match.",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly state the results of the latest basketball game between Los Angeles Lakers and Boston Celtics? (2) Does the agent's answer state the top scorer in the game and the final score? (Note: if top scorers for both teams are provided, they should be both correct) (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-287-ESPN",
+  "task": "Using the website https://www.espn.com/, retrieve the final score and a brief summary of the latest NBA game played by the Los Angeles Lakers",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly state the details of the latest NBA game played by Los Angeles Lakers? (2) Does the agent's answer state the final score and brief summary of the game? (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-288-ESPN",
+  "task": "Using the website https://www.espn.com/, Find information about three top scoring leaders in the NBA of the regular season, and note which teams they play for.",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the names of three top scoring leaders in NBA? (2) Does the agent's answer correctly state the teams the top scorers play for? (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-289-ESPN",
+  "task": "Search on https://www.espn.com/ for how many teams have Los Angeles in their name and how many of them are NBA",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the number of teams with 'Los Angeles' in their name? (Answer: 9) (2) Does the agent's answer correctly state the number of NBA teams with 'Los Angeles' in their name? (Answer: 2) (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/ Reference answer: 9 teams have Los Angeles in their name; 2 teams are NBA"
+  ]
+ },
+ {
+  "id": "EWV-290-ESPN",
+  "task": "Check https://www.espn.com/ for the score and a brief recap of the latest college football championship (NCAAF) game",
+  "url": "https://www.espn.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the details of the latest NCAAF football game? (2) Does the agent's answer correctly state the final scores and a recap of the game? (3) Was the task completed using the website mentioned in the prompt: https://www.espn.com/"
+  ]
+ },
+ {
+  "id": "EWV-316-GitHub",
+  "task": "Search for an open-source project related to 'climate change data visualization' on https://github.com/ and report the project with the most stars.",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly search for 'climate change data visualization' on Github? (2) Does the agent's answer correctly state the project with most stars? (Note: Easiest way to do it is sort by stars. However, it is also acceptable if an agent chooses to analyse all the search result pages one by one ) (3) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-317-GitHub",
+  "task": "Using the website https://github.com/, search for an open-source repository for machine learning in Python, specifically focused on decision trees, updated within the last 2 days",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a repository on Decision Trees in Python? (2) Was the repository updated within the last 2 days? (3) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-318-GitHub",
+  "task": "Using the website https://github.com/, look for the trending Python repositories with most stars.",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer return details of a trending python repositories? (e.g. https://github.com/trending/python) (2) Does the python repositories have most number of stars in the trending section? (3) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-319-GitHub",
+  "task": "Find a popular JavaScript repository created in the last 30 days on https://github.com/ with a Readme file.",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a Javascript repository? (2) Was the repository created in the last 30 days? (3) Does the repository have a Readme file? (4) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-320-GitHub",
+  "task": "Find a Python repository on https://github.com/ that has been updated in the past 2 days and has at least 500 stars",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain details of a Python repository on Github? (2) Has the repository been updated in the past 2 days? (3) Does the repository have at least 500 stars? (4) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-321-GitHub",
+  "task": "Using the website https://github.com/, search for an open-source project related to cryptocurrency wallet updated in the past 30 days and provide the top three contributors.",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer provide details of a cryptocurrency wallet project? (2) Was the project updated in the past 30 days? (3) Does the agent's answer state the details of top 3 contributors of the project (Note: It is possible for a new project to not have any 'Top Contributors')? (4) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-322-GitHub",
+  "task": "Using the website https://github.com/, find the official GitHub repository for ALBERT by Google Research and show me what files the repo changed in the most recent commit.",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does agent successfully open the Github repo for ALBERT by Google Research (https://github.com/google-research/albert) (2) Does the agent's answer correctly state the files that were changed in the most recent commit of the ALBERT repository? (Answer: classifier_utils.py and squad_utils.py) (3) Was the task completed using the website mentioned in the prompt: https://github.com/ Reference answer: classifier_utils.py and squad_utils.py are the two files that were changed in the most recent commit of the ALBERT repository on Apr 13, 2023."
+  ]
+ },
+ {
+  "id": "EWV-323-GitHub",
+  "task": "Using the website https://github.com/, look up the latest release version of Vuex and find out when it was published",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the details of last release of Vuex? Info available : https://github.com/vuejs/vuex/releases (2) Does the agent's answer correctly state when the release was published? (3) Was the task completed using the website mentioned in the prompt: https://github.com/ Reference answer: Latest v4.0.2 on Jun 17, 2021"
+  ]
+ },
+ {
+  "id": "EWV-324-GitHub",
+  "task": "Locate a repository on https://github.com/ that was created in the last week and has 50 or more stars. Provide brief details about the project's purpose and its programming language.",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer provide details of a repository that was created in the last week and has 50 or more stars? (2) Does the agent's answer provide details of the projects purpose and programming language? (3) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-325-GitHub",
+  "task": "Find an open-source project on https://github.com/ related to 'climate change' that has been initiated in Jan 2024; check the main programming language used and the project's description.",
+  "url": "https://github.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of a project related to climate change? (2) Was the project initiated/created in January 2024? (3) Does the agent's answer state the main programming language used in the project? (4) Does the agent's answer provide a description of the project? (5) Was the task completed using the website mentioned in the prompt: https://github.com/"
+  ]
+ },
+ {
+  "id": "EWV-351-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, Find a journey with return option on same day from Edinburg to Manchester on December 21 2026 and show me the lowest price option available.",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for flight options from Edinburg to Manchester with return on the same day for the provided date? (2) Does the agent's answer correctly provide the cheapest flight option from the search results? (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-352-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, show me the list of one-way flights today from Chicago to Paris",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for one-way flight options from Chicago to Paris for today? (Note: Today refers to the day the agent performed the task) (2) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-353-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, find the lowest fare from all eligible one-way flights for 1 adult from JFK to Heathrow on December 08.",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for one-way flight options from JFK to Heathrow for 1 passenger for the provided date? (2) Does the agent's answer correctly provide the cheapest flight option from the search results? (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-354-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, search for the one-way flight available from Calgary to New York on December 13 with the lowest carbon dioxide emissions",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for a one-way flight from Calgary to New York for the provided date? (2) Does the agent's answer correctly provide the flight option from the search results with lowest CO2 emissions? (Note: This would require either sorting by Emissions or scrolling through the full search results) (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-355-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, search for one-way flights from New York to London on December 28 and filter the results to show only non-stop flights",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for a one-way flight from New York to London for the provided date? (2) Does the agent correctly filter the search results to show only non-stop flights? (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-356-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, search for a flight on November 25 2026 and return on December 02 2026 from Tel Aviv to Venice and Select First Class.",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for a round trip flight from Tel Aviv to Venice for the provided date? (2) Does the agent correctly apply First Class as the ticket type for the search? (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-357-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, find a round trip from Phoenix to Miami (January 10 2027 - January 13 2027), show the First Class plane tickets for me that do not exceed $1320.",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for a round trip flight from Phoenix to Miami for the provided date? (2) Does the agent correctly apply First Class as the ticket type for the search? (3) Does the agent's answer correctly provide a travel option from the search result that does not exceed $1320 (a price of exactly $1320 is acceptable)? (4) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-358-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, search a one-way flight from Dublin to Athens Greece for 1 Adult that leaves on February 14 2027 and analyse the price graph for the next 2 months and find the cheapest day to fly.",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for a one-way flight from Dublin to Athens Greece for 1 adult for the provided date? (2) Does the agent's answer correctly provide an analysis of prices for the next 2 months from the search results and provide the cheapest day? (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-359-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, find a one way economy flight from Pune to New York on November 21 2026 and tell me how long it will take for flight transfer.",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for a one-way economy flight from Pune to New York for the provided date? (2) Does the agent's answer correctly provide the flight transfer time for atleast one flight option from the search results? (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-360-GoogleFlights",
+  "task": "Using the website https://flights.google.com/, return the cheapest round-trip flights from New York to Tokyo leaving on March 14 2027 and returning on May 14 2027",
+  "url": "https://flights.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for a round trip flight from New York to Tokyo for the provided dates? (2) Does the agent's answer correctly provide the cheapest flight option from the search results? (3) Was the task completed using the website mentioned in the prompt: https://flights.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-386-GoogleMap",
+  "task": "Using the website https://maps.google.com/, find 5 beauty salons with ratings greater than 4.8 in Seattle, WA",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain details of 5 beauty saloons in Seattle, WA? (2) Does all the salons have a rating of 4.8 or higher? (3) Was the task completed using the website mentioned in the prompt: https://maps.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-387-GoogleMap",
+  "task": "Using the website https://maps.google.com/, tell me one bus stop that is nearest to the intersection of main street and Amherst street in Altavista",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state a bus stop nearest to the intersection of main street and Amherst street in Altavista?(Answer: Amherst and 7th or Main Street Middle) (2) Was the task completed using the website mentioned in the prompt: https://maps.google.com/ Reference answer: 'Amherst and 7th' or 'Main Street Middle' both are correct answers"
+  ]
+ },
+ {
+  "id": "EWV-388-GoogleMap",
+  "task": "Using the website https://maps.google.com/, find Apple Stores close to zip code 90028",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer state an apple store near the zip code 90028? (Example answers: Apple The Grove, Apple Beverly Center) (2) Was the task completed using the website mentioned in the prompt: https://maps.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-389-GoogleMap",
+  "task": "Using the website https://maps.google.com/, find the least amount of walking time from Central Park Zoo to the Broadway Theater in New York.",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly use google map to find walking time between Central Park Zoo and Broadway Theater? (2) Does the agent's answer correctly state the walking time?"
+  ]
+ },
+ {
+  "id": "EWV-390-GoogleMap",
+  "task": "Using the website https://maps.google.com/, plan a trip from Boston Logan Airport to North Station and return the major highway and total travel time by car",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly use google map to search how to travel between Boston Logan Airport and North Station? (2) Does the agent's answer correctly state the travel time by car and name of the road to take?"
+  ]
+ },
+ {
+  "id": "EWV-391-GoogleMap",
+  "task": "Using the website https://maps.google.com/, search for a parking garage near Thalia Hall in Chicago that isn't open 24 hours",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search for parking garage near Thalia Hall in Chicago? (2) Does the agent's answer correctly return the name of a parking garage that does not have 'Open 24 hrs' label on it? (3) Was the task completed using the website mentioned in the prompt: https://maps.google.com/"
+  ]
+ },
+ {
+  "id": "EWV-392-GoogleMap",
+  "task": "Using the website https://maps.google.com/, find all Uniqlo locations in Greater Chicago Metropolitan Area, IL",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search for Uniqlo stores in Chicago? (2) Does the agent's answer correctly state all the stores? (Answer: 2 stores, UNIQLO State Street and Uniqlo Woodfield Mall) (3) Was the task completed using the website mentioned in the prompt: https://maps.google.com/ Reference answer: 2 stores, UNIQLO State Street and Uniqlo Woodfield Mall"
+  ]
+ },
+ {
+  "id": "EWV-393-GoogleMap",
+  "task": "Using the website https://maps.google.com/, find bus stops in Alanson, MI",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search for bus stops in Alanson, MI? (2) Does the agent's answer correctly provide details of the bus stops? (Answer: only 1 bus stop, Alanson, MI (EZ-Mart) Bus Stop) (3) Was the task completed using the website mentioned in the prompt: https://maps.google.com/ Reference answer: only 1 bus stop, Alanson, MI (EZ-Mart) Bus Stop"
+  ]
+ },
+ {
+  "id": "EWV-394-GoogleMap",
+  "task": "Using the website https://maps.google.com/, find a place to climb within 2 miles of zip code 90028",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent perform a search for climbing places near 90028? (2) Does the agent's answer correctly provide details of a climbing place within 2 miles from 90028? (Example Answer: Hollywood Boulders) (3) Was the task completed using the website mentioned in the prompt: https://maps.google.com/ Reference answer: Hollywood Boulders is the only climbing place within 2 miles from 90028"
+  ]
+ },
+ {
+  "id": "EWV-395-GoogleMap",
+  "task": "Using the website https://maps.google.com/, find the art gallery that is nearest to Los Angeles Hindu Temple",
+  "url": "https://maps.google.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly provide details of art gallery near Los Angeles Hindu Temple? (Answer: Honor Fraser Gallery or Walter Maciel Gallery, both within 100m) (2) Was the task completed using the website mentioned in the prompt: https://maps.google.com/ Reference answer: Honor Fraser Gallery or Walter Maciel Gallery, both within 100m."
+  ]
+ },
+ {
+  "id": "EWV-421-SearchEngine",
+  "task": "Using any search engine, navigate to the Amazon Press Center. Identify the latest press releases under the categories 'Retail' and 'Prime Video.' Please provide the title and date for each press release.",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully navigate to Amazon Press Center? (Hint: https://press.aboutamazon.com/press-release-archive) (2) Does the agent's answer correctly state the latest press in the category of Retail? (3) Does the agent's answer correctly state the latest press in the category of Prime Video?"
+  ]
+ },
+ {
+  "id": "EWV-422-SearchEngine",
+  "task": "Using any search engine, navigate to Investor Relations page of NVDIA and find 2022 Q3 financial results press release. What is the reported revenue growth Q/Q?",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully retrieve the 2022 Q3 financial results press release from NVDIA? (Hint: https://nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-third-quarter-fiscal-2022) (2) Does the agent's answer correctly state the revenue growth? (Answer: Upto 9% GAAP and Non-GAAP Q/Q) Reference answer: Upto 9% GAAP and Non-GAAP Q/Q"
+  ]
+ },
+ {
+  "id": "EWV-423-SearchEngine",
+  "task": "Using the website any search engine, navigate to Finnair Investor relations page, What was the last press release published by Finnair in 2022?",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully navigate to press releases section in Finnair website? (Hint:https://company.finnair.com/en/media-centre/all-releases) (2) Does the agent's answer correctly state the last press release from the year 2022? (Answer: https://company.finnair.com/en/media-centre/all-releases/news?id=0F32C994C851C12D) Reference answer: Finnair adds flights between Helsinki and Asia for summer 2023 in response to demand"
+  ]
+ },
+ {
+  "id": "EWV-424-SearchEngine",
+  "task": "Using any search engine, show me a list of comedy movies, sorted by user ratings. Show me the Top 5 movies.",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent successfully search for comedy movies on Google? (2) Does the agent show a list of movies sorted by user ratings? (Note: This could be by opening a new website which has sort capability or a blog that shows top movies by user ratings)"
+  ]
+ },
+ {
+  "id": "EWV-425-SearchEngine",
+  "task": "Using any search engine, navigate to Microsoft investor relations page. Go to the SEC filings section and find the details of the earliest SEC filing made by Microsoft based on the website. When was the filing date?",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent navigate to Microsoft Investor relations page? (2) Does the agent's answer correctly state the time of first SEC filing based on the webpage?(Feb 14, 1994) (3) Does the agent's answer correctly state the details of the first SEC filing? (Answer: FORM 10-Q for Q4 1993)"
+  ]
+ },
+ {
+  "id": "EWV-426-SearchEngine",
+  "task": "Using any search engine, find the score of the latest nba game played by the phoenix suns",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for score of latest phoenix suns game on Google? (2) Does the agent's answer correctly state score of the game?"
+  ]
+ },
+ {
+  "id": "EWV-427-SearchEngine",
+  "task": "Using any search engine as the starting point, find the monthly trending searches in Columbus, Ohio in Google Trends",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the trending search queries on Google Trends for the location Columbus, Ohio (2) Does the agent state the trending search queries based on monthly/last 30 days frequency?"
+  ]
+ },
+ {
+  "id": "EWV-428-SearchEngine",
+  "task": "Using any search engine, find the software requirements for iPhones that support AirDrop's ability to continue transmitting over the web when out of range",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for software requirements for Iphones Airdrop transmit over web feature on Google? (2) Does the agent's answer correctly state the software requirement? (Answer: IOS 17.1) Reference answer: IOS 17.1"
+  ]
+ },
+ {
+  "id": "EWV-429-SearchEngine",
+  "task": "Using any search engine, find the video on YouTube: 'Oscars 2023: Must-See Moments!'. Tell me who the first comment displayed under that video belongs to, and how many thumbs up and replies it has.",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for video 'Oscars 2023: Must-See Moments' on google? (2) Does the agent's answer correctly state first comment in the video? (3) Does the agent's answer correctly state how many likes and replies it has?"
+  ]
+ },
+ {
+  "id": "EWV-430-SearchEngine",
+  "task": "Using any search engine as starting point, find the rating of Prometheus on IMDb and Rotten Tomatoes",
+  "url": "",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the rating of the movie Prometheus and IMDB?"
+  ]
+ },
+ {
+  "id": "EWV-466-Huggingface",
+  "task": "Discover three new NLP models for language translation created in the past month on https://huggingface.co/",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer contain details of 3 new NLP models for translation created in the last month? (2) Was the task completed using the website mentioned in the prompt: https://huggingface.co/"
+  ]
+ },
+ {
+  "id": "EWV-467-Huggingface",
+  "task": "Look up a model with a license of CC BY-SA 4.0 with the most likes on https://huggingface.co/",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer provide details of a model with CC BY-SA 4.0 license from Hugging Face? (2) Does the model have the most likes on Hugging Face for the license?"
+  ]
+ },
+ {
+  "id": "EWV-468-Huggingface",
+  "task": "Locate a conversational AI model on https://huggingface.co/, trained in English and list its main features and applications.",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer provide details of a conversational AI model? (2) Is the conversational AI model trained in English? (3) Does the agent's answer state the main features of the conversational AI model and applications?"
+  ]
+ },
+ {
+  "id": "EWV-469-Huggingface",
+  "task": "Using the website https://huggingface.co/, find a model released for recipe generation. Retrieve the information of the model, including its name, model size and tensor type.",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent locate a model specifically designed for recipe generation? (2) Does the agent's answer state the name, size and tensor type of the model ? (3) Was the task completed using the website mentioned in the prompt: https://huggingface.co/"
+  ]
+ },
+ {
+  "id": "EWV-470-Huggingface",
+  "task": "Using the website https://huggingface.co/, find the most downloaded audio related dataset currently",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer provide details of a dataset that is tagged as audio modality? (Note: details such as name, and number of downloads need to be accurate) (2) Is the dataset most downloaded dataset in audio category? (3) Was the task completed using the website mentioned in the prompt: https://huggingface.co/"
+  ]
+ },
+ {
+  "id": "EWV-471-Huggingface",
+  "task": "Using the website https://huggingface.co/, retrieve an example of a pre-trained language model in natural language processing and identify the tasks it is specifically designed for, like translation or text summarization",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) What is an example of a pre-trained language model in natural language processing? (Note: not all models supporting translation task may have translation in the title) (2) What specific tasks is the identified language model designed for? (3) Does the language model support translation tasks? (4) Does the language model support text summarization tasks? (5) Are there any other tasks that the language model is designed for? (6) Was the task completed using the website mentioned in the prompt: https://huggingface.co/"
+  ]
+ },
+ {
+  "id": "EWV-472-Huggingface",
+  "task": "find the most downloaded machine translation model on https://huggingface.co/ which exclusively focuses on English and Japanese (en-ja) and report the evaluation metrics stated for it.",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent locate a translation model on English and Japanese (en-ja)? (2) Is the model the most downloaded on Huggingface? (3) Does the agent's answer report the name of the model and the evaluation metrics stated for the model? (4) Was the task completed using the website mentioned in the prompt: https://huggingface.co/"
+  ]
+ },
+ {
+  "id": "EWV-473-Huggingface",
+  "task": "Using the website https://huggingface.co/, identify the latest updated image to video model available on Huggingface and summarize its main features.",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer search for image to video models? (https://huggingface.co/models) and sort by recently updated? (2) Does the agent's answer provide details of the most recently updated Image to Video model? (3) Does the agent's answer summarise its main features (if it is available in the model page)?"
+  ]
+ },
+ {
+  "id": "EWV-474-Huggingface",
+  "task": "Using the website https://huggingface.co/, find the most recently updated machine learning model which focuses on Error Correction",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer provide details of a machine learning model focusing on error correction? (2) Is the model most recently updated among other models on error correction? (3) Was the task completed using the website mentioned in the prompt: https://huggingface.co/"
+  ]
+ },
+ {
+  "id": "EWV-475-Huggingface",
+  "task": "Using the website https://huggingface.co/, search for LLaMA in the huggingface doc, what type is the spaces_between_special_tokens parameter in LlamaTokenizer and what is its default value.",
+  "url": "https://huggingface.co/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent locate LLAMA related doc page on Hugging face docs? (2) Does the agent's answer explicitly state the type of the parameter spaces_between_special_tokens?(Answer: Boolean) (3) Does the agent's answer explicitly state the default value of the parameter spaces_between_special_tokens?(Answer: False) Reference answer: Boolean, defaults to False"
+  ]
+ },
+ {
+  "id": "EWV-501-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, give a constraint on the set of inequalities for the inner region of the pentagram",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search to find inequalities for the inner region of pentagram (Sample query: region of pentagram or pentagram)? (2) Does the agent's answer correctly state mathematical expression for inequalities associated with pentagram? (3) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/"
+  ]
+ },
+ {
+  "id": "EWV-502-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, calculate 3^71 and retain 5 significant figures in scientific notation.",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly state the answer for the calculation in scientific notation ? (Answer:7.5095 * 10^33) (2) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: 7.5095 * 10^33"
+  ]
+ },
+ {
+  "id": "EWV-503-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, let g(x) be the integral of x^2 cos(2x). Write the expression of g(x).",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the expression for g(x)? (Answer: 1/4 (2 x cos(2 x) + (-1 + 2 x^2) sin(2 x)) + Constant) (2) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: 1/4 (2 x cos(2 x) + (-1 + 2 x^2) sin(2 x)) + Constant"
+  ]
+ },
+ {
+  "id": "EWV-504-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, pack 24 circles in a circle radius r. Compare Densest known packing and Square packing. Then tell me the radius of the inner circles.",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent search for information on circle packing? (Example queries: pack 24 circles in a circle, pack 24 circles in a circle radius r etc) (2) Does the agent's answer state the radius of inner circles for Densest known packing? (Answer:0.176939r) (3) Does the agent's answer state the radius of inner circles for Square packing? (Answer:0.163961r) (4) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: Densest known packing: 0.176939r; Square packing: 0.163961r"
+  ]
+ },
+ {
+  "id": "EWV-505-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, give the final angle and final length after 6s of a Spring pendulum with spring equilibrium length=0.12m, initial length=0.24m, initial angle=80deg, mass=1kg, spring constant=120 N/m.",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the final angle of the pendulum after 6s? (Answer: -73.26deg from vertical) (2) Does the agent's answer correctly state the final length after 6s? (Answer: 0.252m or 25.21cm or 9.925 inch) (3) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: -73.26° from vertical; 0.252m or 25.21cm or 9.925 inch length after 6s"
+  ]
+ },
+ {
+  "id": "EWV-506-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, give 12 lbs of 4-cyanoindole, converted to molar and indicate the percentage of C, H, N",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the molar amount for the above quantity of the chemical? (Answer: 38.3 mol) (2) Does the agent's answer correctly state percentage of elements? (Answer: 76.0% C; 4.3% H; 19.7% N) (3) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/"
+  ]
+ },
+ {
+  "id": "EWV-507-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, annual energy production of Diablo Canyon 2 in 2010",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the total annual energy production of Diablo Canyon 2 in 2010? (Answer:9752 GW h/yr) (2) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: 9752 GW h/yr (gigawatt hours per year)"
+  ]
+ },
+ {
+  "id": "EWV-508-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, give the geomagnetic field on December 15, 2023 in Oslo",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer correctly state the total geomagnetic field strength on December 15, 2023? (Answer: total 51.5 uT) (2) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: geomagnetic field, total 51.5 uT;"
+  ]
+ },
+ {
+  "id": "EWV-509-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, show the electrical resistivity of UNS A92024 and UNS G10800 at 20 degrees Celsius.",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent's answer state the electrical resistivity of UNS A92024 at 20 degrees Celsius? (4.9x10^-6 Ω cm (ohm centimeters) (at 20 °C)) (2) Does the agent's answer state the electrical resistivity of UNS G10800 at 20 degrees Celsius? (1.8x10^-5 Ω cm (ohm centimeters) (at 20 °C)) (3) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: UNS A92024: 4.9×10^-6 Ω cm (ohm centimeters) (at 20 °C); UNS G10800: 1.8×10^-5 Ω cm (ohm centimeters)"
+  ]
+ },
+ {
+  "id": "EWV-510-WolframAlpha",
+  "task": "Using the website https://www.wolframalpha.com/, which character in unicode 8900 to 8920 looks like a snowflake",
+  "url": "https://www.wolframalpha.com/",
+  "check": "llm",
+  "expected": [
+   "an answer for which all of these checks would be YES: (1) Does the agent correctly answer the snowflake like unicode character between 8900 and 8920? (Answer: 8902 or U+22C6) (2) Was the task completed using the website mentioned in the prompt: https://www.wolframalpha.com/ Reference answer: 8902 (U+22C6)"
+  ]
+ }
+]

@@ -50,6 +50,10 @@ Interactive elements:
 {elements}"""
 
 
+REPLAN_SUFFIX = """
+
+Your recent actions changed nothing on the page ({tried}). Stop repeating them. Choose a different approach: use the site's own search, go back, open a different link, scroll, or goto a more specific URL."""
+
 FINAL_STEP_SUFFIX = """
 
 This is your last step. Reply only with: done "<best answer from your notes and the page>" """

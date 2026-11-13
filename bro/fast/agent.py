@@ -1,6 +1,7 @@
 """The fast agent loop: observe (text only) -> one short LLM call -> act -> settle."""
 
 import asyncio
+import re
 import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus
@@ -10,15 +11,17 @@ from pydantic import BaseModel, Field
 
 from .dsl import Action, parse
 from .llm import ChatModel, Completion
-from .observe import Element, Observation, format_elements, observe, observe_lean
-from .prompts import FINAL_STEP_SUFFIX, USER_TEMPLATE, VERIFY_SUFFIX, system_prompt
+from .observe import Element, Observation, format_elements, observe, observe_lean, signature
+from .prompts import FINAL_STEP_SUFFIX, REPLAN_SUFFIX, USER_TEMPLATE, VERIFY_SUFFIX, system_prompt
 from .settle import settle
 from .system1 import Decision, ideal_label
 
 PAGE_CHANGING = {"click", "goto", "search", "back", "press", "scroll", "select"}
 ALWAYS_RUN = {"done"}
 MAX_ACTIONS_PER_STEP = 3
+NAV_TIMEOUT_MS = 45000
 MAX_VETOES = 2
+HEDGE = re.compile(r"\b(unable|cannot|could not|can't|not (?:be )?(?:found|visible|available|determined|completed)|may be needed|further (?:scrolling|search)|technical issues)\b", re.IGNORECASE)
 
 
 class StepRecord(BaseModel):
@@ -83,6 +86,7 @@ class FastAgent:
         on_done: Optional[OnDone] = None,
         get_messages: Optional[GetMessages] = None,
         verify: bool = False,
+        reject_hedged_done: bool = False,
         observer: str = "lean",
         system1: Optional[Any] = None,
         shadow: Optional[Dict[str, Any]] = None,
@@ -93,6 +97,7 @@ class FastAgent:
         self.shadow = shadow or {}
         self.observer = observer
         self.verify = verify
+        self.reject_hedged_done = reject_hedged_done
         self.vetoes = 0
         self.on_step = on_step
         self.on_done = on_done
@@ -106,6 +111,11 @@ class FastAgent:
         self.history: List[str] = []
         self.notes: List[str] = []
         self._new_pages: List[Page] = []
+        self._pending_obs: Optional[Observation] = None
+        self._noop: Dict[str, int] = {}
+        self._stalled_steps = 0
+        self._step_effect = False
+        self._seen: List[str] = []
 
     def _on_new_page(self, page: Page) -> None:
         self._new_pages.append(page)
@@ -155,12 +165,28 @@ class FastAgent:
                         task += f"\nUser says: {message}"
                 record = StepRecord(step=step, url=page.url, output="")
                 observe_started = time.perf_counter()
-                obs = await self._observe(page)
+                obs = self._pending_obs if self._pending_obs is not None and self._pending_obs.url == page.url else await self._observe(page)
+                self._pending_obs = None
+                for element in obs.elements:
+                    if self._noop.get(element.fingerprint(), 0) >= 1:
+                        element.note = "(clicking this did nothing)"
+                obs.elements = [e for e in obs.elements if self._noop.get(e.fingerprint(), 0) < 2]
+                if self._stalled_steps >= 4 and start_url and page.url != start_url:
+                    await self._goto(page, start_url)
+                    obs = await self._observe(page)
+                    self.history.append(f"{step}. (stuck for {self._stalled_steps} steps; returned to the start page, try a different route)")
+                    self._stalled_steps = 2
+                sig_now = signature(obs)
+                if sig_now not in self._seen:
+                    self._seen = (self._seen + [sig_now])[-40:]
                 record.observe_ms = int((time.perf_counter() - observe_started) * 1000)
 
                 if self.log_states:
                     record.state = {"obs": obs.model_dump(), "history": list(self.history), "notes": list(self.notes), "task": task}
                 user_prompt = self._build_user_prompt(task, obs)
+                if self._stalled_steps >= 2:
+                    tried = sorted({h.split(" -> ")[0].split(". ", 1)[-1] for h in self.history[-6:] if " -> " in h})
+                    user_prompt += REPLAN_SUFFIX.format(tried="; ".join(tried)[:400])
                 if step == max_steps:
                     user_prompt += FINAL_STEP_SUFFIX
                 record.prompt_chars = len(self.system) + len(user_prompt)
@@ -211,6 +237,7 @@ class FastAgent:
 
                 act_started = time.perf_counter()
                 page_changed = False
+                self._step_effect = False
                 for action in actions[:MAX_ACTIONS_PER_STEP]:
                     if page_changed and action.name not in ALWAYS_RUN:
                         self.history.append(f"{step}. {action} -> skipped (page changed)")
@@ -221,6 +248,9 @@ class FastAgent:
                     self.history.append(f"{step}. {action} -> {outcome}")
                     if action.name == "done":
                         veto = await self._veto(user_prompt, action.text) if self.verify else None
+                        if veto is None and self.reject_hedged_done and step < max_steps and HEDGE.search(action.text) and self.vetoes < MAX_VETOES:
+                            self.vetoes += 1
+                            veto = "that is not an answer; keep working (search differently, open the item, scroll) until you have the facts"
                         if veto:
                             self.history.append(f"{step}. (self-check rejected the answer: {veto}; keep working)")
                             break
@@ -230,6 +260,8 @@ class FastAgent:
                     if outcome.startswith("error") or action.name in PAGE_CHANGING:
                         page_changed = True
                 record.act_ms = int((time.perf_counter() - act_started) * 1000)
+                acted = any(a.name not in ("note", "done") for a in actions[:MAX_ACTIONS_PER_STEP])
+                self._stalled_steps = 0 if (self._step_effect or not acted) else self._stalled_steps + 1
                 result.steps.append(record)
                 if self.on_step:
                     await self.on_step(record, obs)
@@ -299,13 +331,44 @@ class FastAgent:
     async def _goto(self, page: Page, url: str) -> None:
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
-        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+        except Exception:
+            # Slow page: settle for the first response instead of failing the whole step.
+            await page.goto(url, wait_until="commit", timeout=NAV_TIMEOUT_MS)
         await settle(page)
 
     def _locator(self, page: Page, element: Element):
         if element.iframe_xpath:
             return page.frame_locator(f"xpath={element.iframe_xpath}").locator(f"xpath={element.xpath}")
         return page.locator(f"xpath={element.xpath}")
+
+    async def _after(self, page: Page, before: Observation, element: Optional[Element] = None) -> str:
+        """Observe after an action; say whether anything visible changed and remember no-op clicks."""
+        try:
+            after = await self._observe(page)
+        except Exception:
+            return "ok"
+        self._pending_obs = after
+        sig = signature(after)
+        novel = sig not in self._seen
+        self._seen = (self._seen + [sig])[-40:]
+        if after.url != before.url or after.title != before.title:
+            if novel:
+                self._step_effect = True
+                return f"ok, now at {after.title}"
+        elif sig != signature(before):
+            if novel:
+                self._step_effect = True
+                return "ok"
+        else:
+            if element is not None:
+                self._noop[element.fingerprint()] = self._noop.get(element.fingerprint(), 0) + 1
+            return "ok, but nothing on the page changed"
+        # The page changed, but only back to a state already seen: toggling, not progress.
+        if element is not None:
+            self._noop[element.fingerprint()] = self._noop.get(element.fingerprint(), 0) + 1
+        return "ok, but this only returned to a page state you had already seen (no progress)"
 
     async def _execute(self, page: Page, action: Action, obs: Observation) -> str:
         try:
@@ -319,23 +382,26 @@ class FastAgent:
                 return "ok"
             if action.name == "goto":
                 await self._goto(page, action.text)
+                self._step_effect = True
                 return f"ok, now at {await page.title()}"
             if action.name == "search":
                 await self._goto(page, f"https://www.google.com/search?q={quote_plus(action.text)}")
+                self._step_effect = True
                 return f"ok, now at {await page.title()}"
             if action.name == "back":
                 await page.go_back(wait_until="domcontentloaded", timeout=15000)
                 await settle(page)
-                return f"ok, now at {await page.title()}"
+                return await self._after(page, obs)
             if action.name == "press":
                 await page.keyboard.press(action.text or "Enter")
                 await settle(page)
-                return f"ok, now at {await page.title()}"
+                return await self._after(page, obs)
             if action.name == "scroll":
                 sign = -1 if action.text == "up" else 1
                 await page.evaluate(f"window.scrollBy(0, {sign} * window.innerHeight * 0.8)")
                 await settle(page, quiet_ms=100, max_ms=600)
-                return "ok"
+                outcome = await self._after(page, obs)
+                return outcome if "nothing" not in outcome else "ok, but the page did not scroll (already at the end)"
             element = obs.element(action.index or -1)
             if element is None:
                 return f"error: no element with index {action.index}"
@@ -343,14 +409,12 @@ class FastAgent:
             if locator is None:
                 return "error: element is no longer on the page"
             if action.name == "click":
-                before = page.url
                 try:
                     await locator.click(timeout=3000)
                 except Exception:
                     await locator.evaluate("el => el.click()")
                 await settle(page)
-                changed = page.url != before
-                return f"ok, now at {await page.title()}" if changed else "ok"
+                return await self._after(page, obs, element)
             if action.name == "type":
                 try:
                     await locator.fill(action.text, timeout=3000)
@@ -359,6 +423,7 @@ class FastAgent:
                     await page.keyboard.press("Meta+A")
                     await page.keyboard.type(action.text)
                 await settle(page, quiet_ms=100, max_ms=600)
+                self._step_effect = True
                 return "ok"
             if action.name == "select":
                 try:
@@ -366,7 +431,7 @@ class FastAgent:
                 except Exception:
                     await locator.select_option(value=action.text, timeout=3000)
                 await settle(page)
-                return "ok"
+                return await self._after(page, obs, element)
             return f"error: unknown action {action.name}"
         except Exception as exc:
             message = str(exc).splitlines()[0][:120]
