@@ -71,10 +71,11 @@ class Element(BaseModel):
     text: str = ""
     note: str = ""
     new: bool = False
+    frame_url: Optional[str] = None
 
     def fingerprint(self) -> str:
         """Identity that survives re-indexing between steps."""
-        return f"{self.tag}|{self.text[:40]}|{self.attrs.get('href', '')}|{self.attrs.get('aria-label', '')}|{self.attrs.get('placeholder', '')}"
+        return f"{self.frame_url or ''}|{self.tag}|{self.text[:40]}|{self.attrs.get('href', '')}|{self.attrs.get('aria-label', '')}|{self.attrs.get('placeholder', '')}"
 
 
 class Observation(BaseModel):
@@ -224,12 +225,32 @@ async def observe_lean(page: Page, max_text_chars: int = 1500, max_elements: int
         Element(index=int(e["index"]), tag=str(e["tag"]), xpath="", ref=int(e["index"]), attrs=e.get("attrs") or {}, text=e.get("text") or "")
         for e in result["elements"]
     ]
+    text = result["text"]
+    # Cross-origin iframes (consent dialogs, embedded widgets) are invisible to the main-frame
+    # script; observe them through their own frames. Same-origin frames were already walked.
+    origin = urlsplit(result["url"]).netloc
+    for frame in [f for f in page.frames if f != page.main_frame][:8]:
+        if not frame.url.startswith("http") or urlsplit(frame.url).netloc == origin:
+            continue
+        try:
+            sub = await frame.evaluate(_LEAN_JS, {"maxTextChars": 300, "maxElements": 40})
+        except Exception:
+            continue
+        if not sub["elements"]:
+            continue
+        host = urlsplit(frame.url).netloc
+        for e in sub["elements"]:
+            elements.append(
+                Element(index=0, tag=str(e["tag"]), xpath="", ref=int(e["index"]), attrs=e.get("attrs") or {}, text=e.get("text") or "", frame_url=frame.url, note=f"(in frame {host})")
+            )
+        if sub["text"]:
+            text += f" | [frame {host}] {sub['text']}"
     scroll = result["scroll"]
     return Observation(
         url=result["url"],
         title=result["title"],
         elements=elements,
-        text=result["text"],
+        text=text,
         scroll_y=int(scroll["y"]),
         viewport_h=int(scroll["h"]),
         page_h=int(scroll["total"]),

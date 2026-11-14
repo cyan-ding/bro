@@ -74,11 +74,21 @@ async def run_task(args: argparse.Namespace, task: Task) -> RunResult:
     return await asyncio.wait_for(_run_task(args, task), args.timeout + 60)
 
 
+_session: dict = {}
+
+
+async def _browser():
+    """One browser for the whole benchmark run; a fresh tab per task."""
+    if "context" not in _session:
+        _session["playwright"], _session["browser"], _session["context"] = await connect()
+    return _session["context"]
+
+
 async def _run_task(args: argparse.Namespace, task: Task) -> RunResult:
     if args.agent == "legacy":
         use_cdp()
         return await asyncio.wait_for(run_legacy(args.model, task.task, task.url, args.max_steps), args.timeout)
-    playwright, browser, context = await connect()
+    context = await _browser()
     try:
         page = await fresh_page(context)
         agent = FastAgent(
@@ -97,7 +107,11 @@ async def _run_task(args: argparse.Namespace, task: Task) -> RunResult:
         )
         return await asyncio.wait_for(agent.run(context, page, task.task, task.url, args.max_steps), args.timeout)
     finally:
-        await disconnect(playwright, browser, context)
+        for extra in list(context.pages)[1:]:
+            try:
+                await extra.close()
+            except Exception:
+                pass
 
 
 async def main() -> None:
@@ -161,8 +175,16 @@ async def main() -> None:
         )
 
 
+async def _main_with_cleanup() -> None:
+    try:
+        await main()
+    finally:
+        if "context" in _session:
+            await disconnect(_session["playwright"], _session["browser"], _session["context"])
+
+
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        asyncio.run(_main_with_cleanup())
     finally:
         shutdown_servers()

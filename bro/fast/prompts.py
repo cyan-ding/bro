@@ -63,7 +63,11 @@ Time is almost up. Reply only with: done "<the most complete answer supported by
 VISION_CHECK_SUFFIX = """
 
 You proposed: done "{answer}"
-A screenshot of the current page is attached. Check the proposed answer against what is actually visible: if the screenshot contradicts it, or the task has parts the answer does not cover, reply with the next action lines instead; if it holds, reply done "answer" (corrected if needed)."""
+A screenshot of the current page is attached. Verify the answer against what is actually visible and against every requirement of the task.
+Reply with exactly one of:
+CONFIRMED
+REJECTED: <what is wrong or missing>
+followed, if rejected, by the next action lines."""
 
 VISION_STALL_SUFFIX = """
 

@@ -14,6 +14,7 @@ from .dsl import Action, parse
 from .llm import ChatModel, Completion
 from .observe import Element, Observation, StableIds, format_elements, observe, observe_lean, signature
 from .prompts import DELIVER_SUFFIX, FINAL_STEP_SUFFIX, REPLAN_SUFFIX, USER_TEMPLATE, VERIFY_SUFFIX, VISION_CHECK_SUFFIX, VISION_STALL_SUFFIX, system_prompt
+from .browser import prepare_page
 from .settle import settle, track_network
 from .system1 import Decision, ideal_label
 
@@ -169,7 +170,7 @@ class FastAgent:
                     self._new_pages.clear()
                     self._dismiss_dialogs(page)
                     track_network(page)
-                    await page.bring_to_front()
+                    await prepare_page(page)  # background tab: focus emulation instead of raising the window
                     await settle(page)
                 if self.get_messages:
                     for message in self.get_messages():
@@ -327,7 +328,12 @@ class FastAgent:
     async def _target(self, page: Page, element: Element):
         """Locator (XPath observer) or ElementHandle (lean observer) for an element, None if gone."""
         if element.ref is not None:
-            handle = (await page.evaluate_handle(f"() => window.__broEls && window.__broEls[{element.ref}]")).as_element()
+            scope = page
+            if element.frame_url:
+                scope = next((f for f in page.frames if f.url == element.frame_url), None)
+                if scope is None:
+                    return None
+            handle = (await scope.evaluate_handle(f"() => window.__broEls && window.__broEls[{element.ref}]")).as_element()
             if handle is None or not await handle.evaluate("el => el.isConnected"):
                 return None
             return handle
@@ -367,30 +373,49 @@ class FastAgent:
         if not image:
             return actions
         reply = await self._complete(user_prompt + VISION_CHECK_SUFFIX.format(answer=proposed.text[:300]), image)
-        checked = parse(reply.text)
-        if not checked:
+        verdict = reply.text.strip()
+        if verdict.upper().startswith("CONFIRMED"):
             return actions
-        if any(a.name == "done" for a in checked):
-            return checked
-        self.history.append("(screenshot check: the proposed answer was not supported; continuing)")
-        return checked
+        if not verdict.upper().startswith("REJECTED"):
+            return actions
+        reason = verdict.splitlines()[0][len("REJECTED") :].strip(" :-")[:160]
+        self.history.append(f"(screenshot check rejected the answer: {reason or 'not supported by the page'}; keep working)")
+        checked = [a for a in parse(reply.text) if a.name != "done"]
+        return checked or [Action(name="read")]
 
-    async def _covered_by(self, page: Page, element: Element) -> Optional[str]:
-        """Name the listed element that would receive a click meant for `element`, if any."""
+    async def _covered_by(self, page: Page, element: Element):
+        """Find a point of `element` that a click actually reaches.
+
+        Returns None (center is fine), a dict {x, y} offset of a clear point inside the element,
+        or a string: "disabled", "hidden", "gone", "ref:N" (covered by listed element N), "other:tag".
+        """
+        scope = page
+        if element.frame_url:
+            scope = next((f for f in page.frames if f.url == element.frame_url), None)
+            if scope is None:
+                return "gone"
         try:
-            hit = await page.evaluate(
+            hit = await scope.evaluate(
                 """(ref) => {
                     const el = window.__broEls && window.__broEls[ref]; if (!el) return "gone";
                     if (el.disabled || el.getAttribute("aria-disabled") === "true") return "disabled";
                     el.scrollIntoView({block: "center", inline: "center"});
                     const r = el.getBoundingClientRect();
                     if (r.width === 0 || r.height === 0) return "hidden";
-                    const x = r.left + r.width / 2, y = r.top + r.height / 2;
-                    const top = document.elementFromPoint(x, y); if (!top) return null;
-                    if (el === top || el.contains(top) || top.contains(el)) return null;
-                    let node = top;
+                    const points = [[0.5, 0.5], [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75], [0.15, 0.15], [0.85, 0.85]];
+                    let first = null;
+                    for (const [fx, fy] of points) {
+                        const x = r.left + r.width * fx, y = r.top + r.height * fy;
+                        const top = document.elementFromPoint(x, y); if (!top) continue;
+                        if (el === top || el.contains(top) || top.contains(el)) {
+                            return (fx === 0.5 && fy === 0.5) ? null : {x: r.width * fx, y: r.height * fy};
+                        }
+                        if (first === null) first = top;
+                    }
+                    if (first === null) return "hidden";
+                    let node = first;
                     while (node && !window.__broEls.includes(node)) node = node.parentElement;
-                    return node ? "ref:" + window.__broEls.indexOf(node) : "other:" + (top.tagName || "?").toLowerCase();
+                    return node ? "ref:" + window.__broEls.indexOf(node) : "other:" + (first.tagName || "?").toLowerCase();
                 }""",
                 element.ref,
             )
@@ -541,12 +566,23 @@ class FastAgent:
                     return "error: that element is disabled; nothing was clicked"
                 if blocker in ("hidden", "gone"):
                     return "error: that element is not visible; nothing was clicked"
-                if blocker and blocker.startswith("ref:"):
-                    cover = next((e for e in obs.elements if e.ref == int(blocker[4:])), None)
-                    if cover is not None and cover is not element:
+                if isinstance(blocker, str) and blocker.startswith("ref:"):
+                    cover = next((e for e in obs.elements if e.ref == int(blocker[4:]) and e.frame_url == element.frame_url), None)
+                    passive = cover is not None and cover.tag in ("span", "div", "p", "li", "img", "label") and not cover.attrs.get("href") and not cover.attrs.get("role")
+                    if cover is not None and cover is not element and not passive:
                         return f"error: covered by [{cover.index}]<{cover.tag}>{cover.text[:40]}; nothing was clicked (dismiss or use that first)"
+                    if passive:
+                        # A badge or wrapper lies over the target: click where a user would, the event bubbles to the target.
+                        box = await locator.bounding_box()
+                        if box:
+                            await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                            await settle(page)
+                            return await self._after(page, obs, element)
                 try:
-                    await locator.click(timeout=3000)
+                    if isinstance(blocker, dict):
+                        await locator.click(position={"x": blocker["x"], "y": blocker["y"]}, timeout=3000)
+                    else:
+                        await locator.click(timeout=3000)
                 except Exception:
                     box = await locator.bounding_box()
                     if not box:
