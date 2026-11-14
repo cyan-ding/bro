@@ -27,6 +27,7 @@
       const val = el.getAttribute(key);
       if (val) out[key] = val.length > 120 ? val.slice(0, 120) : val;
     }
+    if (el.disabled || el.getAttribute("aria-disabled") === "true") out.disabled = "true";
     if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
       if (el.type !== "password" && el.value) out.value = el.value.slice(0, 60);
       if (el.type === "checkbox" || el.type === "radio") out.checked = String(el.checked);

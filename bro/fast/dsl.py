@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-ACTIONS = {"click", "type", "press", "scroll", "goto", "search", "back", "select", "note", "done", "wait"}
+ACTIONS = {"click", "type", "press", "scroll", "goto", "search", "back", "select", "note", "done", "wait", "find", "read"}
 
 
 class Action(BaseModel):
@@ -52,7 +52,7 @@ def parse_line(line: str) -> Optional[Action]:
     if name == "scroll":
         direction = rest.lower().split()[0] if rest else "down"
         return Action(name=name, text="up" if direction.startswith("u") else "down")
-    if name in ("back", "wait"):
+    if name in ("back", "wait", "read"):
         return Action(name=name)
     return Action(name=name, text=_unquote(rest))
 

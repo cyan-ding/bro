@@ -32,8 +32,12 @@ class ChatModel:
     def is_local(self) -> bool:
         return self._local is not None
 
-    async def complete(self, system: str, user: str, stop: Optional[List[str]] = None) -> Completion:
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    async def complete(self, system: str, user: str, stop: Optional[List[str]] = None, image_b64: Optional[str] = None) -> Completion:
+        content = user if image_b64 is None else [
+            {"type": "text", "text": user},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+        ]
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": content}]
         started = time.perf_counter()
         if self._local:
             response = await self._local.chat.completions.create(

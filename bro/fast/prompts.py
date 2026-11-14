@@ -13,13 +13,15 @@ goto URL             open a URL directly
 search "query"       web search
 back                 go back one page
 select N "option"    choose a dropdown option by its visible text
+find "text"          scroll the first occurrence of that text into view (use it to reach a section, row or result)
+read                 show much more of the page's visible text (use before answering questions about page content)
 note "text"          save a fact you will need later (names, numbers, prices, titles)
 done "answer"        finish the task; the answer must contain the specific facts asked for
 
 Rules:
 - Prefer goto with a known URL over searching. Prefer a site's own search box when on the site.
 - To search, send both lines: type N "query" then press Enter. Up to 3 actions per reply; after a click, scroll or navigation the page changes, so put nothing after it except note or done.
-- Element indices change every turn: only use indices listed in the current page.
+- Element ids stay the same while an element stays on the page; a * marks elements that are new since your last look. Only use ids listed in the current page.
 - Read the result of your previous actions. If something failed or nothing changed, do something different; never repeat a failed action.
 - If what you need is not visible, scroll down. Do not scroll more than 4 times on one page without a reason.
 - Save key findings with note before leaving a page. Only note facts that are visible on the current page; a note written after a click is discarded.
@@ -53,6 +55,19 @@ Interactive elements:
 REPLAN_SUFFIX = """
 
 Your recent actions changed nothing on the page ({tried}). Stop repeating them. Choose a different approach: use the site's own search, go back, open a different link, scroll, or goto a more specific URL."""
+
+DELIVER_SUFFIX = """
+
+Time is almost up. Reply only with: done "<the most complete answer supported by what you have seen and noted>" """
+
+VISION_CHECK_SUFFIX = """
+
+You proposed: done "{answer}"
+A screenshot of the current page is attached. Check the proposed answer against what is actually visible: if the screenshot contradicts it, or the task has parts the answer does not cover, reply with the next action lines instead; if it holds, reply done "answer" (corrected if needed)."""
+
+VISION_STALL_SUFFIX = """
+
+A screenshot of the current page is attached because your recent actions changed nothing; use it to find what the text view may be missing (overlays, calendars, maps, images, disabled states)."""
 
 FINAL_STEP_SUFFIX = """
 

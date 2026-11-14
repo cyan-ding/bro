@@ -97,3 +97,14 @@ Two generic fixes to the agent loop, measured on a fixed 150-task Emergence subs
 | + oscillation detection, Patchright | 72/150 (48.0%) | 2 |
 
 The feedback loop is worth about five points and the browser about three (Google Flights went from 0/10 to 6/10). Oscillation detection removes the last loops but did not raise the pass rate: when the agent cannot find what it needs, it now explores instead of repeating, and still runs out of steps. Run-to-run noise on 150 live tasks is about four points, so smaller effects need repeated runs.
+
+### Vision on demand and the browser-use-inspired changes (paired results)
+
+Measured on the same 150-task subset against the previous best (effect detection + Patchright, 76/150):
+
+| arm | pass | median task | notes |
+|---|---|---|---|
+| stable ids, click pre-checks, typing recipe, network-aware settle, `find`/`read`, delivery turn | 68/150 | 48 s | Hugging Face 4→9, arXiv 5→7; Google Flights 6→0 and Booking 5→2 |
+| the same plus a screenshot before every `done` and on stalls | 66/150 | 64 s | Booking 2→7; BBC 6→1, Wolfram 3→0 |
+
+Neither arm beat the baseline in aggregate, and the per-site swings show why. The first arm's oscillation rule counted any return to a previously seen page state as a no-op and dropped the element, which on dynamic sites removed the controls the agent needed (softened since: only an identical repeated action that bounces the page counts). The click pre-check refused 100 clicks, half of them false positives (a "Featured" badge overlapping a product card) and a quarter cookie-consent iframes whose buttons the observer cannot see because they are cross-origin; in both cases the agent repeated the click. The vision arm's losses were mostly not vision: three Wolfram tasks hit connection timeouts, and the BBC consent dialog became unpassable once clicks through it were refused. A vision call costs about 7 s on this hardware, so the arm was also the slowest. The mechanisms are kept, with two fixes queued: observe cross-origin iframes through Playwright frames, and retry a covered click at another point of the target before refusing.

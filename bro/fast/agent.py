@@ -1,6 +1,7 @@
 """The fast agent loop: observe (text only) -> one short LLM call -> act -> settle."""
 
 import asyncio
+import base64
 import re
 import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
@@ -11,12 +12,12 @@ from pydantic import BaseModel, Field
 
 from .dsl import Action, parse
 from .llm import ChatModel, Completion
-from .observe import Element, Observation, format_elements, observe, observe_lean, signature
-from .prompts import FINAL_STEP_SUFFIX, REPLAN_SUFFIX, USER_TEMPLATE, VERIFY_SUFFIX, system_prompt
-from .settle import settle
+from .observe import Element, Observation, StableIds, format_elements, observe, observe_lean, signature
+from .prompts import DELIVER_SUFFIX, FINAL_STEP_SUFFIX, REPLAN_SUFFIX, USER_TEMPLATE, VERIFY_SUFFIX, VISION_CHECK_SUFFIX, VISION_STALL_SUFFIX, system_prompt
+from .settle import settle, track_network
 from .system1 import Decision, ideal_label
 
-PAGE_CHANGING = {"click", "goto", "search", "back", "press", "scroll", "select"}
+PAGE_CHANGING = {"click", "goto", "search", "back", "press", "scroll", "select", "find"}
 ALWAYS_RUN = {"done"}
 MAX_ACTIONS_PER_STEP = 3
 NAV_TIMEOUT_MS = 45000
@@ -41,6 +42,7 @@ class StepRecord(BaseModel):
     s1: Dict[str, Any] = Field(default_factory=dict)
     shadow: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     state: Optional[Dict[str, Any]] = None
+    vision: bool = False
 
 
 class RunResult(BaseModel):
@@ -87,6 +89,8 @@ class FastAgent:
         get_messages: Optional[GetMessages] = None,
         verify: bool = False,
         reject_hedged_done: bool = False,
+        vision: bool = False,
+        time_budget_s: float = 0,
         observer: str = "lean",
         system1: Optional[Any] = None,
         shadow: Optional[Dict[str, Any]] = None,
@@ -98,6 +102,9 @@ class FastAgent:
         self.observer = observer
         self.verify = verify
         self.reject_hedged_done = reject_hedged_done
+        self.vision = vision
+        self.time_budget_s = time_budget_s
+        self.ids = StableIds()
         self.vetoes = 0
         self.on_step = on_step
         self.on_done = on_done
@@ -116,6 +123,8 @@ class FastAgent:
         self._stalled_steps = 0
         self._step_effect = False
         self._seen: List[str] = []
+        self._last_action: Optional[str] = None
+        self._current_action: Optional[str] = None
 
     def _on_new_page(self, page: Page) -> None:
         self._new_pages.append(page)
@@ -149,6 +158,7 @@ class FastAgent:
         started = time.perf_counter()
         context.on("page", self._on_new_page)
         self._dismiss_dialogs(page)
+        track_network(page)
         try:
             if start_url:
                 await self._goto(page, start_url)
@@ -158,6 +168,7 @@ class FastAgent:
                     page = self._new_pages[-1]
                     self._new_pages.clear()
                     self._dismiss_dialogs(page)
+                    track_network(page)
                     await page.bring_to_front()
                     await settle(page)
                 if self.get_messages:
@@ -184,11 +195,18 @@ class FastAgent:
                 if self.log_states:
                     record.state = {"obs": obs.model_dump(), "history": list(self.history), "notes": list(self.notes), "task": task}
                 user_prompt = self._build_user_prompt(task, obs)
+                image: Optional[str] = None
                 if self._stalled_steps >= 2:
                     tried = sorted({h.split(" -> ")[0].split(". ", 1)[-1] for h in self.history[-6:] if " -> " in h})
                     user_prompt += REPLAN_SUFFIX.format(tried="; ".join(tried)[:400])
-                if step == max_steps:
-                    user_prompt += FINAL_STEP_SUFFIX
+                    if self.vision:
+                        image = await self._screenshot(page)
+                        if image:
+                            user_prompt += VISION_STALL_SUFFIX
+                            record.vision = True
+                out_of_time = self.time_budget_s and (time.perf_counter() - started) > self.time_budget_s
+                if step == max_steps or out_of_time:
+                    user_prompt += FINAL_STEP_SUFFIX if step == max_steps else DELIVER_SUFFIX
                 record.prompt_chars = len(self.system) + len(user_prompt)
 
                 shadow_decisions: Dict[str, Decision] = {}
@@ -206,7 +224,7 @@ class FastAgent:
                     record.output = f"{reflex.choice.label} ({reflex.confidence:.2f})"
                     actions = [reflex.choice.action]
                 else:
-                    completion = await self._complete(user_prompt)
+                    completion = await self._complete(user_prompt, image)
                     record.output = completion.text
                     record.llm_ms = completion.latency_ms + (reflex.latency_ms if reflex else 0)
                     record.prompt_tokens = completion.prompt_tokens
@@ -234,6 +252,14 @@ class FastAgent:
                         break
                     continue
                 parse_failures = 0
+                if self.vision and any(a.name == "done" for a in actions) and step < max_steps and not out_of_time:
+                    proposed = next(a for a in actions if a.name == "done")
+                    actions = await self._vision_check(page, user_prompt, proposed, actions)
+                    record.vision = True
+                if any(a.name == "done" and len(a.text.strip()) < 8 for a in actions) and step < max_steps and self.vetoes < MAX_VETOES:
+                    self.vetoes += 1
+                    self.history.append(f"{step}. done -> rejected: empty answer; give the actual facts")
+                    actions = [a for a in actions if a.name != "done"] or [Action(name="read")]
 
                 act_started = time.perf_counter()
                 page_changed = False
@@ -242,7 +268,9 @@ class FastAgent:
                     if page_changed and action.name not in ALWAYS_RUN:
                         self.history.append(f"{step}. {action} -> skipped (page changed)")
                         continue
+                    self._current_action = str(action)
                     outcome = await self._execute(page, action, obs)
+                    self._last_action = self._current_action
                     record.actions.append(str(action))
                     record.results.append(outcome)
                     self.history.append(f"{step}. {action} -> {outcome}")
@@ -288,10 +316,13 @@ class FastAgent:
     async def _observe(self, page: Page) -> Observation:
         observer = observe_lean if self.observer == "lean" else observe
         try:
-            return await observer(page, self.max_text_chars)
+            obs = await observer(page, self.max_text_chars)
         except Exception:
             await settle(page, max_ms=3000)
-            return await observer(page, self.max_text_chars)
+            obs = await observer(page, self.max_text_chars)
+        if self.observer == "lean":
+            self.ids.assign(obs)
+        return obs
 
     async def _target(self, page: Page, element: Element):
         """Locator (XPath observer) or ElementHandle (lean observer) for an element, None if gone."""
@@ -303,9 +334,9 @@ class FastAgent:
         locator = self._locator(page, element).first
         return locator if await locator.count() else None
 
-    async def _complete(self, user_prompt: str) -> Completion:
+    async def _complete(self, user_prompt: str, image: Optional[str] = None) -> Completion:
         try:
-            return await self.llm.complete(self.system, user_prompt)
+            return await self.llm.complete(self.system, user_prompt, image_b64=image)
         except Exception as exc:
             return Completion(text=f"# llm error: {exc}")
 
@@ -322,6 +353,80 @@ class FastAgent:
             return None
         self.vetoes += 1
         return reply[:160]
+
+    async def _screenshot(self, page: Page) -> Optional[str]:
+        try:
+            data = await page.screenshot(type="jpeg", quality=70)
+        except Exception:
+            return None
+        return base64.b64encode(data).decode()
+
+    async def _vision_check(self, page: Page, user_prompt: str, proposed: Action, actions: List[Action]) -> List[Action]:
+        """Ask the planner to confirm a proposed answer against a screenshot; it may correct it or keep working."""
+        image = await self._screenshot(page)
+        if not image:
+            return actions
+        reply = await self._complete(user_prompt + VISION_CHECK_SUFFIX.format(answer=proposed.text[:300]), image)
+        checked = parse(reply.text)
+        if not checked:
+            return actions
+        if any(a.name == "done" for a in checked):
+            return checked
+        self.history.append("(screenshot check: the proposed answer was not supported; continuing)")
+        return checked
+
+    async def _covered_by(self, page: Page, element: Element) -> Optional[str]:
+        """Name the listed element that would receive a click meant for `element`, if any."""
+        try:
+            hit = await page.evaluate(
+                """(ref) => {
+                    const el = window.__broEls && window.__broEls[ref]; if (!el) return "gone";
+                    if (el.disabled || el.getAttribute("aria-disabled") === "true") return "disabled";
+                    el.scrollIntoView({block: "center", inline: "center"});
+                    const r = el.getBoundingClientRect();
+                    if (r.width === 0 || r.height === 0) return "hidden";
+                    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+                    const top = document.elementFromPoint(x, y); if (!top) return null;
+                    if (el === top || el.contains(top) || top.contains(el)) return null;
+                    let node = top;
+                    while (node && !window.__broEls.includes(node)) node = node.parentElement;
+                    return node ? "ref:" + window.__broEls.indexOf(node) : "other:" + (top.tagName || "?").toLowerCase();
+                }""",
+                element.ref,
+            )
+        except Exception:
+            return None
+        return hit
+
+    async def _type_into(self, page: Page, locator, element: Element, text: str) -> str:
+        """Select-all and retype; the last character goes as a real key so autocompletes and date pickers react."""
+        if element.tag == "select":
+            try:
+                await locator.select_option(label=text, timeout=3000)
+            except Exception:
+                await locator.select_option(value=text, timeout=3000)
+            return "ok"
+        if element.attrs.get("type") in ("date", "time", "datetime-local", "month", "week"):
+            await locator.evaluate(
+                "(el, v) => { const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'); d.set.call(el, v); el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }",
+                text,
+            )
+            return "ok"
+        await locator.click(timeout=3000)
+        await page.keyboard.press("Meta+A")
+        await page.keyboard.press("Backspace")
+        if len(text) > 1:
+            await page.keyboard.insert_text(text[:-1])
+        if text:
+            await page.keyboard.press(text[-1]) if len(text[-1]) == 1 and text[-1].isprintable() and text[-1] != " " else await page.keyboard.insert_text(text[-1])
+        await settle(page, quiet_ms=80, max_ms=600)
+        try:
+            shown = await page.evaluate("() => { const a = document.activeElement; return a && 'value' in a ? String(a.value).slice(0, 60) : '' }")
+        except Exception:
+            shown = ""
+        if shown and shown.strip() != text.strip():
+            return f"ok, field now shows '{shown}'"
+        return "ok"
 
     def _detect_loop(self) -> None:
         recent = [h.split(" -> ")[0].split(". ", 1)[-1] for h in self.history[-3:]]
@@ -365,10 +470,14 @@ class FastAgent:
             if element is not None:
                 self._noop[element.fingerprint()] = self._noop.get(element.fingerprint(), 0) + 1
             return "ok, but nothing on the page changed"
-        # The page changed, but only back to a state already seen: toggling, not progress.
-        if element is not None:
-            self._noop[element.fingerprint()] = self._noop.get(element.fingerprint(), 0) + 1
-        return "ok, but this only returned to a page state you had already seen (no progress)"
+        # The page changed, but only back to a state already seen. Only an identical action that
+        # bounces the page back counts as a no-op (open/close toggling); otherwise it is just information.
+        if self._last_action is not None and self._last_action == self._current_action:
+            if element is not None:
+                self._noop[element.fingerprint()] = self._noop.get(element.fingerprint(), 0) + 1
+            return "ok, but this only toggled the page back to a state you had already seen (no progress)"
+        self._step_effect = True
+        return "ok (a page state seen before)"
 
     async def _execute(self, page: Page, action: Action, obs: Observation) -> str:
         try:
@@ -396,6 +505,24 @@ class FastAgent:
                 await page.keyboard.press(action.text or "Enter")
                 await settle(page)
                 return await self._after(page, obs)
+            if action.name == "read":
+                try:
+                    text = await page.evaluate("() => (document.querySelector('main, [role=main]') || document.body).innerText.replace(/\\s+/g, ' ').trim().slice(0, 3000)")
+                except Exception as exc:
+                    return f"error: {str(exc)[:80]}"
+                return f"page text: {text}"
+            if action.name == "find":
+                found = await page.evaluate(
+                    """(needle) => { const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); const n = needle.toLowerCase();
+                        while (walker.nextNode()) { const t = walker.currentNode; if (t.textContent.toLowerCase().includes(n) && t.parentElement) {
+                            const cs = getComputedStyle(t.parentElement); if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+                            t.parentElement.scrollIntoView({block: 'center'}); return true; } } return false; }""",
+                    action.text,
+                )
+                await settle(page, quiet_ms=80, max_ms=600)
+                if not found:
+                    return f"error: '{action.text[:40]}' is not on this page"
+                return await self._after(page, obs)
             if action.name == "scroll":
                 sign = -1 if action.text == "up" else 1
                 await page.evaluate(f"window.scrollBy(0, {sign} * window.innerHeight * 0.8)")
@@ -409,22 +536,28 @@ class FastAgent:
             if locator is None:
                 return "error: element is no longer on the page"
             if action.name == "click":
+                blocker = await self._covered_by(page, element) if element.ref is not None else None
+                if blocker == "disabled":
+                    return "error: that element is disabled; nothing was clicked"
+                if blocker in ("hidden", "gone"):
+                    return "error: that element is not visible; nothing was clicked"
+                if blocker and blocker.startswith("ref:"):
+                    cover = next((e for e in obs.elements if e.ref == int(blocker[4:])), None)
+                    if cover is not None and cover is not element:
+                        return f"error: covered by [{cover.index}]<{cover.tag}>{cover.text[:40]}; nothing was clicked (dismiss or use that first)"
                 try:
                     await locator.click(timeout=3000)
                 except Exception:
-                    await locator.evaluate("el => el.click()")
+                    box = await locator.bounding_box()
+                    if not box:
+                        return "error: element is not visible; nothing was clicked"
+                    await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
                 await settle(page)
                 return await self._after(page, obs, element)
             if action.name == "type":
-                try:
-                    await locator.fill(action.text, timeout=3000)
-                except Exception:
-                    await locator.click(timeout=2000)
-                    await page.keyboard.press("Meta+A")
-                    await page.keyboard.type(action.text)
-                await settle(page, quiet_ms=100, max_ms=600)
+                outcome = await self._type_into(page, locator, element, action.text)
                 self._step_effect = True
-                return "ok"
+                return outcome
             if action.name == "select":
                 try:
                     await locator.select_option(label=action.text, timeout=3000)

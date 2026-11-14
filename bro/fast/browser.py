@@ -18,7 +18,17 @@ async def connect(cdp_url: str = CDP_URL) -> Tuple[Playwright, Optional[Browser]
     if os.environ.get("BRO_BROWSER") == "patchright":
         profile = os.environ.get("BRO_PROFILE_DIR", os.path.expanduser("~/tmp/chrome-profile-patchright"))
         context = await playwright.chromium.launch_persistent_context(
-            profile, channel="chrome", headless=False, no_viewport=True, viewport=None
+            profile,
+            channel="chrome",
+            headless=False,
+            no_viewport=True,
+            viewport=None,
+            # An occluded or background tab stops painting: scrolls time out and keys get dropped.
+            args=[
+                "--disable-background-timer-throttling",
+                "--disable-renderer-backgrounding",
+                "--disable-backgrounding-occluded-windows",
+            ],
         )
         return playwright, None, context
     browser = await playwright.chromium.connect_over_cdp(cdp_url)

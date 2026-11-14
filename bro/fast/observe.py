@@ -46,6 +46,7 @@ _SCROLL_JS = """
 """
 
 _ATTR_ORDER = (
+    "disabled",
     "type",
     "placeholder",
     "aria-label",
@@ -69,10 +70,11 @@ class Element(BaseModel):
     attrs: Dict[str, Any] = {}
     text: str = ""
     note: str = ""
+    new: bool = False
 
     def fingerprint(self) -> str:
         """Identity that survives re-indexing between steps."""
-        return f"{self.tag}|{self.text[:40]}|{self.attrs.get('href', '')}|{self.attrs.get('aria-label', '')}"
+        return f"{self.tag}|{self.text[:40]}|{self.attrs.get('href', '')}|{self.attrs.get('aria-label', '')}|{self.attrs.get('placeholder', '')}"
 
 
 class Observation(BaseModel):
@@ -120,7 +122,8 @@ def _format_element(el: Element, page_url: str) -> str:
         parts.append(f'{key}="{val}"' if " " in val else f"{key}={val}")
     attrs = (" " + " ".join(parts)) if parts else ""
     note = f" {el.note}" if el.note else ""
-    return f"[{el.index}]<{el.tag}{attrs}>{el.text[:80]}{note}"
+    star = "*" if el.new else ""
+    return f"{star}[{el.index}]<{el.tag}{attrs}>{el.text[:80]}{note}"
 
 
 INTERACTIVE_TAGS = {"a", "button", "input", "select", "textarea", "summary", "option", "label"}
@@ -169,10 +172,40 @@ def signature(obs: Observation) -> str:
 
 
 def format_elements(obs: Observation, max_elements: int = 120) -> str:
-    lines = [_format_element(e, obs.url) for e in obs.elements[:max_elements]]
-    if len(obs.elements) > max_elements:
-        lines.append(f"... {len(obs.elements) - max_elements} more elements below")
+    """Element lines within budget; when over budget keep the first 80% and the last 20%,
+    because a dialog's Done/Submit button is usually among the last elements."""
+    elements = obs.elements
+    if len(elements) > max_elements:
+        head = int(max_elements * 0.8)
+        tail = max_elements - head
+        cut = len(elements) - max_elements
+        lines = [_format_element(e, obs.url) for e in elements[:head]]
+        lines.append(f"... {cut} elements omitted ...")
+        lines += [_format_element(e, obs.url) for e in elements[-tail:]]
+    else:
+        lines = [_format_element(e, obs.url) for e in elements]
     return "\n".join(lines) if lines else "(no interactive elements)"
+
+
+class StableIds:
+    """Keeps element ids stable across steps: the same element keeps its id, new elements get fresh ones."""
+
+    def __init__(self) -> None:
+        self._ids: Dict[str, int] = {}
+        self._next = 1
+
+    def assign(self, obs: Observation) -> None:
+        seen_fp: Dict[str, int] = {}
+        for el in obs.elements:
+            base = el.fingerprint()
+            nth = seen_fp.get(base, 0)
+            seen_fp[base] = nth + 1
+            key = f"{base}#{nth}"
+            if key not in self._ids:
+                self._ids[key] = self._next
+                self._next += 1
+                el.new = self._next > 2
+            el.index = self._ids[key]
 
 
 async def ensure_dom_script(page: Page) -> None:
