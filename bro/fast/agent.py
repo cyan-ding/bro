@@ -14,7 +14,7 @@ from .dsl import Action, parse
 from .llm import ChatModel, Completion
 from .observe import Element, Observation, StableIds, format_elements, observe, observe_lean, signature
 from .prompts import DELIVER_SUFFIX, FINAL_STEP_SUFFIX, REPLAN_SUFFIX, USER_TEMPLATE, VERIFY_SUFFIX, VISION_CHECK_SUFFIX, VISION_STALL_SUFFIX, system_prompt
-from .browser import prepare_page
+from .browser import FocusWatch, prepare_page
 from .settle import settle, track_network
 from .system1 import Decision, ideal_label
 
@@ -44,6 +44,7 @@ class StepRecord(BaseModel):
     shadow: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     state: Optional[Dict[str, Any]] = None
     vision: bool = False
+    focus: List[str] = Field(default_factory=list)
 
 
 class RunResult(BaseModel):
@@ -121,6 +122,7 @@ class FastAgent:
         self._new_pages: List[Page] = []
         self._pending_obs: Optional[Observation] = None
         self._noop: Dict[str, int] = {}
+        self._focus_notes: List[str] = []
         self._stalled_steps = 0
         self._step_effect = False
         self._seen: List[str] = []
@@ -181,7 +183,7 @@ class FastAgent:
                 self._pending_obs = None
                 for element in obs.elements:
                     if self._noop.get(element.fingerprint(), 0) >= 1:
-                        element.note = "(clicking this did nothing)"
+                        element.note = "(clicking this does not work)"
                 obs.elements = [e for e in obs.elements if self._noop.get(e.fingerprint(), 0) < 2]
                 if self._stalled_steps >= 4 and start_url and page.url != start_url:
                     await self._goto(page, start_url)
@@ -247,6 +249,7 @@ class FastAgent:
                     self.history.append(
                         f'{step}. (invalid reply, no action line; your draft was: "{draft}") -> reply with action lines only; if the draft contains the answer, reply done "answer"'
                     )
+                    record.focus, self._focus_notes = self._focus_notes, []
                     result.steps.append(record)
                     if parse_failures >= 3:
                         result.error = "model produced no valid actions three times"
@@ -270,8 +273,13 @@ class FastAgent:
                         self.history.append(f"{step}. {action} -> skipped (page changed)")
                         continue
                     self._current_action = str(action)
+                    watch = FocusWatch()
+                    await watch.start()
                     outcome = await self._execute(page, action, obs)
                     self._last_action = self._current_action
+                    note = await watch.check(str(action))
+                    if note:
+                        self._focus_notes.append(note)
                     record.actions.append(str(action))
                     record.results.append(outcome)
                     self.history.append(f"{step}. {action} -> {outcome}")
@@ -291,6 +299,7 @@ class FastAgent:
                 record.act_ms = int((time.perf_counter() - act_started) * 1000)
                 acted = any(a.name not in ("note", "done") for a in actions[:MAX_ACTIONS_PER_STEP])
                 self._stalled_steps = 0 if (self._step_effect or not acted) else self._stalled_steps + 1
+                record.focus, self._focus_notes = self._focus_notes, []
                 result.steps.append(record)
                 if self.on_step:
                     await self.on_step(record, obs)
@@ -361,10 +370,15 @@ class FastAgent:
         return reply[:160]
 
     async def _screenshot(self, page: Page) -> Optional[str]:
+        watch = FocusWatch()
+        await watch.start()
         try:
             data = await page.screenshot(type="jpeg", quality=70)
         except Exception:
             return None
+        note = await watch.check("screenshot")
+        if note:
+            self._focus_notes.append(note)
         return base64.b64encode(data).decode()
 
     async def _vision_check(self, page: Page, user_prompt: str, proposed: Action, actions: List[Action]) -> List[Action]:
@@ -382,6 +396,11 @@ class FastAgent:
         self.history.append(f"(screenshot check rejected the answer: {reason or 'not supported by the page'}; keep working)")
         checked = [a for a in parse(reply.text) if a.name != "done"]
         return checked or [Action(name="read")]
+
+    def _refuse(self, element: Element, message: str) -> str:
+        """A click that cannot land counts as a no-op, so the element is flagged and then dropped like any inert one."""
+        self._noop[element.fingerprint()] = self._noop.get(element.fingerprint(), 0) + 1
+        return message
 
     async def _covered_by(self, page: Page, element: Element):
         """Find a point of `element` that a click actually reaches.
@@ -563,14 +582,14 @@ class FastAgent:
             if action.name == "click":
                 blocker = await self._covered_by(page, element) if element.ref is not None else None
                 if blocker == "disabled":
-                    return "error: that element is disabled; nothing was clicked"
+                    return self._refuse(element, "error: that element is disabled; nothing was clicked")
                 if blocker in ("hidden", "gone"):
-                    return "error: that element is not visible; nothing was clicked"
+                    return self._refuse(element, "error: that element is not visible; nothing was clicked")
                 if isinstance(blocker, str) and blocker.startswith("ref:"):
                     cover = next((e for e in obs.elements if e.ref == int(blocker[4:]) and e.frame_url == element.frame_url), None)
                     passive = cover is not None and cover.tag in ("span", "div", "p", "li", "img", "label") and not cover.attrs.get("href") and not cover.attrs.get("role")
                     if cover is not None and cover is not element and not passive:
-                        return f"error: covered by [{cover.index}]<{cover.tag}>{cover.text[:40]}; nothing was clicked (dismiss or use that first)"
+                        return self._refuse(element, f"error: covered by [{cover.index}]<{cover.tag}>{cover.text[:40]}; nothing was clicked (dismiss or use that first)")
                     if passive:
                         # A badge or wrapper lies over the target: click where a user would, the event bubbles to the target.
                         box = await locator.bounding_box()

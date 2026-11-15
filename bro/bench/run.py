@@ -173,6 +173,9 @@ async def main() -> None:
             (result.answer or result.error or "")[:80],
             verdict.reason,
         )
+        focus = [note for step in getattr(result, "steps", []) for note in getattr(step, "focus", [])]
+        if focus:
+            log.info("%s | focus: %s", task.id, "; ".join(focus))
 
 
 async def _main_with_cleanup() -> None:

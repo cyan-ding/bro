@@ -103,7 +103,7 @@
     }
   }
 
-  walk(document.body, 0, 0, null, mainEl === null, false);
+  walk(document.body || document.documentElement, 0, 0, null, mainEl === null, false);
   window.__broEls = handles;
   return {
     url: location.href,

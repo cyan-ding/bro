@@ -108,3 +108,46 @@ Measured on the same 150-task subset against the previous best (effect detection
 | the same plus a screenshot before every `done` and on stalls | 66/150 | 64 s | Booking 2→7; BBC 6→1, Wolfram 3→0 |
 
 Neither arm beat the baseline in aggregate, and the per-site swings show why. The first arm's oscillation rule counted any return to a previously seen page state as a no-op and dropped the element, which on dynamic sites removed the controls the agent needed (softened since: only an identical repeated action that bounces the page counts). The click pre-check refused 100 clicks, half of them false positives (a "Featured" badge overlapping a product card) and a quarter cookie-consent iframes whose buttons the observer cannot see because they are cross-origin; in both cases the agent repeated the click. The vision arm's losses were mostly not vision: three Wolfram tasks hit connection timeouts, and the BBC consent dialog became unpassable once clicks through it were refused. A vision call costs about 7 s on this hardware, so the arm was also the slowest. The mechanisms are kept, with two fixes queued: observe cross-origin iframes through Playwright frames, and retry a covered click at another point of the target before refusing.
+
+### Background Chrome, headless mode, and the paired results (2026-11-15)
+
+**Goal: the agent must never take the keyboard away from you.** Measured with a sampler that records the
+frontmost macOS app every 10 s while the 150-task paired subset runs.
+
+What is in the tree now (`bro/fast/browser.py`):
+
+- One Chrome per benchmark run, launched through Patchright and sent behind the app you were using; one tab reused
+  between tasks (opening a tab over the DevTools protocol raises the window on macOS); focus emulation instead of
+  `bring_to_front`; tracker, font and media requests blocked at the network layer; 1440x1100 window, `en-US`,
+  reduced motion.
+- `FocusWatch`: every agent operation (action, screenshot, tab reset) samples the frontmost app before and after
+  itself. If the agent's own Chrome (matched by PID) took the front and there was no human input in the last 1.5 s,
+  focus is handed back and the action is named in the step log (`StepRecord.focus`). Your own switches into Chrome
+  (click, cmd-tab, trackpad gesture) are left alone. No macOS permission beyond the one-time "control app X" prompt
+  for re-activating your app. `BRO_FOCUS_GUARD=0` disables it.
+- `BRO_HEADLESS=1`: `--headless=new` with the normal Chrome user-agent (the headless build announces itself as
+  `HeadlessChrome`) on its own profile. No window exists, so nothing can take focus; Google Flights, Booking,
+  Amazon, BBC load and bot.sannysoft.com shows no failed checks.
+
+Paired results on `tasks_emergence_150.json` (local 2-bit Qwen3.6-35B under Splash, 12 GB cap, 25 steps):
+
+| arm | config | pass | median s | Chrome frontmost |
+|---|---|---|---|---|
+| A | Pillar 1 loop, headful | 76/150 | 36.5 | not measured |
+| p3_vision | all of the above, headful, `--vision` | 65/150 | 59.6 | 43 of 945 samples (4 episodes, longest 5.7 min) |
+| p3_novision | headless, fresh profile, no vision | 70/150 | 49.7 | 0 of 741 samples |
+
+Two sites were lost to the environment rather than the agent: Cambridge Dictionary now serves a Cloudflare
+challenge to this machine (0/10 and 1/10 vs 8-9/10 on earlier nights; a fresh profile passes one task and is then
+challenged too), and Wolfram Alpha refused TCP connections for most of the night (0/10 in the headful arm, 6/10
+once the block lifted during the headless arm). On the other 130 tasks the three arms are flat: 65, 65 and 63.
+Vision therefore still does not pay for its ~7 s per screenshot at this model size; the browser fixes are neutral
+on pass rate and solve the focus problem outright in headless mode.
+
+Where headful Chrome took focus, by the `FocusWatch` log: clicks on Cloudflare's "verify you are human" checkbox
+(cross-origin challenge iframe, 36 of 39 attributed events) and clicks on Coursera course cards. The agent does not
+try to solve bot challenges; the practical answer is headless mode.
+
+Also new: click refusals (covered, disabled, hidden targets) now count as no-ops, so a target that cannot be
+clicked is flagged after one attempt and dropped after two (`_refuse`); the observer survives documents without a
+`<body>`; `bro/bench/run.py` keeps one browser for the whole run and logs per-task focus events.
