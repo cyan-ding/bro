@@ -49,12 +49,15 @@ class ChatModel:
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
         else:
+            # Same as the local path: one action line per turn, no hidden thinking (it would eat max_tokens).
+            extra = {"extra_body": {"reasoning": {"enabled": False}}} if self.model.startswith("openrouter/") else {}
             response = await litellm.acompletion(
                 model=self.model,
                 messages=messages,
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
                 stop=stop,
+                **extra,
             )
         latency_ms = int((time.perf_counter() - started) * 1000)
         usage = getattr(response, "usage", None)

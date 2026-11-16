@@ -151,3 +151,34 @@ try to solve bot challenges; the practical answer is headless mode.
 Also new: click refusals (covered, disabled, hidden targets) now count as no-ops, so a target that cannot be
 clicked is flagged after one attempt and dropped after two (`_refuse`); the observer survives documents without a
 `<body>`; `bro/bench/run.py` keeps one browser for the whole run and logs per-task focus events.
+
+### Full Emergence WebVoyager rerun, Pillar 3, and a head-to-head with browser-use (2026-11-16)
+
+**Full 535, headless.** Same local 2-bit Qwen3.6-35B (Splash, 12 GB cap), 25 steps, 240 s, headless Chrome, no
+vision, code frozen at `232b2fb`, tasks in a fixed-seed shuffled order. **242/535 = 45.2%**, up from 218/535 =
+40.7% on the earlier full run (104 tasks won, 80 lost); median 45.6 s per task. Chrome was never the frontmost app
+(0 of 2,624 samples); peak compressed memory 10.7 GB. Without Cambridge Dictionary and Wolfram Alpha, whose
+results tonight depended on bot checks and connection blocks aimed at this machine, 181/465 -> 214/465 (38.9% ->
+46.0%). Biggest gains: Google Flights 0 -> 16/35 (the site now loads), Wolfram 10 -> 22, Huggingface 15 -> 24,
+GitHub 12 -> 20. Biggest losses: Cambridge 27 -> 6 (Cloudflare challenge) and Amazon 27 -> 13 (CAPTCHA pages in most
+Amazon failures; whether headless mode or traffic from this IP triggers it is not yet separated).
+
+**Pillar 3, a cached-prefix "is the answer already on this page?" gate on the planner, was measured offline and not
+shipped.** On 2,396 logged states, the planner's own weights (Qwen3.6-35B on OpenRouter, the agent's exact prompt
+plus a YES/NO question) agreed with a criteria-aware judge at precision 0.66 and recall 0.32. Of the 45 tasks that
+ran out of steps or gave no answer, the gate fired on 4, while it fired prematurely on 13 tasks that passed. The
+same model cannot recognise, when asked, what it missed while acting.
+
+**Head-to-head with browser-use 1.0.3** on 30 tasks (the first two of each site), both on `qwen3.6-35b-a3b` via
+OpenRouter, both in headless Chrome with the same user-agent, recorded with one CDP screencast recorder:
+
+| agent | pass | median time | total time |
+|---|---|---|---|
+| Bro fast loop | 15/30 | 18.2 s | 11.8 min |
+| browser-use 1.0.3 | 12/30 | 85.4 s | 50.4 min ($0.50) |
+
+On the 7 tasks both passed, browser-use took a median 6.8x as long. Each passed tasks the other missed (Bro only 8,
+browser-use only 5), so the speed gap is the robust result and the accuracy gap is within noise at n = 30.
+
+`bro/fast/llm.py` now disables hidden reasoning for `openrouter/` models: Qwen3.6 thinks by default there and used
+the whole 400-token budget, returning nothing.
