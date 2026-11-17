@@ -94,6 +94,8 @@ up from 218 (40.7%) on an earlier version of the harness.
 
 ## Caveats
 
+- The 150 tasks are the first 10 per site by task ID, chosen before any results existed; they are a fixed slice, not a
+  random sample.
 - Bro's 150-task numbers come from one night and browser-use's from the next, on live websites.
 - Cambridge Dictionary favours browser-use, 8/10 against 1/10. Bro's run reused a browser profile with a flagged
   Cloudflare cookie, since fixed by clearing cookies per task. Without that site the score is 69/140 against 45/140.
