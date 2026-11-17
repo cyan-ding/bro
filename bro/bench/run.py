@@ -90,6 +90,9 @@ async def _run_task(args: argparse.Namespace, task: Task) -> RunResult:
         return await asyncio.wait_for(run_legacy(args.model, task.task, task.url, args.max_steps), args.timeout)
     context = await _browser()
     try:
+        # Every task starts logged out with no cookies, as in a fresh browser: a flagged bot-check cookie
+        # (Cloudflare cf_clearance) otherwise follows the profile into every later task on that site.
+        await context.clear_cookies()
         page = await fresh_page(context)
         agent = FastAgent(
             args.model,
