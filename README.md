@@ -5,17 +5,19 @@ Bro is a browser agent that runs entirely on your laptop. On the same local mode
 [browser-use](https://github.com/browser-use/browser-use) in less than half the time, while using no more than 12 GB of
 memory for the model and never taking over your screen.
 
-| | **Bro** | browser-use 1.0.3 |
-|---|---|---|
-| tasks solved | **70 / 150** | 53 / 150 |
-| median time per task | **43.7 s** | 113.0 s |
-| median time on a solved task | **33.9 s** | 111.7 s |
-| solved within 30 s / 60 s / 120 s | **30 / 53 / 70** | 2 / 7 / 31 |
-| wall clock for all 150 tasks | **2.0 h** | 4.9 h |
+| agent and settings | solved | median per task | median on a solved task | solved within 30 / 60 / 120 s | all 150 tasks |
+|---|---|---|---|---|---|
+| **Bro, with screenshot checks** | **74** | 46.3 s | **28.5 s** | **38 / 58 / 73** | **2.0 h** |
+| **Bro, text only** | 70 | **43.7 s** | 33.9 s | 30 / 53 / 70 | **2.0 h** |
+| browser-use 1.0.3, defaults (thinking on) | 53 | 113.0 s | 111.7 s | 2 / 7 / 31 | 4.9 h |
+| browser-use 1.0.3, thinking off | 48 | 99.6 s | 96.2 s | 1 / 5 / 38 | 4.5 h |
 
-Both agents ran Qwen3.6-35B-A3B (2-bit, served by [Splash](https://github.com/incoai/splash) under a 12 GB memory cap) on
-an M4 Max with 36 GB, in headless Chrome, with 25 steps and 240 s per task, scored by the same LLM judge. On the 30 tasks
-both solved, browser-use took a median 3.3x as long.
+All four ran Qwen3.6-35B-A3B (2-bit, served by [Splash](https://github.com/incoai/splash) under a 12 GB memory cap) on
+an M4 Max with 36 GB, in headless Chrome, with 25 steps and 240 s per task, scored by the same LLM judge. Bro never uses
+the model's hidden thinking. Its screenshot checks look at the page before accepting an answer and when two steps in a
+row changed nothing (1.8 screenshots per task). browser-use's model takes a screenshot whenever its code calls for one
+(about 1 step in 30). Turning browser-use's thinking off saved only 12% of its time and cost 5 tasks: its speed comes
+from the harness design, not from reasoning.
 
 ## Watch it
 
@@ -88,7 +90,8 @@ up from 218 (40.7%) on an earlier version of the harness.
 - **A System 1 reflex** in the style of [Jev](https://docs.typesafe.ai/api/), a fast decision model that picks an
   action from a menu without calling the planner. It saved 15% per step with the local planner and lost time with a
   cloud one, and the small local models we tried were too inaccurate or too slow to serve as the reflex.
-- **Screenshots before answering.** About 7 s per check, and no gain in pass rate at 2-bit.
+- **Screenshots, so far.** Checking answers and stuck pages against a screenshot gained 4 tasks in the run above, but
+  lost 2 and 5 tasks in two earlier runs. On balance it is noise at this model size; the text view does the work.
 - **Asking the planner whether the answer is already on the page.** Offline it caught 4 of the 45 tasks that ran out
   of steps and fired too early on 13 that passed. A model cannot spot, when asked directly, what it missed while acting.
 
@@ -96,11 +99,12 @@ up from 218 (40.7%) on an earlier version of the harness.
 
 - The 150 tasks are the first 10 per site by task ID, chosen before any results existed; they are a fixed slice, not a
   random sample.
-- Bro's 150-task numbers come from one night and browser-use's from the next, on live websites.
-- Cambridge Dictionary favours browser-use, 8/10 against 1/10. Bro's run reused a browser profile with a flagged
-  Cloudflare cookie, since fixed by clearing cookies per task. Without that site the score is 69/140 against 45/140.
-- browser-use ran at its defaults, with the model's thinking on; three of its tasks stopped at its own per-run request
-  limit.
+- The screenshot-check Bro and thinking-off browser-use ran interleaved, task by task, on the same night. The other two
+  rows come from earlier nights, on live websites.
+- Cambridge Dictionary favours browser-use, 7 to 8 of 10 against 1 of 10: Cloudflare challenges Bro there, and mostly
+  lets browser-use (a fresh browser profile per task) through. We have not isolated why. Without that site Bro still
+  leads, 73/140 and 69/140 against 45/140 and 41/140.
+- Three browser-use tasks in each run stopped at its own per-run request limit.
 - The judge is an LLM (Gemini 2.5 Flash) applied to each task's success criteria.
 
 Every run, setting and dead end is in the [lab notebook](LABNOTEBOOK.md).

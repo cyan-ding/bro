@@ -205,3 +205,23 @@ browser-use alone 23. Caveats: Bro's numbers come from the 2026-11-16 full run, 
 night; Cambridge Dictionary favours browser-use (8/10 vs 1/10) because Bro's run reused a profile with a flagged
 Cloudflare cookie, since fixed by clearing cookies per task (without Cambridge: 69/140 vs 45/140); three browser-use
 tasks ended on its own per-run request limit.
+
+### Bro with screenshot checks vs browser-use with thinking off (2026-11-18)
+
+Both arms ran interleaved, task by task, in a fixed shuffled order over the same 150 tasks, with the same Splash server
+(2-bit Qwen3.6-35B-A3B, 12 GB cap), headless Chrome, 25 steps and 240 s, from 01:34 to 08:35. Bro ran with `--vision`;
+browser-use 1.0.3 ran with `reasoning_effort="none"`, which Splash logs as "thinking off" for every request.
+
+| arm | solved | median | median on solved | within 30 / 60 / 120 s | total |
+|---|---|---|---|---|---|
+| Bro text-only (2026-11-16 full run) | 70 | 43.7 s | 33.9 s | 30 / 53 / 70 | 2.04 h |
+| Bro `--vision` | 74 | 46.3 s | 28.5 s | 38 / 58 / 73 | 2.03 h |
+| browser-use, thinking on (2026-11-17) | 53 | 113.0 s | 111.7 s | 2 / 7 / 31 | 4.90 h |
+| browser-use, thinking off | 48 | 99.6 s | 96.2 s | 1 / 5 / 38 | 4.49 h |
+
+Without Cambridge Dictionary (10 tasks): 69, 73, 45 and 41. Bro's screenshots: 270 in total (1.8 per task), 110 answer
+checks in 103 tasks with at least 10 rejected answers, and 160 stuck-page screenshots in 55 tasks; a step with a
+screenshot took a median 3.3 s of model time. Cambridge stayed at 1/10 for Bro even with cookies cleared per task, while
+browser-use (fresh profile per task) passed 7/10, so the Cloudflare difference is not only the flagged cookie; not yet
+isolated. Turning thinking off cut browser-use's median time by about 12% and cost 5 tasks. Screenshot checks for Bro
+across three runs: -2, -5, +4 tasks; treat as noise at 2-bit.
