@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
 
@@ -54,7 +54,7 @@ def stop_chrome(chrome: subprocess.Popen, profile: Path) -> None:
 
 
 def make_agent(task: TaskSpec, model: str, base_url: str, api_key: str) -> Agent:
-    llm = ChatOpenAI(model, base_url=base_url, api_key=api_key)
+    llm = ChatOpenAI(model, base_url=base_url, api_key=api_key, reasoning_effort=os.environ.get("BU_REASONING_EFFORT") or None)
     return Agent(f"Start at {task.url}. {task.task}", llm=llm, browser=Browser(cdp_url=f"http://127.0.0.1:{PORT}"))
 
 
@@ -75,10 +75,10 @@ async def bench_one(task: TaskSpec, model: str, base_url: str, api_key: str) -> 
     return record
 
 
-async def bench(tasks_path: Path, out: Path, model: str, base_url: str, api_key: str, deadline: Optional[float]) -> None:
+async def bench(tasks_path: Path, out: Path, model: str, base_url: str, api_key: str, deadline: Optional[float], only: List[str]) -> None:
     done = {json.loads(line)["task_id"] for line in out.read_text().splitlines() if line.strip()} if out.exists() else set()
     for task in load_task_specs(tasks_path).values():
-        if task.id in done:
+        if task.id in done or (only and task.id not in only):
             continue
         if deadline and time.time() > deadline:
             print("deadline reached", flush=True)
@@ -121,10 +121,14 @@ if __name__ == "__main__":
     parser.add_argument("--base-url", default="http://127.0.0.1:8001/v1")
     parser.add_argument("--api-key", default=os.environ.get("BU_API_KEY", "local"))
     parser.add_argument("--deadline", type=float, help="bench mode: epoch seconds after which no new task starts")
+    parser.add_argument("--only", nargs="*", default=[], help="bench mode: run only these task ids")
+    parser.add_argument("--reasoning-effort", help="sent as reasoning_effort; 'none' turns thinking off on Splash and similar servers")
     parser.add_argument("--bro-python", default=".venv/bin/python", help="record mode: Python of Bro's environment")
     args = parser.parse_args()
+    if args.reasoning_effort:
+        os.environ["BU_REASONING_EFFORT"] = args.reasoning_effort
     if args.mode == "bench":
-        asyncio.run(bench(Path(args.tasks), Path(args.out), args.model, args.base_url, args.api_key, args.deadline))
+        asyncio.run(bench(Path(args.tasks), Path(args.out), args.model, args.base_url, args.api_key, args.deadline, args.only))
     else:
         out_dir = Path(args.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
