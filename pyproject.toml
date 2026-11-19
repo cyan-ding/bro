@@ -37,6 +37,7 @@ dependencies = [
 
 [project.optional-dependencies]
 local = ["mlx-lm>=0.32"]
+demo = ["pillow>=11"]
 
 [tool.setuptools.packages.find]
 where = ["bro"]

@@ -1,0 +1,12 @@
+[
+ {"id": "flight", "label": "Flight home for winter break", "url": "https://www.google.com/travel/flights", "task": "Using Google Flights, find the cheapest one-way nonstop flight from San Francisco (SFO) to New York (JFK) on December 18, 2026. Give the airline, departure time and price."},
+ {"id": "recipe", "label": "Dinner tonight", "url": "https://www.allrecipes.com/", "task": "On Allrecipes, find a vegetarian chili recipe rated at least 4.5 stars with more than 100 ratings. Give its name, rating, number of ratings and total time."},
+ {"id": "paper", "label": "Paper for my lit review", "url": "https://arxiv.org/", "task": "On arXiv, find the most recently submitted paper whose title mentions speculative decoding. Give its title, first author and submission date."},
+ {"id": "course", "label": "Course for next semester", "url": "https://www.coursera.org/", "task": "On Coursera, find a beginner-level Python course offered by a university. Give its title, the university, its rating and how long it takes."},
+ {"id": "repo", "label": "Library for my project", "url": "https://github.com/", "task": "On GitHub, find the llama.cpp repository by ggml-org. Give its star count and the name of its latest release."},
+ {"id": "model", "label": "Speech model for my project", "url": "https://huggingface.co/", "task": "On Hugging Face, find the most downloaded text-to-speech model. Give its name and its number of downloads."},
+ {"id": "laptop", "label": "Laptop price check", "url": "https://www.apple.com/", "task": "On apple.com, find the starting price of the 13-inch MacBook Air in the US and the chip it comes with."},
+ {"id": "news", "label": "Catch up on tech news", "url": "https://www.bbc.com/innovation/technology", "task": "On BBC News, find the top story in the Technology section. Give its headline and a one-sentence summary."},
+ {"id": "math", "label": "Check my homework answer", "url": "https://www.wolframalpha.com/", "task": "Using Wolfram Alpha, compute the integral of x^2 * e^x from 0 to 1. Give the exact value and a decimal approximation."},
+ {"id": "map", "label": "Coffee shop to study at", "url": "https://www.google.com/maps", "task": "On Google Maps, find a coffee shop near Union Square, San Francisco with a rating of at least 4.5. Give its name, rating and address."}
+]

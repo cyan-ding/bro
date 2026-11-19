@@ -68,3 +68,7 @@ metrics/
 temp/
 tmp/
 *.tmp
+
+# Demo recordings
+demo-runs/
+Screen Recording*.mov
