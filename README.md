@@ -74,6 +74,13 @@ difference is how the model acts, not how the page is read.
 
 The goal was an agent you can leave running while you use the same laptop.
 
+![Doing homework while Bro finishes 10 tasks in the background](docs/media/works-while-you-work.gif)
+
+*Homework in the foreground; Bro working through 10 everyday tasks on the local model in invisible Chrome (bottom
+right). All 10 done in 4:08, and Bro's browser took focus 0 times in 241 one-second checks. Playing at 8x;
+[full video](docs/media/works-while-you-work.mp4), [raw recording](docs/media/works-while-you-work-raw.mp4),
+[logged timeline](docs/media/works-while-you-work-timeline.json). Record your own with `bro/demo/start.sh`.*
+
 - **Memory.** The 4-bit model wires about 21 GB, which leaves nothing for other apps on a 36 GB Mac. The 2-bit build
   under Splash's 12 GB cap keeps the hot experts in RAM and streams the rest from SSD, at no loss in accuracy on our
   task sets.
