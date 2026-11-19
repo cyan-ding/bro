@@ -7,8 +7,8 @@ memory for the model and never taking over your screen.
 
 | agent and settings | solved | median per task | median on a solved task | solved within 30 / 60 / 120 s | all 150 tasks |
 |---|---|---|---|---|---|
-| **Bro, with screenshot checks** | **74** | 46.3 s | **28.5 s** | **38 / 58 / 73** | **2.0 h** |
 | **Bro, text only** | 70 | **43.7 s** | 33.9 s | 30 / 53 / 70 | **2.0 h** |
+| **Bro, text + screenshot checks** | **74** | 46.3 s | **28.5 s** | **38 / 58 / 73** | **2.0 h** |
 | browser-use 1.0.3, defaults (thinking on) | 53 | 113.0 s | 111.7 s | 2 / 7 / 31 | 4.9 h |
 | browser-use 1.0.3, thinking off | 48 | 99.6 s | 96.2 s | 1 / 5 / 38 | 4.5 h |
 
@@ -85,13 +85,19 @@ The goal was an agent you can leave running while you use the same laptop.
 On all 535 Emergence WebVoyager tasks, fully local, Bro solves **242 (45.2%)** at a median of 45.6 s per task. That is
 up from 218 (40.7%) on an earlier version of the harness.
 
+## Screenshots: not settled yet
+
+Bro reads pages as text. With screenshot checks on, it also looks at a screenshot before accepting an answer and when
+two steps in a row changed nothing, 1.8 screenshots per task. In our latest run that gained 4 tasks at no cost in total
+time and shortened solved tasks (28.5 s against 33.9 s median). Two earlier runs lost tasks, but both were confounded,
+one by bugs since fixed and one by a different browser mode, and +4 of 150 is within night-to-night noise. A same-night
+comparison will settle it.
+
 ## What did not help
 
 - **A System 1 reflex** in the style of [Jev](https://docs.typesafe.ai/api/), a fast decision model that picks an
   action from a menu without calling the planner. It saved 15% per step with the local planner and lost time with a
   cloud one, and the small local models we tried were too inaccurate or too slow to serve as the reflex.
-- **Screenshots, so far.** Checking answers and stuck pages against a screenshot gained 4 tasks in the run above, but
-  lost 2 and 5 tasks in two earlier runs. On balance it is noise at this model size; the text view does the work.
 - **Asking the planner whether the answer is already on the page.** Offline it caught 4 of the 45 tasks that ran out
   of steps and fired too early on 13 that passed. A model cannot spot, when asked directly, what it missed while acting.
 
