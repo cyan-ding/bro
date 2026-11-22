@@ -89,8 +89,20 @@ right). All 10 done in 4:08, and Bro's browser took focus 0 times in 241 one-sec
 
 ## The full benchmark
 
-On all 535 Emergence WebVoyager tasks, fully local, Bro solves **242 (45.2%)** at a median of 45.6 s per task. That is
-up from 218 (40.7%) on an earlier version of the harness.
+On all 535 Emergence WebVoyager tasks, with the same local model, same machine and same judge:
+
+| | **Bro** (text only) | browser-use 1.0.3 (defaults) |
+|---|---|---|
+| tasks solved | **242 / 535 (45.2%)** | 207 / 535 (38.7%) |
+| median time per task | **45.6 s** | 108.2 s |
+| median time on a solved task | **33.8 s** | 105.0 s |
+| solved within 30 s / 60 s / 120 s | **107 / 185 / 241** | 5 / 23 / 134 |
+| wall clock for all 535 tasks | **7.2 h** | 17.0 h |
+
+On the 116 tasks both solved, browser-use took a median 3.4x as long. Bro leads on 10 of the 15 sites; browser-use
+leads on Cambridge Dictionary (20 against 6, the Cloudflare issue above), arXiv, Amazon and ESPN. Without Cambridge the
+score is 236/500 against 187/500. The gap holds on the 385 tasks the harness was never tuned on: 172 against 154, at a
+median 46.2 s against 106.6 s. The 150-task tables above are a subset of this run.
 
 ## Screenshots: not settled yet
 

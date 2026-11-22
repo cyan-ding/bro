@@ -225,3 +225,22 @@ screenshot took a median 3.3 s of model time. Cambridge stayed at 1/10 for Bro e
 browser-use (fresh profile per task) passed 7/10, so the Cloudflare difference is not only the flagged cookie; not yet
 isolated. Turning thinking off cut browser-use's median time by about 12% and cost 5 tasks. Screenshot checks for Bro
 across three runs: -2, -5, +4 tasks; treat as noise at 2-bit.
+
+### browser-use on all 535 Emergence WebVoyager tasks (2026-11-17 to 2026-11-21)
+
+browser-use 1.0.3 at its defaults (thinking on, screenshots on request), local 2-bit Qwen3.6-35B-A3B under Splash
+(12 GB cap), fresh headless Chrome and profile per task with the normal user-agent, 25 steps, 240 s; 150 tasks on
+2026-11-17, 240 on 2026-11-20, 145 on 2026-11-21, in a fixed shuffled order (seed 535). Judged with Bro's judge.
+Compared with Bro's 2026-11-16 headless full run.
+
+| | Bro | browser-use |
+|---|---|---|
+| solved | 242 | 207 |
+| median / median on solved | 45.6 s / 33.8 s | 108.2 s / 105.0 s |
+| within 30 / 60 / 120 s | 107 / 185 / 241 | 5 / 23 / 134 |
+| total | 7.24 h | 16.96 h |
+
+Solved by both 116 (browser-use / Bro median time ratio 3.4x), only Bro 126, only browser-use 91. Without Cambridge
+236/500 against 187/500. Tuning set (150) 70 against 53; held-out (385) 172 against 154. Per site, browser-use leads on
+Cambridge 20/6, arXiv 15/10, Amazon 18/13 and ESPN 11/8; Bro leads most on Google Flights 16/2, Booking 12/1, BBC 19/8
+and Coursera 23/13. browser-use hit the 25-step cap on 420 of 535 tasks and errored on 7 (its per-run request limit).
