@@ -72,3 +72,4 @@ tmp/
 # Demo recordings
 demo-runs/
 Screen Recording*.mov
+.venv-browser-use/

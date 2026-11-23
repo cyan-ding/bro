@@ -20,13 +20,13 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
 
 from browser_use import Agent, Browser, ChatOpenAI  # noqa: E402
 
-from .models import CHROME, BrowserUseRecord, RecordedRun, TaskSpec, load_task_specs  # noqa: E402
+from .models import CHROME, BrowserUseRecord, Om2wResult, RecordedRun, TaskSpec, load_om2w_tasks, load_task_specs, write_trajectory  # noqa: E402
 
 PORT = 9333
 MAX_STEPS = 25
@@ -110,9 +110,57 @@ async def record_one(task: TaskSpec, out: Path, model: str, base_url: str, api_k
     return run
 
 
+def actions_from(messages: List[Any]) -> List[str]:
+    """One line per code cell the model ran, from the run transcript (pydantic-ai tool calls)."""
+    actions: List[str] = []
+    for message in messages:
+        for part in getattr(message, "parts", []):
+            if getattr(part, "part_kind", "") != "tool-call":
+                continue
+            args = part.args
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    args = {"code": args}
+            if not isinstance(args, dict):
+                args = {"code": str(args)}
+            code = str(args.get("code") or args)
+            lines = [line.strip() for line in code.splitlines() if line.strip() and not line.strip().startswith("#")]
+            actions.append(" ; ".join(lines)[:240] or part.tool_name)
+    return actions
+
+
+async def om2w_one(task: TaskSpec, out: Path, model: str, base_url: str, api_key: str, bro_python: str) -> Om2wResult:
+    """One Online-Mind2Web task, recorded, written as a WebJudge trajectory in out/<task_id>/bu."""
+    side = out / task.id / "bu"
+    side.mkdir(parents=True, exist_ok=True)
+    profile = Path(tempfile.mkdtemp(prefix="bu-profile-"))
+    chrome = launch_chrome(profile)
+    await asyncio.sleep(2.5)
+    recorder = subprocess.Popen([bro_python, "-m", "bro.bench.compare.screencast", "--cdp", f"http://127.0.0.1:{PORT}", "--out", str(side / "frames")])
+    await asyncio.sleep(2)
+    started = time.time()
+    answer, steps, error, actions = "", None, None, []
+    try:
+        result = await asyncio.wait_for(make_agent(task, model, base_url, api_key).run(max_steps=MAX_STEPS, timeout=TIMEOUT_S), TIMEOUT_S + 90)
+        answer, steps, error, actions = str(result.final_result() or ""), result.steps, result.error, actions_from(result.messages)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"[:300]
+    elapsed = round(time.time() - started, 1)
+    recorder.terminate()
+    recorder.wait(timeout=30)
+    stop_chrome(chrome, profile)
+    write_trajectory(side / "frames", side, len(actions))
+    record = Om2wResult(task_id=task.id, task=task.task, action_history=actions, final_result_response=answer,
+                        agent="browser-use 1.0.3", model=model, steps=steps, elapsed_s=elapsed, error=error)
+    (side / "result.json").write_text(record.model_dump_json(indent=1))
+    return record
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["bench", "record"])
+    parser.add_argument("mode", choices=["bench", "record", "om2w"])
     parser.add_argument("task_id", nargs="?", help="record mode: task id")
     parser.add_argument("out_dir", nargs="?", help="record mode: output directory")
     parser.add_argument("--tasks", default="bro/bench/tasks_emergence.json")
@@ -129,6 +177,10 @@ if __name__ == "__main__":
         os.environ["BU_REASONING_EFFORT"] = args.reasoning_effort
     if args.mode == "bench":
         asyncio.run(bench(Path(args.tasks), Path(args.out), args.model, args.base_url, args.api_key, args.deadline, args.only))
+    elif args.mode == "om2w":
+        spec = load_om2w_tasks(Path(args.tasks))[args.task_id]
+        done_om2w = asyncio.run(om2w_one(spec, Path(args.out_dir), args.model, args.base_url, args.api_key, args.bro_python))
+        print(f"{time.strftime('%H:%M:%S')} {done_om2w.task_id[:12]} browser-use {done_om2w.elapsed_s}s steps={done_om2w.steps} | {(done_om2w.final_result_response or done_om2w.error or '')[:80]}", flush=True)
     else:
         out_dir = Path(args.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -244,3 +244,29 @@ Solved by both 116 (browser-use / Bro median time ratio 3.4x), only Bro 126, onl
 236/500 against 187/500. Tuning set (150) 70 against 53; held-out (385) 172 against 154. Per site, browser-use leads on
 Cambridge 20/6, arXiv 15/10, Amazon 18/13 and ESPN 11/8; Bro leads most on Google Flights 16/2, Booking 12/1, BBC 19/8
 and Coursera 23/13. browser-use hit the 25-step cap on 420 of 535 tasks and errored on 7 (its per-run request limit).
+
+### Online-Mind2Web, Bro vs browser-use (2026-11-22 to 2026-11-23)
+
+300 tasks, 147 sites (80 easy, 141 medium, 79 hard), fixed shuffled order (seed 300). Same local 2-bit model under
+Splash (12 GB cap), headless Chrome, 25 steps, 240 s; browser-use 1.0.3 at its defaults (thinking on). Each run was
+recorded with the shared screencast recorder and written as a WebJudge trajectory: the action history (Bro: each action
+with the element's tag and label; browser-use: the code lines of each cell) and one frame per action, evenly spaced in
+time and ending on the last frame (max 25). Runners: `bro/bench/compare/om2w_bro.py`, `browser_use_run.py om2w`.
+Judge: `bro/bench/compare/webjudge.py`, the official WebJudge functions with GPT-6 Luna through OpenRouter, 0 judge
+errors. The official run.py fails on macOS (spawn cannot pickle its client; forced fork hangs), and its 512-token cap
+made GPT-6 Luna return empty replies (counted as failures), so the driver calls the official functions in threads with
+an 8,192-token cap and one retry. WebJudge does not read the final answer text; it judges from key points, screenshots
+and actions.
+
+| | Bro | browser-use |
+|---|---|---|
+| passed | 68 (22.7%) | 35 (11.7%) |
+| easy / medium / hard | 35/80, 29/141, 4/79 | 21/80, 11/141, 3/79 |
+| median / median on passed | 54.3 s / 22.1 s | 112.3 s / 93.7 s |
+| within 30 / 60 / 120 s | 39 / 58 / 68 | 0 / 2 / 21 |
+| total | 4.58 h | 10.15 h |
+
+Both 21, Bro only 47, browser-use only 14; both-passed median time ratio 5.9x. Run in three sessions (03:24-09:47 and
+09:47-11:48 on 2026-11-22, 02:24-09:34 on 2026-11-23). During the last session the scratchpad holding browser-use's
+environment was wiped; Bro ran 31 tasks alone before it was caught, and browser-use ran those 31 right after under the
+same conditions rather than interleaved. browser-use now lives in the repo's `.venv-browser-use` (git-ignored).

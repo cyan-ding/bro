@@ -104,6 +104,28 @@ leads on Cambridge Dictionary (20 against 6, the Cloudflare issue above), arXiv,
 score is 236/500 against 187/500. The gap holds on the 385 tasks the harness was never tuned on: 172 against 154, at a
 median 46.2 s against 106.6 s. The 150-task tables above are a subset of this run.
 
+## Online-Mind2Web
+
+[Online-Mind2Web](https://github.com/OSU-NLP-Group/Online-Mind2Web) has 300 tasks on 147 live websites, many of them
+actions (filter, add to cart, set a store) rather than lookups. Neither harness was tuned on any of these sites. Same
+local model, machine, 25 steps and 240 s; each run scored by the official WebJudge prompts (GPT-6 Luna, the authors'
+recommended backbone) from its action history and one screenshot per action.
+
+| | **Bro** | browser-use 1.0.3 |
+|---|---|---|
+| tasks passed | **68 / 300 (22.7%)** | 35 / 300 (11.7%) |
+| easy / medium / hard | **35 / 29 / 4** of 80 / 141 / 79 | 21 / 11 / 3 |
+| median time per task | **54.3 s** | 112.3 s |
+| median time on a passed task | **22.1 s** | 93.7 s |
+| passed within 30 s / 60 s / 120 s | **39 / 58 / 68** | 0 / 2 / 21 |
+| wall clock for all 300 tasks | **4.6 h** | 10.2 h |
+
+On the 21 tasks both passed, browser-use took a median 5.9x as long. The lead is wider here than on Emergence
+WebVoyager (1.9x the tasks passed, against 1.17x), on sites neither harness had seen. Hard tasks stay out of reach for
+both at this model size. WebJudge's 512-token reply cap was raised to 8,192, since the reasoning backbone otherwise
+returned no verdict; prompts and threshold are unchanged. Scores use a 25-step budget and are not comparable to
+published results with longer budgets.
+
 ## Screenshots: not settled yet
 
 Bro reads pages as text. With screenshot checks on, it also looks at a screenshot before accepting an answer and when
