@@ -23,6 +23,23 @@ ALWAYS_RUN = {"done"}
 MAX_ACTIONS_PER_STEP = 3
 NAV_TIMEOUT_MS = 45000
 MAX_VETOES = 2
+CONTROL_ROLES = {"checkbox", "radio", "switch", "menuitemcheckbox", "menuitemradio", "option", "tab"}
+CONTROL_STATE_JS = """el => {
+  const pick = 'input[type=checkbox], input[type=radio]';
+  let box = (el.tagName === 'INPUT' && /checkbox|radio/.test(el.type)) ? el : null;
+  if (!box && el.tagName === 'LABEL' && el.control) box = el.control;
+  if (!box) { const inner = el.querySelectorAll(pick); if (inner.length === 1) box = inner[0]; }
+  if (box) return box.checked ? 'checked' : 'unchecked';
+  for (const attr of ['aria-checked', 'aria-pressed', 'aria-selected']) {
+    const val = el.getAttribute(attr);
+    const word = attr === 'aria-checked' ? 'checked' : attr.slice(5);
+    if (val === 'true') return word;
+    if (val === 'false') return 'not ' + word;
+    if (val === 'mixed') return 'partly ' + word;
+  }
+  const state = el.getAttribute('data-state');
+  return state ? 'state=' + state : null;
+}"""
 HEDGE = re.compile(r"\b(unable|cannot|could not|can't|not (?:be )?(?:found|visible|available|determined|completed)|may be needed|further (?:scrolling|search)|technical issues)\b", re.IGNORECASE)
 
 
@@ -123,6 +140,7 @@ class FastAgent:
         self._pending_obs: Optional[Observation] = None
         self._noop: Dict[str, int] = {}
         self._focus_notes: List[str] = []
+        self._step, self._max_steps = 0, 0
         self._stalled_steps = 0
         self._step_effect = False
         self._seen: List[str] = []
@@ -140,6 +158,7 @@ class FastAgent:
         history = "\n".join(self.history[-self.history_len :]) or "(none yet)"
         return USER_TEMPLATE.format(
             task=task,
+            progress=f"Step: {self._step} of {self._max_steps}; give the answer before the steps run out\n" if self._max_steps else "",
             notes="; ".join(self.notes) or "(none)",
             history=history,
             title=obs.title[:80],
@@ -167,6 +186,7 @@ class FastAgent:
                 await self._goto(page, start_url)
             parse_failures = 0
             for step in range(1, max_steps + 1):
+                self._step, self._max_steps = step, max_steps
                 if self._new_pages:
                     page = self._new_pages[-1]
                     self._new_pages.clear()
@@ -284,7 +304,7 @@ class FastAgent:
                     record.results.append(outcome)
                     self.history.append(f"{step}. {action} -> {outcome}")
                     if action.name == "done":
-                        veto = await self._veto(user_prompt, action.text) if self.verify else None
+                        veto = await self._veto(user_prompt, action.text) if self.verify and step < max_steps and not out_of_time else None
                         if veto is None and self.reject_hedged_done and step < max_steps and HEDGE.search(action.text) and self.vetoes < MAX_VETOES:
                             self.vetoes += 1
                             veto = "that is not an answer; keep working (search differently, open the item, scroll) until you have the facts"
@@ -356,7 +376,7 @@ class FastAgent:
             return Completion(text=f"# llm error: {exc}")
 
     async def _veto(self, user_prompt: str, answer: str) -> Optional[str]:
-        """Cheap self-check that reuses the cached prompt prefix; returns a reason to reject, else None."""
+        """Requirement-by-requirement check of a proposed answer (reuses the cached prefix); returns what is missing, else None."""
         if self.vetoes >= MAX_VETOES:
             return None
         check = user_prompt + VERIFY_SUFFIX.format(answer=answer)
@@ -364,10 +384,11 @@ class FastAgent:
             reply = (await self.llm.complete(self.system, check)).text.strip()
         except Exception:
             return None
-        if reply.lower().startswith("yes"):
+        rejected = re.search(r"REJECTED:?\s*(.*)", reply)
+        if rejected is None:
             return None
         self.vetoes += 1
-        return reply[:160]
+        return (rejected.group(1).strip() or "a part of the task is missing")[:200]
 
     async def _screenshot(self, page: Page) -> Optional[str]:
         watch = FocusWatch()
@@ -396,6 +417,35 @@ class FastAgent:
         self.history.append(f"(screenshot check rejected the answer: {reason or 'not supported by the page'}; keep working)")
         checked = [a for a in parse(reply.text) if a.name != "done"]
         return checked or [Action(name="read")]
+
+    @staticmethod
+    def _is_control(element: Element) -> bool:
+        """Checkbox, radio, switch, option, tab or a filter wrapper that reports one of those states."""
+        role = element.attrs.get("role", "")
+        return (
+            element.attrs.get("type") in ("checkbox", "radio")
+            or role in CONTROL_ROLES
+            or any(key in element.attrs for key in ("checked", "selected", "pressed", "state"))
+        )
+
+    @staticmethod
+    async def _control_state(locator: Any) -> Optional[str]:
+        """'checked', 'unchecked', 'not pressed', 'state=open', ... for a control (or the one input it wraps); None otherwise."""
+        try:
+            return await locator.evaluate(CONTROL_STATE_JS)
+        except Exception:
+            return None
+
+    async def _with_state(self, locator: Any, before: Optional[str], outcome: str) -> str:
+        """Say whether a clicked control actually changed, so the model does not assume a filter is on when it is not."""
+        if before is None:
+            return outcome
+        after = await self._control_state(locator)
+        if after is None or outcome.startswith("ok, now at"):
+            return outcome
+        if after == before:
+            return f"{outcome}; the control did not change (still {after}), try another element or approach"
+        return f"{outcome}; the control is now {after}"
 
     def _refuse(self, element: Element, message: str) -> str:
         """A click that cannot land counts as a no-op, so the element is flagged and then dropped like any inert one."""
@@ -580,6 +630,7 @@ class FastAgent:
             if locator is None:
                 return "error: element is no longer on the page"
             if action.name == "click":
+                before = await self._control_state(locator) if self._is_control(element) else None
                 blocker = await self._covered_by(page, element) if element.ref is not None else None
                 if blocker == "disabled":
                     return self._refuse(element, "error: that element is disabled; nothing was clicked")
@@ -596,7 +647,7 @@ class FastAgent:
                         if box:
                             await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
                             await settle(page)
-                            return await self._after(page, obs, element)
+                            return await self._with_state(locator, before, await self._after(page, obs, element))
                 try:
                     if isinstance(blocker, dict):
                         await locator.click(position={"x": blocker["x"], "y": blocker["y"]}, timeout=3000)
@@ -608,7 +659,7 @@ class FastAgent:
                         return "error: element is not visible; nothing was clicked"
                     await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
                 await settle(page)
-                return await self._after(page, obs, element)
+                return await self._with_state(locator, before, await self._after(page, obs, element))
             if action.name == "type":
                 outcome = await self._type_into(page, locator, element, action.text)
                 self._step_effect = True
@@ -619,7 +670,12 @@ class FastAgent:
                 except Exception:
                     await locator.select_option(value=action.text, timeout=3000)
                 await settle(page)
-                return await self._after(page, obs, element)
+                outcome = await self._after(page, obs, element)
+                try:
+                    shown = await locator.evaluate("el => el.selectedOptions && el.selectedOptions.length ? el.selectedOptions[0].textContent.trim() : ''")
+                except Exception:
+                    shown = ""
+                return f"{outcome} (dropdown now shows {shown[:60]!r})" if shown else outcome
             return f"error: unknown action {action.name}"
         except Exception as exc:
             message = str(exc).splitlines()[0][:120]

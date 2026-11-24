@@ -270,3 +270,34 @@ Both 21, Bro only 47, browser-use only 14; both-passed median time ratio 5.9x. R
 09:47-11:48 on 2026-11-22, 02:24-09:34 on 2026-11-23). During the last session the scratchpad holding browser-use's
 environment was wiped; Bro ran 31 tasks alone before it was caught, and browser-use ran those 31 right after under the
 same conditions rather than interleaved. browser-use now lives in the repo's `.venv-browser-use` (git-ignored).
+
+### Control state, answer checklist and step budget: an A/B that found no gain (2026-11-24)
+
+A failure analysis of every failed run (an LLM sorting each into one cause) found that on Online-Mind2Web about half
+the failures, for both Bro and browser-use, were controls that never took (filters, forms, dropdowns), and on Emergence
+WebVoyager half were answers that were wrong or incomplete on the right page; about half of failed runs used all 25
+steps. Three generic changes followed: (1) control state in the page view (`checked` for labels and wrappers around a
+hidden checkbox, ARIA checked/selected/pressed/current, `data-state`), plus a report after every click on a control
+("the control is now checked" / "the control did not change, try another element or approach") and the option a
+dropdown shows after `select`; (2) a requirement checklist before `done` (the model lists each part of the task as found
+or missing, then CONFIRMED or REJECTED); (3) "Step N of 25" in the prompt and alternative routes for stuck controls in
+the replan hint.
+
+Tested on 210 tasks (Emergence: 60 previously failed, Cambridge excluded, and 30 previously passed; Online-Mind2Web: 90
+failed and 30 passed, seed 1123), the last commit against the new code, interleaved per task with alternating order, same
+local model, one night.
+
+| | old | new |
+|---|---|---|
+| Emergence, previously failed (60) | 15 | 14 |
+| Emergence, previously passed (30) | 17 | 18 |
+| Online-Mind2Web, previously failed (90) | 10 | 13 |
+| Online-Mind2Web, previously passed (30) | 22 | 17 |
+
+Projected to each benchmark's mix: Emergence +4/535, Online-Mind2Web -4/300, both noise. The new code was slower on
+previously passed tasks (median 27 -> 35 s and 20 -> 39 s), mostly from the checklist call and the extra steps after a
+rejection. The fixes did fire (42 control changes confirmed, 12 failures flagged, 18 checklist rejections in 14 tasks).
+At the halfway mark the failed-task numbers looked clearly better and then reversed: the old code alone re-passed 25%
+of previously failed Emergence tasks, so same-night baselines are essential. Kept: control state, step budget, replan
+hint (cheap, informative). Checklist off by default (`--verify` to enable). Reading: the harness now tells the model
+what is wrong; the 2-bit model still cannot act on it, so the next lever is the model itself.

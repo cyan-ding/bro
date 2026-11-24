@@ -128,7 +128,7 @@ async def main() -> None:
     parser.add_argument("--max-steps", type=int, default=20)
     parser.add_argument("--timeout", type=float, default=240)
     parser.add_argument("--reason", action="store_true")
-    parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--verify", action="store_true", help="requirement checklist before accepting done (off: measured no gain, slower)")
     parser.add_argument("--reject-hedged-done", action="store_true", help="refuse hedged non-answers while steps remain")
     parser.add_argument("--vision", action="store_true", help="screenshot before done and when stalled")
     parser.add_argument("--observer", choices=["lean", "legacy"], default="lean")

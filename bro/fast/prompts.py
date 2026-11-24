@@ -42,7 +42,7 @@ REASONING_SUFFIX = """
 - Start your reply with one short line beginning with # that states what you see and your plan, then the action lines."""
 
 USER_TEMPLATE = """Task: {task}
-Notes: {notes}
+{progress}Notes: {notes}
 Recent actions:
 {history}
 Page: {title} | {url}
@@ -54,7 +54,7 @@ Interactive elements:
 
 REPLAN_SUFFIX = """
 
-Your recent actions changed nothing on the page ({tried}). Stop repeating them. Choose a different approach: use the site's own search, go back, open a different link, scroll, or goto a more specific URL."""
+Your recent actions changed nothing on the page ({tried}). Stop repeating them. Choose a different approach: use the site's own search, go back, open a different link, scroll, or goto a more specific URL. If a filter, checkbox or dropdown will not take, try another element with the same label, type the value into its input, put the criteria into the site search, or add them as URL parameters like the ones in the address bar."""
 
 DELIVER_SUFFIX = """
 
@@ -80,8 +80,10 @@ This is your last step. Reply only with: done "<best answer from your notes and 
 
 VERIFY_SUFFIX = """
 
-You replied: done "{answer}"
-Self-check: does that answer fully and specifically satisfy every part of the task, using facts from the pages rather than guesses? Reply with yes, or no followed by what is missing."""
+You proposed: done "{answer}"
+Before finishing, check it against the task. List each specific thing the task asks for (every item, attribute, number,
+filter, setting or action), one per line, as "- <requirement>: found" or "- <requirement>: missing", using only what the
+pages and your notes show. Then end with one line: CONFIRMED if nothing is missing, or REJECTED: <what is missing>."""
 
 
 def system_prompt(reason: bool) -> str:

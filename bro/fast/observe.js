@@ -33,7 +33,19 @@
       if (el.type === "checkbox" || el.type === "radio") out.checked = String(el.checked);
     } else if (el.tagName === "SELECT" && el.selectedOptions.length) {
       out.value = clean(el.selectedOptions[0].textContent).slice(0, 60);
+    } else {
+      // Filter sidebars often hide the real checkbox inside a label or a styled wrapper.
+      const boxes = el.tagName === "LABEL" && el.control ? [el.control] : el.querySelectorAll("input[type=checkbox], input[type=radio]");
+      if (boxes.length === 1 && /checkbox|radio/.test(boxes[0].type || "")) out.checked = String(boxes[0].checked);
     }
+    const ariaChecked = el.getAttribute("aria-checked");
+    if (ariaChecked) out.checked = ariaChecked;
+    for (const [attr, key] of [["aria-selected", "selected"], ["aria-pressed", "pressed"], ["aria-current", "current"]]) {
+      const val = el.getAttribute(attr);
+      if (val && val !== "false") out[key] = val;
+    }
+    const dataState = el.getAttribute("data-state");
+    if (dataState && /^(checked|unchecked|on|off|active|inactive|open|closed|selected)$/.test(dataState)) out.state = dataState;
     return out;
   }
 
