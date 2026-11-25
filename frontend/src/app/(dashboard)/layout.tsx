@@ -15,14 +15,14 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <div className="grid grid-cols-[auto_1fr] grid-rows-1 min-h-svh w-screen">
+      <div className="grid h-svh w-screen grid-cols-[auto_1fr] grid-rows-1">
         <AppSidebar runs={runs} setRuns={setRuns}/>
-        <div className="grid grid-rows-[auto_1fr]">
-          <div className="flex justify-between items-center">
+        <div className="grid h-svh min-h-0 grid-rows-[auto_1fr]">
+          <div className="flex items-center justify-between">
             <SidebarTrigger />
             <DashboardNavbar />
           </div>
-          {children}
+          <div className="min-h-0">{children}</div>
         </div>
       </div>
     </SidebarProvider>

@@ -105,7 +105,8 @@ async def list_local_runs() -> List[dict]:
                         "id": data["id"],
                         "status": data["status"],
                         "title": data.get("title"),
-                        "completed_at": data.get("completed_at")
+                        "completed_at": data.get("completed_at"),
+                        "created_at": data.get("created_at"),
                     })
             except Exception as e:
                 print(f"Error reading {run_file}: {e}")

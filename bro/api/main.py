@@ -63,6 +63,8 @@ app.add_middleware(
 # Global run manager instance (mock or real based on USE_MOCK)
 run_manager = RunManager()
 
+LIVE_STATUSES = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.AWAITING_DECISION)
+
 # Global registry for screencast client and websocket
 _screencast_client: Optional[ScreencastClient] = None
 _screencast_websocket: Optional[WebSocket] = None
@@ -89,7 +91,7 @@ async def root():
 
 
 @app.get("/runs", response_model=List[ListRunsResponse])
-async def list_runs():
+async def list_runs() -> List[ListRunsResponse]:
     """
     get run information from database or local storage
     """
@@ -98,12 +100,17 @@ async def list_runs():
     storage_mode = get_storage_mode()
 
     if storage_mode == "local":
-        runs = await list_local_runs()
-        return runs
+        stored = await list_local_runs()
     else:
         db = await get_supabase()
-        runs = await db.table("runs").select("id, status, title, completed_at").execute()
-        return runs.data
+        stored = (await db.table("runs").select("id, status, title, completed_at, created_at").execute()).data
+
+    runs = [ListRunsResponse(**run) for run in stored]
+    for run in runs:
+        active = await run_manager.get_run(run.id)
+        if run.status in LIVE_STATUSES and not (active and active.agent):
+            run.status = RunStatus.STOPPED
+    return runs
 
 
 @app.post("/runs", response_model=CreateRunResponse)
@@ -166,7 +173,7 @@ async def get_run_status(run_id: str):
                 user_prompt=pulled_run.user_prompt,
                 title=pulled_run.title,
             )
-            run_info.set_status(pulled_run.status)
+            run_info.set_status(RunStatus.STOPPED if pulled_run.status in LIVE_STATUSES else pulled_run.status)
             await run_manager.set_run(run_id, run_info)
         except Exception:
             raise HTTPException(status_code=404, detail="Run not found")
@@ -461,10 +468,11 @@ async def websocket_screencast(websocket: WebSocket):
 
     # Register this websocket
     _screencast_websocket = websocket
+    driving = False
 
     try:
         # Check if screencast client already exists
-        if _screencast_client is None:
+        if _screencast_client is None or not _screencast_client.running:
             try:
                 # Create and connect CDP client
                 client = ScreencastClient()
@@ -487,8 +495,16 @@ async def websocket_screencast(websocket: WebSocket):
                             print(f"❌ Error sending frame to websocket: {e}")
                             _screencast_websocket = None
 
+                async def broadcast_url(url: str) -> None:
+                    if _screencast_websocket:
+                        try:
+                            await _screencast_websocket.send_json({"type": "url", "url": url})
+                        except Exception:
+                            pass
+
                 await client.start_screencast(
                     frame_callback=broadcast_frame,
+                    url_callback=broadcast_url,
                     quality=80,
                     every_nth_frame=1,
                     max_width=1280,
@@ -505,6 +521,9 @@ async def websocket_screencast(websocket: WebSocket):
                 traceback.print_exc()
                 await websocket.close(code=1011, reason=error_msg[:100])
                 return
+
+        if _screencast_client.current_url:
+            await websocket.send_json({"type": "url", "url": _screencast_client.current_url})
 
         # Keep websocket alive and handle incoming input messages
         while True:
@@ -554,6 +573,9 @@ async def websocket_screencast(websocket: WebSocket):
                                 case "url":  # update url
                                     url = data.get("url", "")
                                     await _screencast_client.update_url(url)
+                        case "control":
+                            driving = data.get("driving") is True
+                            await run_manager.set_driving(driving)
 
                 except json.JSONDecodeError:
                     # Ignore non-JSON messages (ping/pong)
@@ -568,8 +590,10 @@ async def websocket_screencast(websocket: WebSocket):
         print(f"❌ WebSocket error: {e}")
         await websocket.close(code=1011, reason=str(e))
     finally:
-        # Cleanup
-        _screencast_websocket = None
+        if _screencast_websocket is websocket:
+            _screencast_websocket = None
+        if driving:
+            await run_manager.set_driving(False)
 
 """
 these settings endpoints are not actively used, the desktop directly interacts with the filesystem
@@ -609,14 +633,23 @@ async def get_valid_models():
     # Load environment variables fresh (~/.bro/.env)
     load_env_files()
 
+    local_models = list_local_models()
     try:
         valid_models = get_valid_models(check_provider_endpoint=True)
-        return {"models": list_local_models() + valid_models}
     except Exception as e:
+        if local_models:
+            return {"models": local_models}
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get valid models: {str(e)}"
         )
+    return {"models": local_models + valid_models}
+
+
+@app.get("/models/local")
+async def get_local_models():
+    """Cached on-device models. Does not start a server and does not call cloud providers."""
+    return {"models": list_local_models()}
 
 
 @app.get("/settings")

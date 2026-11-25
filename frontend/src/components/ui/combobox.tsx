@@ -19,6 +19,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+export function modelLabel(id: string): string {
+  if (!id.startsWith("local/")) {
+    return id.replace(/^[^/]*\//, "");
+  }
+  const repo = id.slice("local/".length).split("/").pop() ?? id;
+  const short = repo.replace(/-?\d+B.*$/, "").replace(/-/g, " ").trim();
+  return `${short || repo} · on this Mac`;
+}
+
 interface ComboBoxParams {
   options: Record<string, string>;
   display: string;
@@ -53,19 +62,15 @@ export function Combobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-[200px] justify-between", className)}
+          className={cn("h-8 w-fit max-w-56 justify-between px-2", className)}
         >
           <span className="truncate mr-2">
-            {displayedValue
-              ? Object.entries(options)
-                  .find(([key]) => key === displayedValue)?.[0]
-                  ?.replace(/^[^/]*\//, "")
-              : display}
+            {displayedValue ? modelLabel(displayedValue) : display}
           </span>
           <ChevronsUpDown className="opacity-50 flex-shrink-0" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className={cn("w-[200px] p-0")}>
+      <PopoverContent className="w-56 p-0">
         <Command>
           <CommandInput placeholder={display} className="h-9" />
           <CommandList>
@@ -74,14 +79,14 @@ export function Combobox({
               {Object.entries(options).map(([key, value]) => (
                 <CommandItem
                   key={value}
-                  value={key}
+                  value={modelLabel(key)}
                   onSelect={() => {
                     setDisplayedValue(key);
                     setter(value);
                     setOpen(false);
                   }}
                 >
-                  {key}
+                  {modelLabel(key)}
                   <Check
                     className={cn(
                       "ml-auto",

@@ -4,12 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { ArrowLeft, RotateCw } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useAgentStore } from "@/store/useAgentStore";
 
 interface ScreencastViewerProps {
-  currentUrl?: string;
   isRunning?: boolean;
+  onDrivingChange?: (driving: boolean) => void;
 }
 
 /**
@@ -18,16 +16,12 @@ interface ScreencastViewerProps {
  * Shows Chrome screencast at ~10 FPS with optional manual intervention controls.
  */
 export default function ScreencastViewer({
-  currentUrl,
   isRunning = false,
+  onDrivingChange,
 }: ScreencastViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fps, setFps] = useState(0);
-  const lastFrameTimeRef = useRef(Date.now());
-  const frameCountRef = useRef(0);
   const [viewportDimensions, setViewportDimensions] = useState({
     width: 1280,
     height: 720,
@@ -35,18 +29,7 @@ export default function ScreencastViewer({
   const [manualInterventionEnabled, setManualInterventionEnabled] =
     useState(false);
   const chromeClosedRef = useRef(false);
-  const [localUrl, setLocalUrl] = useState(currentUrl ?? "");
-  const router = useRouter();
-  const {
-    runId
-  } = useAgentStore();
-
-  // Sync localUrl with currentUrl prop changes
-  useEffect(() => {
-    if (currentUrl) {
-      setLocalUrl(currentUrl);
-    }
-  }, [currentUrl]);
+  const [localUrl, setLocalUrl] = useState("");
 
   useEffect(() => {
     if (!isRunning) {
@@ -69,7 +52,6 @@ export default function ScreencastViewer({
         wsRef.current = ws;
 
         ws.onopen = () => {
-          setIsConnected(true);
           setError(null);
         };
 
@@ -80,8 +62,12 @@ export default function ScreencastViewer({
             // Check if Chrome was intentionally closed
             if (data.type === "chrome_closed") {
               chromeClosedRef.current = true;
-              setIsConnected(false);
-              setError("Chrome browser has been closed");
+              setError("The browser closed");
+              return;
+            }
+
+            if (data.type === "url" && data.url) {
+              setLocalUrl(data.url);
               return;
             }
 
@@ -96,23 +82,11 @@ export default function ScreencastViewer({
                     canvas.height = img.height;
 
                     setViewportDimensions({
-                      width: img.width,
-                      height: img.height,
+                      width: data.metadata?.deviceWidth ?? img.width,
+                      height: data.metadata?.deviceHeight ?? img.height,
                     });
 
                     ctx.drawImage(img, 0, 0);
-
-                    frameCountRef.current++;
-                    const now = Date.now();
-                    const elapsed = now - lastFrameTimeRef.current;
-
-                    if (elapsed >= 1000) {
-                      setFps(
-                        Math.round((frameCountRef.current / elapsed) * 1000)
-                      );
-                      frameCountRef.current = 0;
-                      lastFrameTimeRef.current = now;
-                    }
                   }
                 }
               };
@@ -130,18 +104,14 @@ export default function ScreencastViewer({
 
         ws.onerror = (err) => {
           console.error("[Screencast] WebSocket error:", err);
-          setError(
-            "WebSocket connection error. Chrome may not be running or the run may have ended."
-          );
-          setIsConnected(false);
+          setError("The page isn't available right now.");
         };
 
         ws.onclose = (event) => {
-          setIsConnected(false);
           if (event.code !== 1000 && !chromeClosedRef.current) {
-            setError("Connection lost");
+            setError("The page disconnected.");
           } else if (chromeClosedRef.current) {
-            setError("Chrome browser has been closed");
+            setError("The browser closed");
           }
         };
       } catch (err) {
@@ -156,8 +126,20 @@ export default function ScreencastViewer({
       if (wsRef.current) {
         wsRef.current.close();
       }
+      setManualInterventionEnabled(false);
+      onDrivingChange?.(false);
     };
-  }, [isRunning]);
+  }, [isRunning, onDrivingChange]);
+
+  const setDriving = (driving: boolean) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    ws.send(JSON.stringify({ type: "control", driving }));
+    setManualInterventionEnabled(driving);
+    onDrivingChange?.(driving);
+  };
 
   const canvasToViewportCoords = (canvasX: number, canvasY: number) => {
     const canvas = canvasRef.current;
@@ -282,105 +264,76 @@ export default function ScreencastViewer({
     );
   };
 
+  if (!isRunning) {
+    return (
+      <div className="flex h-full min-w-0 items-center justify-center rounded-xl border border-dashed px-6">
+        <p className="text-center text-sm text-muted-foreground">The page shows up here while Bro works.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-card rounded-lg border shadow-sm p-4 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Browser View</h2>
-          {/* Connection status*/}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <div
-              className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"
-                }`}
-            />
-            <span>{fps} FPS</span>
-          </div>
-        </div>
-        <div className="flex ml-auto">
-          {/* Manual button */}
-          <Button
-            onClick={() =>
-              setManualInterventionEnabled(!manualInterventionEnabled)
-            }
-            className={`py-1 text-sm rounded-md font-medium transition-colors ${manualInterventionEnabled
-                ? "bg-green-600 hover:bg-green-700 text-white"
-                : "bg-secondary hover:bg-secondary/80"
-              }`}
-          >
-            {manualInterventionEnabled ? "Manual: ON" : "Manual: OFF"}
-          </Button>
-
-          <Button
-            onClick={() => router.push(`/logs?runId=${runId}`)}
-            variant="link">
-            View Logs
-          </Button>
-        </div>
-
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-2">
+      <div className="flex items-center justify-end">
+        <Button
+          size="sm"
+          variant={manualInterventionEnabled ? "default" : "secondary"}
+          onClick={() => setDriving(!manualInterventionEnabled)}
+        >
+          {manualInterventionEnabled ? "Hand back" : "I'll drive"}
+        </Button>
       </div>
 
       {error && (
-        <div
-          className={`mb-3 p-3 rounded text-sm flex-shrink-0 ${error.includes("Waiting")
-              ? "bg-blue-500/10 border border-blue-500 text-blue-700 dark:text-blue-300"
-              : "bg-destructive/10 border border-destructive text-destructive"
-            }`}
-        >
-          {error}
-        </div>
+        <p className="text-sm text-destructive">{error}</p>
       )}
 
-      {/* URL Bar */}
-      <div className="mb-2 px-3 py-2 bg-secondary rounded flex items-center gap-2 text-sm flex-shrink-0">
-        {/* Back Button */}
-        <Button
-          onClick={() => {
-            const ws = wsRef.current;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "navigation", action: "back" }));
-            }
-          }}
-          className="p-1.5 hover:bg-accent rounded transition-colors"
-          title="Go back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-
-        {/* Reload Button */}
-        <Button
-          onClick={() => {
-            const ws = wsRef.current;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "navigation", action: "reload" }));
-            }
-          }}
-          className="p-1.5 hover:bg-accent rounded transition-colors"
-          title="Reload"
-        >
-          <RotateCw className="h-4 w-4" />
-        </Button>
-
-        {/* Lock Icon + URL */}
-        <div className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1 bg-background rounded">
-
+      {manualInterventionEnabled && (
+        <div className="flex items-center gap-2">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              const ws = wsRef.current;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "navigation", action: "back" }));
+              }
+            }}
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              const ws = wsRef.current;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "navigation", action: "reload" }));
+              }
+            }}
+            aria-label="Reload"
+          >
+            <RotateCw className="h-4 w-4" />
+          </Button>
           <Input
-            className="text-muted-foreground truncate outline-none border-none"
+            className="h-8"
             value={localUrl}
             onChange={(e) => setLocalUrl(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                updateUrl(localUrl);
+                updateUrl(e.currentTarget.value);
               }
             }}
+            aria-label="Page address"
           />
         </div>
-      </div>
+      )}
 
-      {/* Screencast */}
-      <div className="bg-black rounded overflow-hidden flex-1 flex items-center justify-center">
+      <div className="flex flex-1 items-center justify-center overflow-hidden rounded-xl bg-black">
         <canvas
           ref={canvasRef}
-          className="max-w-full max-h-full cursor-pointer object-contain"
+          className="max-h-full max-w-full object-contain"
           onClick={handleCanvasClick}
           onContextMenu={handleCanvasContextMenu}
           onKeyDown={handleKeyDown}

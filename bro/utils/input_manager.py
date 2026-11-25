@@ -46,6 +46,23 @@ class InputManager:
         self._listener_task: Optional[asyncio.Task] = None
         self._running = False
         self._enable_stdin = enable_stdin
+        self._handed_back = asyncio.Event()
+        self._handed_back.set()
+        self._user_drove = False
+
+    def take_control(self) -> None:
+        """The user is driving the browser; the agent waits until hand_back()."""
+        self._user_drove = True
+        self._handed_back.clear()
+
+    def hand_back(self) -> None:
+        self._handed_back.set()
+
+    async def wait_while_driving(self) -> bool:
+        """Block while the user drives. True if the user took control since the last call."""
+        await self._handed_back.wait()
+        drove, self._user_drove = self._user_drove, False
+        return drove
 
     async def start(self) -> None:
         """Start the input listener background task (only if stdin is enabled)."""

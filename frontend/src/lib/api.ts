@@ -191,6 +191,16 @@ export async function getLogs(runId: string): Promise<LogEventDB[]> {
  * Get valid models based on environment variables.
  * Uses LiteLLM's get_valid_models() to check which models are accessible.
  */
+export async function getLocalModels(): Promise<{ models: string[] }> {
+  const response = await fetch(`${API_BASE_URL}/models/local`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to get local models: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 export async function getValidModels(): Promise<{ models: string[] }> {
   const response = await fetch(`${API_BASE_URL}/models/validate`, {
     method: "POST",

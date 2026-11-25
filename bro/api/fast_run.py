@@ -11,10 +11,39 @@ from utils.input_manager import InputManager
 from bro.fast.agent import FastAgent, StepRecord
 from bro.fast.browser import connect
 from bro.fast.local_server import ensure_local_server
-from bro.fast.observe import Observation
+from bro.fast.dsl import parse
+from bro.fast.observe import Element, Observation
 
 from .models import LogType, RunStatus
 from .run_info import RunInfo
+
+
+def _element_label(element: Element) -> str:
+    for candidate in (element.text, element.attrs.get("aria-label"), element.attrs.get("placeholder"), element.attrs.get("title"), element.attrs.get("alt")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()[:60]
+    return ""
+
+
+def describe_action(command: str, outcome: str, obs: Observation) -> str:
+    """Plain-language step, naming the element from the observation the action was planned on."""
+    parsed = parse(command)
+    if not parsed:
+        return command
+    action = parsed[0]
+    element = next((e for e in obs.elements if e.index == action.index), None) if action.index is not None else None
+    label = _element_label(element) if element else ""
+    target = f'"{label}"' if label else (f"a {element.tag}" if element else "something")
+    arrived = outcome.split("now at ", 1)[1].strip() if "now at " in outcome else ""
+    if action.name == "click":
+        text = f"Clicked {target}"
+    elif action.name == "type":
+        text = f'Typed "{action.text}" into {target}'
+    elif action.name == "select":
+        text = f'Picked "{action.text}" in {target}'
+    else:
+        return command
+    return f"{text} → {arrived}" if arrived else text
 
 
 class FastRun:
@@ -23,7 +52,13 @@ class FastRun:
         self.run_info = run_info
         self.agent_state = AgentState()
         self.input_manager: Optional[InputManager] = None
-        self.agent = FastAgent(model, on_step=self._on_step, on_done=self._on_done, get_messages=self._messages)
+        self.agent = FastAgent(
+            model,
+            on_step=self._on_step,
+            on_done=self._on_done,
+            get_messages=self._messages,
+            wait_for_user=self._wait_for_user,
+        )
 
     async def run(self, user_prompt: str, url: str = "", max_iterations: int = 100, enable_input_queue: bool = True) -> None:
         self.agent_state.max_iterations = max_iterations
@@ -44,6 +79,9 @@ class FastRun:
     def _messages(self) -> List[str]:
         return self.input_manager.get_messages() if self.input_manager else []
 
+    async def _wait_for_user(self) -> bool:
+        return await self.input_manager.wait_while_driving() if self.input_manager else False
+
     async def _on_step(self, record: StepRecord, obs: Observation) -> None:
         comments = [line.lstrip("# ") for line in record.output.splitlines() if line.strip().startswith("#")]
         thinking = StructuredOutputContext(
@@ -59,7 +97,7 @@ class FastRun:
                 arguments={"command": command},
                 result=outcome,
                 iteration=record.step,
-                description=command,
+                description=describe_action(command, outcome, obs),
                 logger=self.run_info.add_log_event,
             )
         self.agent_state.tabs = [TabState(url=obs.url, title=obs.title, is_active=True)]

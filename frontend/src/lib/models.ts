@@ -20,6 +20,7 @@ export interface ListRunsResponse {
   title?: string;
   status: RunStatus;
   completed_at?: string;
+  created_at?: string;
 }
 
 export type RunStatus =

@@ -18,7 +18,7 @@ from bro.fast.local_server import ensure_local_server
 
 from .fast_run import FastRun
 
-from .models import RunStatus, SendDecisionRequest
+from .models import LogType, RunStatus, SendDecisionRequest
 from .run_info import RunInfo
 
 
@@ -43,6 +43,21 @@ class RunManager:
     async def get_run(self, run_id: str) -> Optional[RunInfo]:
         async with self._lock:
             return self._runs.get(run_id)
+
+    async def set_driving(self, driving: bool) -> None:
+        """Pause (or resume) every live run while the user drives the shared browser."""
+        async with self._lock:
+            runs = list(self._runs.values())
+        live = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.AWAITING_DECISION)
+        for run_info in runs:
+            manager = run_info.agent.input_manager if run_info.agent else None
+            if manager is None or run_info.status not in live:
+                continue
+            if driving:
+                manager.take_control()
+            else:
+                manager.hand_back()
+            await run_info.add_log_event(LogType.CONTROL, message="You took over" if driving else "Bro picked back up")
 
     async def create_run(
         self,
@@ -242,7 +257,7 @@ class RunManager:
 
     async def get_agent_state(self, run_id: str) -> Optional[Dict]:
         run_info = await self.get_run(run_id)
-        if not run_info:
+        if not run_info or not run_info.agent:
             return None
 
         state_dict = run_info.agent.agent_state.model_dump(

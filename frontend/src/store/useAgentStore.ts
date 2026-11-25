@@ -25,6 +25,7 @@ interface AgentStore {
   error: string | null;
   eventSource: EventSource | null;
   chatMessages: ChatMessage[];
+  userPrompt: string | null;
   model: string | null;
   pollingInterval: NodeJS.Timeout | null;
   isLoadingRun: boolean;
@@ -44,6 +45,7 @@ interface AgentStore {
   startLogStreaming: (runId: string) => void;
   addChatMessage: (message: ChatMessage) => void;
   setChatMessages: (messages: ChatMessage[]) => void;
+  setUserPrompt: (userPrompt: string | null) => void;
   clearAll: () => void;
   loadRun: (runId: string) => Promise<void>;
   stopPolling: () => void;
@@ -62,6 +64,7 @@ export const useAgentStore = create<AgentStore>()(
       error: null,
       eventSource: null,
       chatMessages: [],
+      userPrompt: null,
       model: null,
       pollingInterval: null,
       isLoadingRun: false,
@@ -84,6 +87,7 @@ export const useAgentStore = create<AgentStore>()(
       addChatMessage: (message) =>
         set((state) => ({ chatMessages: [...state.chatMessages, message] })),
       setChatMessages: (chatMessages) => set({ chatMessages }),
+      setUserPrompt: (userPrompt) => set({ userPrompt }),
       setRunConfig: (config) =>
         set((state) => ({
           runConfig: { ...state.runConfig, ...config },
@@ -190,6 +194,7 @@ export const useAgentStore = create<AgentStore>()(
           error: null,
           eventSource: null,
           chatMessages: [],
+          userPrompt: null,
           pollingInterval: null,
           isLoadingRun: false,
           // Keep runs and model - these are useful across sessions
@@ -220,23 +225,21 @@ export const useAgentStore = create<AgentStore>()(
           logs: [],
           agentState: null,
           runStatus: null,
-          error: null
+          error: null,
+          userPrompt: null,
         });
 
         try {
-          // Fetch run status first
-          const status = await getRunStatus(runId);
-          set({ runStatus: status });
+          const [status, runData] = await Promise.all([
+            getRunStatus(runId),
+            getRun(runId),
+          ]);
+          set({ runStatus: status, userPrompt: runData.user_prompt });
 
           const isComplete = status === "completed" || status === "stopped" || status === "error";
 
           if (isComplete) {
-            // For completed runs, fetch data once (no streaming/polling)
-            const [runData, logsData] = await Promise.all([
-              getRun(runId),
-              getLogs(runId)
-            ]);
-
+            const logsData = await getLogs(runId);
             set({
               logs: logsData,
               agentState: runData.metadata as AgentStateResponse | null,

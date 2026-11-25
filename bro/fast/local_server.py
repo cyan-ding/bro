@@ -183,15 +183,38 @@ def server_for(model: str, wait_s: int = 180) -> str:
     raise TimeoutError(f"local MLX server for {model_id} did not start")
 
 
-def list_local_models() -> List[str]:
-    """Model ids the local server can serve, prefixed with `local/`; empty when it is down."""
-    if not _is_up():
+def _cached_mlx_model_ids() -> List[str]:
+    """MLX repos already in the Hugging Face cache, so the picker works before a server starts."""
+    try:
+        from huggingface_hub import scan_cache_dir
+    except ImportError:
         return []
-    import json
+    ids: List[str] = []
+    for repo in scan_cache_dir().repos:
+        if "mlx" in repo.repo_id.lower() and repo.size_on_disk > 1_000_000_000:
+            ids.append(repo.repo_id)
+    return ids
 
-    with urllib.request.urlopen(f"{LOCAL_BASE_URL}/models", timeout=2) as response:
-        data = json.load(response)
-    return [f"{LOCAL_PREFIX}{item['id']}" for item in data.get("data", []) if "mlx" in item["id"].lower()]
+
+def list_local_models() -> List[str]:
+    """Model ids the local server can serve, prefixed with `local/`.
+
+    Includes cached MLX weights even when nothing is listening yet. A run starts the server.
+    """
+    found = set(_cached_mlx_model_ids())
+    if _is_up():
+        import json
+
+        try:
+            with urllib.request.urlopen(f"{LOCAL_BASE_URL}/models", timeout=2) as response:
+                data = json.load(response)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            data = {}
+        for item in data.get("data", []):
+            model_id = item.get("id", "")
+            if "mlx" in model_id.lower():
+                found.add(model_id)
+    return [f"{LOCAL_PREFIX}{model_id}" for model_id in sorted(found)]
 
 
 def ensure_local_server(model: str, wait_s: int = 120) -> None:

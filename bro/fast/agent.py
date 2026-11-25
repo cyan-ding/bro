@@ -92,6 +92,7 @@ def _decision_summary(decision: Decision) -> Dict[str, Any]:
 OnStep = Callable[[StepRecord, Observation], Awaitable[None]]
 OnDone = Callable[[str], Awaitable[Tuple[str, str]]]
 GetMessages = Callable[[], List[str]]
+WaitForUser = Callable[[], Awaitable[bool]]
 
 
 class FastAgent:
@@ -106,6 +107,7 @@ class FastAgent:
         on_step: Optional[OnStep] = None,
         on_done: Optional[OnDone] = None,
         get_messages: Optional[GetMessages] = None,
+        wait_for_user: Optional[WaitForUser] = None,
         verify: bool = False,
         reject_hedged_done: bool = False,
         vision: bool = False,
@@ -128,6 +130,7 @@ class FastAgent:
         self.on_step = on_step
         self.on_done = on_done
         self.get_messages = get_messages
+        self.wait_for_user = wait_for_user
         self.llm = ChatModel(model, max_tokens=max_tokens)
         self.model = model
         self.system = system_prompt(reason)
@@ -194,6 +197,9 @@ class FastAgent:
                     track_network(page)
                     await prepare_page(page)  # background tab: focus emulation instead of raising the window
                     await settle(page)
+                if self.wait_for_user and await self.wait_for_user():
+                    self._pending_obs = None
+                    self.history.append(f"{step}. (the user took control of the browser and may have changed the page)")
                 if self.get_messages:
                     for message in self.get_messages():
                         task += f"\nUser says: {message}"
@@ -289,6 +295,10 @@ class FastAgent:
                 page_changed = False
                 self._step_effect = False
                 for action in actions[:MAX_ACTIONS_PER_STEP]:
+                    if self.wait_for_user and await self.wait_for_user():
+                        self._pending_obs = None
+                        self.history.append(f"{step}. (planned {action}, but the user took control of the browser first; plan again from the current page)")
+                        break
                     if page_changed and action.name not in ALWAYS_RUN:
                         self.history.append(f"{step}. {action} -> skipped (page changed)")
                         continue

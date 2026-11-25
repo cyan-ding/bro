@@ -30,6 +30,8 @@ class ScreencastClient:
         self.session: Optional[aiohttp.ClientSession] = None
         self.running = False
         self.frame_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+        self.url_callback: Optional[Callable[[str], Any]] = None
+        self.current_url = ""
         self.message_id = 0
 
     async def connect(self) -> None:
@@ -43,11 +45,12 @@ class ScreencastClient:
         # Get list of targets (tabs)
         async with self.session.get(f"{self.cdp_url}/json") as resp:
             targets = await resp.json()
-            if not targets:
+            pages = [t for t in targets if t["type"] == "page"]
+            if not pages:
                 raise Exception("No Chrome tabs found")
 
-            # Use first tab
-            ws_url = targets[0]["webSocketDebuggerUrl"]
+            ws_url = pages[0]["webSocketDebuggerUrl"]
+            self.current_url = pages[0]["url"]
 
         # Connect to WebSocket
         self.ws = await self.session.ws_connect(ws_url)
@@ -77,6 +80,7 @@ class ScreencastClient:
     async def start_screencast(
         self,
         frame_callback: Callable[[Dict[str, Any]], None],
+        url_callback: Optional[Callable[[str], Any]] = None,
         quality: int = 100,
         every_nth_frame: int = 1,
         max_width: int = 1280,
@@ -96,7 +100,10 @@ class ScreencastClient:
             raise Exception("Must connect() before starting screencast")
 
         self.frame_callback = frame_callback
+        self.url_callback = url_callback
         self.running = True
+
+        await self._send_command("Page.enable")
 
         # Start screencast
         await self._send_command(
@@ -146,6 +153,13 @@ class ScreencastClient:
                             await self._send_command(
                                 "Page.screencastFrameAck", {"sessionId": session_id}
                             )
+
+                    elif data.get("method") == "Page.frameNavigated":
+                        frame = data["params"]["frame"]
+                        if "parentId" not in frame:
+                            self.current_url = frame["url"]
+                            if self.url_callback:
+                                await self.url_callback(frame["url"])
 
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     print(f"❌ WebSocket error: {msg.data}")

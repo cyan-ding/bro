@@ -25,6 +25,7 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import { UserSettings } from "@/lib/models";
+import { modelLabel } from "@/components/ui/combobox";
 import { useConfigStore } from "@/store/useConfigStore";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -51,6 +52,7 @@ export default function Home() {
   const [current, setCurrent] = useState(0);
   const [stepCompletion, setStepCompletion] = useState<boolean[]>([false, false, false, false, false]);
   const [env, setEnv] = useState("")
+  const [redoSetup, setRedoSetup] = useState(false);
   const isEditMode = searchParams.get("edit") === "true";
   useEffect(() => {
     loadSettings();
@@ -105,7 +107,17 @@ export default function Home() {
     });
   }, []);
 
-  if (!settings) return <div>Loading...</div>;
+  if (!settings) return null;
+  if (settings.completed && !isEditMode) return null;
+  if (isEditMode && !redoSetup) {
+    return (
+      <SettingsHome
+        settings={settings}
+        onBack={() => router.push("/dashboard")}
+        onRedo={() => setRedoSetup(true)}
+      />
+    );
+  }
 
   // Move to next step in carousel
   const handleForward = (nextStep: number) => {
@@ -196,6 +208,58 @@ export default function Home() {
           <CarouselNext className="right-4" disabled={!stepCompletion[current]} onClick={() => api?.scrollNext()} /> // override normal carousel behavior with api
         )}
       </Carousel>
+    </div>
+  );
+}
+
+function SettingsHome({
+  settings,
+  onBack,
+  onRedo,
+}: {
+  settings: UserSettings;
+  onBack: () => void;
+  onRedo: () => void;
+}) {
+  const models = (settings.selected_models ?? []).map((model) => modelLabel(model));
+  return (
+    <div className="relative flex min-h-screen items-center justify-center p-8">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-4 left-4"
+        onClick={onBack}
+        aria-label="Back"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </Button>
+      <div className="w-full max-w-lg space-y-8">
+        <div>
+          <h1 className="text-2xl font-semibold">Settings</h1>
+          <p className="text-sm text-muted-foreground">Used whenever Bro works on this Mac.</p>
+        </div>
+        <div className="space-y-5 text-sm">
+          <div>
+            <div className="font-medium">Chrome</div>
+            <div className="break-all text-muted-foreground">{settings.chrome_path || "Not set"}</div>
+          </div>
+          <div>
+            <div className="font-medium">Saved chats</div>
+            <div className="text-muted-foreground">
+              {settings.storage_mode === "cloud" ? "Cloud" : "On this Mac"}
+            </div>
+          </div>
+          <div>
+            <div className="font-medium">Models</div>
+            <div className="text-muted-foreground">
+              {models.length > 0 ? models.join(", ") : "Pick one when you start a chat"}
+            </div>
+          </div>
+        </div>
+        <Button variant="outline" onClick={onRedo}>
+          Run setup again
+        </Button>
+      </div>
     </div>
   );
 }

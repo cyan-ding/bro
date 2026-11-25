@@ -1,5 +1,5 @@
 import { MoreVerticalIcon, PlusIcon, TrashIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Sidebar,
@@ -30,12 +30,41 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { ListRunsResponse } from "@/lib/models";
+import { ListRunsResponse, RunStatus } from "@/lib/models";
 import { Button } from "@/components/ui/button";
-import { useTheme } from "next-themes";
 import { useAgentStore } from "@/store/useAgentStore";
 import { useRouter } from "next/navigation";
 import { deleteRun } from "@/lib/api";
+
+function isLive(status: RunStatus): boolean {
+  return status === "running" || status === "awaiting_decision";
+}
+
+function orderedRuns(runs: ListRunsResponse[]): ListRunsResponse[] {
+  return runs.slice().sort((a, b) => {
+    if (isLive(a.status) !== isLive(b.status)) {
+      return isLive(a.status) ? -1 : 1;
+    }
+    const aStarted = a.created_at ?? a.completed_at;
+    const bStarted = b.created_at ?? b.completed_at;
+    const aTime = aStarted ? new Date(aStarted).getTime() : 0;
+    const bTime = bStarted ? new Date(bStarted).getTime() : 0;
+    return bTime - aTime;
+  });
+}
+
+function StatusDot({ status }: { status: RunStatus }) {
+  if (status === "running") {
+    return <span className="size-1.5 shrink-0 rounded-full bg-green-500" />;
+  }
+  if (status === "awaiting_decision") {
+    return <span className="size-1.5 shrink-0 rounded-full bg-amber-500" />;
+  }
+  if (status === "error") {
+    return <span className="size-1.5 shrink-0 rounded-full bg-destructive" />;
+  }
+  return <span className="size-1.5 shrink-0" />;
+}
 
 interface SidebarProps {
   runs: ListRunsResponse[],
@@ -45,8 +74,15 @@ interface SidebarProps {
 export function AppSidebar({ runs, setRuns }: SidebarProps) {
   const router = useRouter();
   const { clearAll } = useAgentStore();
-  const { theme, resolvedTheme } = useTheme();
-  const isDark = (theme ? (theme === "dark") : resolvedTheme === "dark");
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    const update = () => setIsDark(root.classList.contains("dark"));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
 
@@ -101,20 +137,21 @@ export function AppSidebar({ runs, setRuns }: SidebarProps) {
               variant="default"
             >
               <PlusIcon className="h-4 w-4" />
-              New Run
+              New chat
             </Button>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Recent Runs</SidebarGroupLabel>
+          <SidebarGroupLabel>Chats</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {runs.slice().sort((a, b) => new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime()).map((run) => (
+              {orderedRuns(runs).map((run) => (
                 <SidebarMenuItem key={run.id}>
                   <div className="relative flex items-center w-full">
                     <SidebarMenuButton asChild className="flex-1">
                       <a href={`/runs?runId=${run.id}`}>
-                        <span>{run.title}</span>
+                        <StatusDot status={run.status} />
+                        <span className="truncate">{run.title?.trim() || "Untitled"}</span>
                       </a>
                     </SidebarMenuButton>
                     <DropdownMenu>

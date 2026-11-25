@@ -11,7 +11,7 @@ import { useAgentStore } from "@/store/useAgentStore";
 import { useConfigStore } from "@/store/useConfigStore";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon, Settings } from "lucide-react";
-import { createRun, getRunList } from "@/lib/api";
+import { createRun, getLocalModels, getRunList } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -27,12 +27,13 @@ import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const router = useRouter();
-  const { model, setModel, setRunId, setError, setRuns, runConfig, setRunConfig } = useAgentStore();
+  const { model, setModel, setRunId, setError, error, setRuns, setUserPrompt, runConfig, setRunConfig } = useAgentStore();
   const { settings, loadSettings } = useConfigStore();
 
   const [prompt, setPrompt] = useState("");
-  const [models, setModels] = useState({});
+  const [models, setModels] = useState<Record<string, string>>({});
   const [showSettings, setShowSettings] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [tempMaxIterations, setTempMax] = useState(runConfig.maxIterations || 1);
 
   useEffect(() => {
@@ -40,14 +41,37 @@ export default function Dashboard() {
   }, [loadSettings]);
 
   useEffect(() => {
-    if (settings?.selected_models) {
-      const modelsRecord = settings.selected_models.reduce((acc, model) => {
-        acc[model] = model;
-        return acc;
-      }, {} as Record<string, string>);
-      setModels(modelsRecord);
-    }
-  }, [settings?.selected_models]);
+    let cancelled = false;
+
+    const loadModels = async (): Promise<void> => {
+      const record: Record<string, string> = {};
+      for (const id of settings?.selected_models ?? []) {
+        record[id] = id;
+      }
+      try {
+        const local = await getLocalModels();
+        for (const id of local.models) {
+          record[id] = id;
+        }
+        if (!cancelled && !useAgentStore.getState().model) {
+          const qwen = local.models.find((id) => id.toLowerCase().includes("qwen"));
+          if (qwen) {
+            setModel(qwen);
+          }
+        }
+      } catch {
+        // Saved cloud models still show when the local list cannot be loaded.
+      }
+      if (!cancelled) {
+        setModels(record);
+      }
+    };
+
+    void loadModels();
+    return () => {
+      cancelled = true;
+    };
+  }, [settings?.selected_models, setModel]);
 
   useEffect(() => {
     const fetchRuns = async () => {
@@ -61,10 +85,11 @@ export default function Dashboard() {
 
   const handleStart = useCallback(
     async (prompt: string) => {
-      if (!model) {
+      if (!model || starting) {
         return;
       }
 
+      setStarting(true);
       try {
         const response = await createRun({
           user_prompt: prompt,
@@ -75,6 +100,7 @@ export default function Dashboard() {
         });
         const run_id = response.run_id;
         setRunId(run_id);
+        setUserPrompt(prompt);
         setModel(model);
 
         // Refresh the runs list to include the new run
@@ -84,25 +110,17 @@ export default function Dashboard() {
         router.push(`/runs?runId=${run_id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to start agent");
+        setStarting(false);
       }
     },
-    [model, router, setModel, setRunId, setError, setRuns, runConfig]
+    [model, starting, router, setModel, setRunId, setUserPrompt, setError, setRuns, runConfig]
   );
 
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && prompt) {
-        handleStart(prompt)
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleStart, prompt])
-
   return (
-    <div className="flex justify-center items-center">
-      <div className="w-1/2">
+    <div className="flex h-full items-center justify-center px-6">
+      <div className="w-full max-w-2xl space-y-4">
+        <h1 className="text-center text-2xl font-medium">What should Bro do?</h1>
         <InputGroup>
           <InputGroupTextarea
             className="resize-none max-h-48"
@@ -114,7 +132,13 @@ export default function Dashboard() {
             rows={4}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Message Bro"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (prompt.trim()) handleStart(prompt);
+              }
+            }}
+            placeholder="Find a vegetarian lasagna with 100+ reviews"
           />
           <InputGroupAddon align="block-end">
             <Combobox
@@ -141,26 +165,28 @@ export default function Dashboard() {
               className="rounded-full"
               size="icon-xs"
               aria-label="Submit"
-              disabled={prompt === "" || !model}
+              disabled={prompt === "" || !model || starting}
               onClick={() => handleStart(prompt)}
             >
               <ArrowUpIcon />
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
+        {starting && <p className="text-center text-sm text-muted-foreground">Starting Bro…</p>}
+        {error && <p className="text-center text-sm text-destructive">{error}</p>}
       </div>
 
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Run Settings</DialogTitle>
+            <DialogTitle>This chat</DialogTitle>
             <DialogDescription>
-              Configure settings for the agent run
+              Optional. Bro picks a page and a pace on its own.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="url">Starting URL (optional)</Label>
+              <Label htmlFor="url">Start on a page</Label>
               <Input
                 id="url"
                 type="text"
@@ -170,7 +196,7 @@ export default function Dashboard() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="maxIterations">Max Iterations</Label>
+              <Label htmlFor="maxIterations">Step limit</Label>
               <Input
                 id="maxIterations"
                 type="number"
@@ -193,7 +219,7 @@ export default function Dashboard() {
                 }
               />
               <Label htmlFor="classicLoop">
-                Classic loop (screenshots and long reasoning, slower)
+                Slower, and look at the page
               </Label>
             </div>
           </div>

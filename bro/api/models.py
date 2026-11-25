@@ -46,6 +46,7 @@ class ListRunsResponse(BaseModel):
     status: RunStatus
     title: Optional[str]
     completed_at: Optional[str]
+    created_at: Optional[str] = None
 
 
 class AgentStateResponse(BaseModel):
@@ -123,6 +124,7 @@ class LogType(str, Enum):
     USER_INPUT = "user_input"
     USER_DECISION = "user_decision"
     THINKING = "thinking"
+    CONTROL = "control"
 
 
 class LogEvent(BaseModel):

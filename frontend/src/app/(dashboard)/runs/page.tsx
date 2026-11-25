@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import AgentChat from "@/components/AgentChat";
 import ScreencastViewer from "@/components/ScreencastViewer";
@@ -11,14 +11,17 @@ import {
   stopRun,
   closeBrowser,
   getRunList,
+  createRun,
 } from "@/lib/api";
 
 import { useAgentStore } from "@/store/useAgentStore";
+import { buildConversation, withPreviousContext } from "@/lib/conversation";
 
 /**
  * Main dashboard page for controlling and monitoring the Bro agent.
  */
 export default function Run() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlRunId = searchParams.get("runId");
 
@@ -28,6 +31,11 @@ export default function Run() {
     runStatus,
     agentState,
     error,
+    userPrompt,
+    model,
+    runConfig,
+    setRunId,
+    setUserPrompt,
     setRunStatus,
     setError,
     setRuns,
@@ -36,6 +44,7 @@ export default function Run() {
 
   const isRunning = runStatus === "running";
   const isAwaitingDecision = runStatus === "awaiting_decision";
+  const [isDriving, setIsDriving] = useState(false);
 
   // Fetch runs list on mount to ensure sidebar is up to date
   useEffect(() => {
@@ -70,21 +79,16 @@ export default function Run() {
     try {
       await stopRun(runId);
       setRunStatus("stopped");
-
-      // Close event source when stopping
       useAgentStore.getState().closeEventSource();
+      try {
+        await closeBrowser();
+      } catch {
+        // The browser may already be gone.
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop agent");
     }
-  }, [runId, runStatus, setRunStatus, setError]);
-
-  const handleCloseBrowser = useCallback(async () => {
-    try {
-      await closeBrowser();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to close browser");
-    }
-  }, [setError]);
+  }, [runId, setRunStatus, setError]);
 
   const handleSendInput = useCallback(
     async (message: string) => {
@@ -127,43 +131,62 @@ export default function Run() {
     [runId, setError, setRunStatus]
   );
 
-  return (
-    <div className="container mx-auto px-4 py-4">
+  const handleFollowUp = useCallback(
+    async (message: string) => {
+      if (!model) {
+        setError("Pick a model from a new chat first.");
+        return;
+      }
+      const previousAnswer = buildConversation(userPrompt, logs, agentState?.action_history)
+        .filter((item) => item.kind === "answer")
+        .pop()?.text;
+      const prompt = userPrompt && previousAnswer
+        ? withPreviousContext(message, userPrompt, previousAnswer)
+        : message;
+      try {
+        const response = await createRun({
+          user_prompt: prompt,
+          url: runConfig.url || "",
+          max_iterations: runConfig.maxIterations,
+          model,
+          mode: runConfig.mode,
+        });
+        setRunId(response.run_id);
+        setUserPrompt(message);
+        const updatedRuns = await getRunList();
+        setRuns(updatedRuns);
+        router.push(`/runs?runId=${response.run_id}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to start agent");
+      }
+    },
+    [model, runConfig, router, setError, setRunId, setRuns, setUserPrompt, userPrompt, logs, agentState]
+  );
 
+  return (
+    <div className="flex h-full min-h-0 flex-col px-4 py-3">
       {error && (
-        <div className="mb-4 p-4 bg-destructive/10 border border-destructive rounded-lg">
-          <p className="text-sm text-destructive">{error}</p>
-        </div>
+        <p className="mb-3 text-sm text-destructive">{error}</p>
       )}
 
-      <div
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6 grid-rows-1"
-        style={{ height: "calc(100vh - 70px)" }}
-      >
-        {/* Left column: Chat Interface */}
-        <div className="lg:col-span-1">
-          <AgentChat
-            isRunning={isRunning}
-            onStop={handleStop}
-            onCloseBrowser={handleCloseBrowser}
-            onSendInput={handleSendInput}
-            onSendDecision={handleSendDecision}
-            isAwaitingDecision={isAwaitingDecision}
-            logs={logs}
-            runId={runId}
-            agentState={agentState}
-          />
-        </div>
-
-        {/* Middle + Right columns: Screencast (expanded) */}
-        <div className="lg:col-span-2">
-          <ScreencastViewer
-            currentUrl={
-              agentState?.tabs?.[agentState.current_tab_index ?? 0]?.url
-            }
-            isRunning={isRunning}
-          />
-        </div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-[minmax(260px,1fr)_2fr]">
+        <AgentChat
+          isRunning={isRunning}
+          onStop={handleStop}
+          onSendInput={handleSendInput}
+          onSendDecision={handleSendDecision}
+          onFollowUp={handleFollowUp}
+          isAwaitingDecision={isAwaitingDecision}
+          isPaused={isDriving}
+          logs={logs}
+          agentState={agentState}
+          userPrompt={userPrompt}
+        />
+        <ScreencastViewer
+          key={runId}
+          isRunning={isRunning || isAwaitingDecision}
+          onDrivingChange={setIsDriving}
+        />
       </div>
     </div>
   );
