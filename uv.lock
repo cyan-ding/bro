@@ -180,6 +180,7 @@ dependencies = [
     { name = "chardet" },
     { name = "deptry" },
     { name = "fastapi" },
+    { name = "huggingface-hub" },
     { name = "litellm" },
     { name = "markdownify" },
     { name = "openai" },
@@ -193,6 +194,7 @@ dependencies = [
     { name = "ruff" },
     { name = "sse-starlette" },
     { name = "supabase" },
+    { name = "tqdm" },
     { name = "uvicorn" },
 ]
 
@@ -213,6 +215,7 @@ requires-dist = [
     { name = "chardet" },
     { name = "deptry", specifier = "==0.23.1" },
     { name = "fastapi" },
+    { name = "huggingface-hub", specifier = ">=2.4.0" },
     { name = "litellm" },
     { name = "markdownify", specifier = ">=1.2.0" },
     { name = "mlx-lm", marker = "extra == 'local'", specifier = ">=0.32" },
@@ -228,6 +231,7 @@ requires-dist = [
     { name = "ruff", specifier = "==0.12.7" },
     { name = "sse-starlette" },
     { name = "supabase", specifier = ">=2.24.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "uvicorn" },
 ]
 provides-extras = ["local", "demo"]

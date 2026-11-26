@@ -24,7 +24,7 @@ from sse_starlette.sse import EventSourceResponse
 from utils.db import get_supabase
 from utils.screencast import ScreencastClient
 from utils.use_cdp import use_cdp
-from bro.fast.local_server import list_local_models
+from bro.fast.local_server import QwenStatus, list_local_models, qwen_status, start_qwen_download
 
 from .log_streamer import stream_logs
 from .models import (
@@ -650,6 +650,18 @@ async def get_valid_models():
 async def get_local_models():
     """Cached on-device models. Does not start a server and does not call cloud providers."""
     return {"models": list_local_models()}
+
+
+@app.get("/models/qwen")
+async def get_qwen_status() -> QwenStatus:
+    """Whether the local Qwen weights are on this Mac, and download progress if not."""
+    return await asyncio.to_thread(qwen_status)
+
+
+@app.post("/models/qwen/download")
+async def download_qwen() -> QwenStatus:
+    start_qwen_download()
+    return await asyncio.to_thread(qwen_status)
 
 
 @app.get("/settings")

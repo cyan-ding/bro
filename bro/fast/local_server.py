@@ -1,22 +1,28 @@
 """Start the local MLX inference server on demand (macOS, Apple Silicon)."""
 
 import os
+import platform
 import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from pydantic import BaseModel
+from tqdm.auto import tqdm
+
 LOCAL_PREFIX = "local/"
+QWEN_MODEL = "mlx-community/Qwen3.6-35B-A3B-4bit"
 LOCAL_BASE_URL = os.environ.get("BRO_LOCAL_BASE_URL", "http://127.0.0.1:8080/v1")
 SPLASH_BASE_URL = "http://127.0.0.1:8001/v1"
 # Builds that an engine with a memory cap (Splash) can run when the full model does not fit.
 LOW_MEMORY_BUILDS: Dict[str, str] = {
-    "mlx-community/Qwen3.6-35B-A3B-4bit": "unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q2_K_XL",
+    QWEN_MODEL: "unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q2_K_XL",
 }
 
 _server_process: Optional[subprocess.Popen] = None
@@ -262,3 +268,106 @@ def _start_low_memory(model_id: str, wait_s: int) -> None:
         if _is_up(base_url=SPLASH_BASE_URL):
             return
     raise TimeoutError("Splash did not start (see ~/.bro/splash.log)")
+
+
+class QwenStatus(BaseModel):
+    model: str
+    path: Optional[str] = None
+    downloading: bool = False
+    downloaded_bytes: int = 0
+    total_bytes: Optional[int] = None
+    supported: bool
+    fits: bool
+    ram_gb: int
+    error: Optional[str] = None
+
+
+_qwen_total_bytes: Optional[int] = None
+_qwen_download: Optional[threading.Thread] = None
+_qwen_error: Optional[str] = None
+_qwen_bars: List[tqdm] = []
+
+
+class _TrackedBar(tqdm):
+    """Progress bar that remembers itself, since Xet writes the weight files only near the end."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        _qwen_bars.append(self)
+
+
+def _qwen_cache_dir() -> Path:
+    from huggingface_hub.constants import HF_HUB_CACHE
+
+    return Path(HF_HUB_CACHE) / f"models--{QWEN_MODEL.replace('/', '--')}"
+
+
+def _qwen_size() -> Optional[int]:
+    """Total size of the Qwen weights on Hugging Face, fetched once (None when offline)."""
+    global _qwen_total_bytes
+    if _qwen_total_bytes is None:
+        from huggingface_hub import HfApi
+
+        try:
+            info = HfApi().model_info(QWEN_MODEL, files_metadata=True)
+        except Exception:
+            return None
+        _qwen_total_bytes = sum(file.size or 0 for file in info.siblings or [])
+    return _qwen_total_bytes
+
+
+def qwen_status() -> QwenStatus:
+    """Where the local Qwen weights are, how much is downloaded, and whether this Mac can run them."""
+    total_ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    total = _qwen_size()
+    blobs = _qwen_cache_dir() / "blobs"
+    files = list(blobs.iterdir()) if blobs.is_dir() else []
+    downloaded = sum(file.stat().st_size for file in files)
+    downloading = _qwen_download is not None and _qwen_download.is_alive()
+    if downloading:
+        downloaded = max([int(bar.n) for bar in _qwen_bars if bar.unit == "B"] + [0])
+    complete = (
+        bool(files)
+        and not downloading
+        and not any(file.name.endswith(".incomplete") for file in files)
+        and (total is None or downloaded >= total)
+    )
+    path = None
+    if complete:
+        from huggingface_hub import snapshot_download
+
+        path = snapshot_download(QWEN_MODEL, local_files_only=True)
+    size = total or downloaded
+    need = size + max(int(0.4 * 1024**3), int(0.08 * size))
+    return QwenStatus(
+        model=f"{LOCAL_PREFIX}{QWEN_MODEL}",
+        path=path,
+        downloading=downloading,
+        downloaded_bytes=downloaded,
+        total_bytes=total,
+        supported=platform.system() == "Darwin" and platform.machine() == "arm64",
+        fits=size > 0 and need <= MEMORY_BUDGET * total_ram,
+        ram_gb=round(total_ram / 1024**3),
+        error=_qwen_error,
+    )
+
+
+def _download_qwen() -> None:
+    global _qwen_error
+    from huggingface_hub import snapshot_download
+
+    try:
+        snapshot_download(QWEN_MODEL, tqdm_class=_TrackedBar)
+    except Exception as error:
+        _qwen_error = str(error)
+
+
+def start_qwen_download() -> None:
+    """Download the Qwen weights into the Hugging Face cache in the background."""
+    global _qwen_download, _qwen_error
+    if _qwen_download is not None and _qwen_download.is_alive():
+        return
+    _qwen_error = None
+    _qwen_bars.clear()
+    _qwen_download = threading.Thread(target=_download_qwen, daemon=True)
+    _qwen_download.start()

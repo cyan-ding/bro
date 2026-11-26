@@ -124,3 +124,15 @@ export interface UserSettings {
   initialized?: boolean;
   completed?: boolean;
 }
+
+export interface QwenStatus {
+  model: string;
+  path: string | null;
+  downloading: boolean;
+  downloaded_bytes: number;
+  total_bytes: number | null;
+  supported: boolean;
+  fits: boolean;
+  ram_gb: number;
+  error: string | null;
+}

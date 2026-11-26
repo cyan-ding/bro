@@ -24,13 +24,13 @@ import {
   CarouselPrevious,
   type CarouselApi,
 } from "@/components/ui/carousel";
-import { UserSettings } from "@/lib/models";
+import { QwenStatus, UserSettings } from "@/lib/models";
 import { modelLabel } from "@/components/ui/combobox";
 import { useConfigStore } from "@/store/useConfigStore";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { findChromePath, chooseChromePath, readEnvFile, writeEnvFile } from "@/lib/settings";
-import { getValidModels } from "@/lib/api";
+import { downloadQwen, getQwenStatus, getValidModels } from "@/lib/api";
 
 interface Settings {
   settings: UserSettings;
@@ -50,7 +50,7 @@ export default function Home() {
   const searchParams = useSearchParams();
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
-  const [stepCompletion, setStepCompletion] = useState<boolean[]>([false, false, false, false, false]);
+  const [stepCompletion, setStepCompletion] = useState<boolean[]>([false, false, false, false, false, false]);
   const [env, setEnv] = useState("")
   const [redoSetup, setRedoSetup] = useState(false);
   const isEditMode = searchParams.get("edit") === "true";
@@ -79,12 +79,13 @@ export default function Home() {
   // Initialize completion state based on existing settings
   useEffect(() => {
     if (settings) {
-      setStepCompletion([
+      setStepCompletion((prev) => [
         settings.initialized ?? false, // Step 0 is always completable
         Boolean(settings.chrome_path), // chrome path exists
         env !== "", // env vars loaded
         Boolean(settings.storage_mode), // Step 3 completed if storage mode selected
-        (settings.selected_models?.length ?? 0) > 0, // Step 4 completed if models selected
+        prev[4], // local model found, downloading, or skipped
+        (settings.selected_models?.length ?? 0) > 0, // Step 5 completed if models selected
       ]);
     }
   }, [settings?.initialized, settings?.chrome_path, settings?.storage_mode, settings?.selected_models, env]);
@@ -133,7 +134,7 @@ export default function Home() {
   };
 
   const canGoBack = current > 0;
-  const canGoNext = current < 4 && stepCompletion[current];
+  const canGoNext = current < 5 && stepCompletion[current];
 
   return (
     <div className="relative flex flex-col justify-center items-center min-h-screen p-8">
@@ -192,12 +193,21 @@ export default function Home() {
             />
           </CarouselItem>
           <CarouselItem key={4}>
+            <LocalModelStep
+              settings={settings}
+              updateSettings={updateSettings}
+              onComplete={() => handleForward(5)}
+              onCompletionChange={(isCompleted) => handleStepCompleted(4, isCompleted)}
+              isActive={current === 4}
+            />
+          </CarouselItem>
+          <CarouselItem key={5}>
             <ProviderModelsStep
               settings={settings}
               updateSettings={updateSettings}
               onComplete={() => router.push("/dashboard")}
-              onCompletionChange={(isCompleted) => handleStepCompleted(4, isCompleted)}
-              isActive={current === 4}
+              onCompletionChange={(isCompleted) => handleStepCompleted(5, isCompleted)}
+              isActive={current === 5}
             />
           </CarouselItem>
         </CarouselContent>
@@ -524,6 +534,145 @@ function StorageStep({ settings, updateSettings, onComplete, onCompletionChange 
       >
         Save and Continue
       </Button>
+    </div>
+  );
+}
+
+const gigabytes = (bytes: number): string => (bytes / 1e9).toFixed(1);
+
+function LocalModelStep({ onComplete, onCompletionChange, isActive }: StepProps) {
+  const [status, setStatus] = useState<QwenStatus | null>(null);
+  const [unreachable, setUnreachable] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      setStatus(await getQwenStatus());
+      setUnreachable(false);
+    } catch {
+      setUnreachable(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isActive) void refresh();
+  }, [isActive, refresh]);
+
+  useEffect(() => {
+    if (!status?.downloading) return;
+    const timer = setInterval(() => void refresh(), 2000);
+    return () => clearInterval(timer);
+  }, [status?.downloading, refresh]);
+
+  useEffect(() => {
+    onCompletionChange(Boolean(status?.path || status?.downloading));
+  }, [status?.path, status?.downloading]);
+
+  const startDownload = async () => {
+    try {
+      setStatus(await downloadQwen());
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to start the download");
+    }
+  };
+
+  const skip = () => {
+    onCompletionChange(true);
+    onComplete();
+  };
+
+  const skipButton = (
+    <Button variant="ghost" onClick={skip}>
+      Skip, use cloud models
+    </Button>
+  );
+
+  if (unreachable) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
+        <h1 className="text-2xl font-bold text-center">Couldn&apos;t reach Bro</h1>
+        <p className="text-sm text-muted-foreground text-center">
+          Bro&apos;s engine isn&apos;t running, so it can&apos;t look for a local model.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => void refresh()}>Try again</Button>
+          {skipButton}
+        </div>
+      </div>
+    );
+  }
+
+  if (!status) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <h1 className="text-2xl font-bold text-center">Looking for Qwen...</h1>
+      </div>
+    );
+  }
+
+  if (status.path) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
+        <h1 className="text-2xl font-bold text-center">Qwen is ready on this Mac</h1>
+        <p className="text-sm text-muted-foreground text-center max-w-2xl break-all">{status.path}</p>
+        <p className="text-sm text-muted-foreground text-center">
+          Pick it in the next step to run Bro without sending pages to the cloud.
+        </p>
+        <Button variant="outline" onClick={onComplete}>Continue</Button>
+      </div>
+    );
+  }
+
+  const total = status.total_bytes ?? 0;
+  const cannotRun = !status.supported
+    ? "Qwen runs on Macs with Apple silicon (M1 or later). You can still use cloud models."
+    : !status.fits && total > 0
+      ? `Qwen needs more memory than this Mac has (${status.ram_gb} GB). You can still use cloud models.`
+      : null;
+
+  if (cannotRun) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
+        <h1 className="text-2xl font-bold text-center">Local model not available</h1>
+        <p className="text-sm text-muted-foreground text-center max-w-xl">{cannotRun}</p>
+        <Button variant="outline" onClick={skip}>Continue with cloud models</Button>
+      </div>
+    );
+  }
+
+  if (status.downloading) {
+    const percent = total > 0 ? Math.min(100, (status.downloaded_bytes / total) * 100) : 0;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
+        <h1 className="text-2xl font-bold text-center">Downloading Qwen</h1>
+        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-muted-foreground/20">
+          <div className="h-full bg-foreground transition-all" style={{ width: `${percent}%` }} />
+        </div>
+        <p className="text-sm text-muted-foreground text-center">
+          {gigabytes(status.downloaded_bytes)} of {total > 0 ? gigabytes(total) : "?"} GB.
+          You can keep going; it finishes in the background and shows up in the model picker.
+        </p>
+        <Button variant="outline" onClick={onComplete}>Continue</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
+      <h1 className="text-2xl font-bold text-center">Run Bro on this Mac</h1>
+      <p className="text-sm text-muted-foreground text-center max-w-xl">
+        Bro can use Qwen 3.6, a free model that runs entirely on your Mac, so no API key is needed
+        and pages never leave your computer. It&apos;s a one-time download
+        {total > 0 ? ` of ${gigabytes(total)} GB` : ""}.
+      </p>
+      {status.error && (
+        <p className="text-sm text-red-500 text-center max-w-xl">Download failed: {status.error}</p>
+      )}
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => void startDownload()}>
+          {status.error ? "Try again" : "Download Qwen"}
+        </Button>
+        {skipButton}
+      </div>
     </div>
   );
 }

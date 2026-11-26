@@ -13,6 +13,7 @@ import type {
   AgentStateResponse,
   RunState,
   LogEventDB,
+  QwenStatus,
 } from "./models";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -208,6 +209,28 @@ export async function getValidModels(): Promise<{ models: string[] }> {
 
   if (!response.ok) {
     throw new Error(`Failed to get valid models: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function getQwenStatus(): Promise<QwenStatus> {
+  const response = await fetch(`${API_BASE_URL}/models/qwen`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to check for Qwen: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function downloadQwen(): Promise<QwenStatus> {
+  const response = await fetch(`${API_BASE_URL}/models/qwen/download`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to start the Qwen download: ${response.statusText}`);
   }
 
   return response.json();
