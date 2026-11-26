@@ -16,7 +16,8 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import json
-from typing import Dict, List, Optional
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +25,7 @@ from sse_starlette.sse import EventSourceResponse
 from utils.db import get_supabase
 from utils.screencast import ScreencastClient
 from utils.use_cdp import use_cdp
-from bro.fast.local_server import QwenStatus, list_local_models, qwen_status, start_qwen_download
+from bro.fast.local_server import QwenStatus, list_local_models, qwen_status, shutdown_servers, start_qwen_download
 
 from .log_streamer import stream_logs
 from .models import (
@@ -44,17 +45,24 @@ from .models import (
 )
 from .run_manager import RunManager
 
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    yield
+    shutdown_servers()
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Bro Agent API",
     description="API for managing Bro web automation agent runs",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_origins=["http://localhost:3000", "app://bro"],  # dev server and the packaged desktop app
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -690,4 +698,4 @@ if __name__ == "__main__":
 
     # Note: reload=False on Windows to ensure event loop policy is respected
     # The reloader spawns subprocesses that create event loops before policy is set
-    uvicorn.run("bro.api.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("bro.api.main:app", host="127.0.0.1", port=8000, reload=False)

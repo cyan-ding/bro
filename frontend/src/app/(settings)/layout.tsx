@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 export default function SettingsLayout({
   children,
 }: {
@@ -5,7 +7,9 @@ export default function SettingsLayout({
 }) {
   return (
     <>
-      <main className="flex flex-1 flex-col justify-center">{children}</main>
+      <main className="flex flex-1 flex-col justify-center">
+        <Suspense>{children}</Suspense>
+      </main>
     </>
   );
 }

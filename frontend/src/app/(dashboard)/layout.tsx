@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { DashboardNavbar } from "@/components/ui/dashboard-navbar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAgentStore } from "@/store/useAgentStore";
+import { Suspense } from "react";
 
 
 export default function DashboardLayout({
@@ -22,7 +23,9 @@ export default function DashboardLayout({
             <SidebarTrigger />
             <DashboardNavbar />
           </div>
-          <div className="min-h-0">{children}</div>
+          <div className="min-h-0">
+            <Suspense>{children}</Suspense>
+          </div>
         </div>
       </div>
     </SidebarProvider>

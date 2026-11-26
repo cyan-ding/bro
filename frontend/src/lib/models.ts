@@ -133,6 +133,8 @@ export interface QwenStatus {
   total_bytes: number | null;
   supported: boolean;
   fits: boolean;
+  low_memory: boolean;
+  splash_installed: boolean;
   ram_gb: number;
   error: string | null;
 }

@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -223,6 +224,8 @@ def list_local_models() -> List[str]:
     Includes cached MLX weights even when nothing is listening yet. A run starts the server.
     """
     found = set(_cached_mlx_model_ids())
+    if _low_memory_ready():
+        found.add(QWEN_MODEL)
     if _is_up():
         import json
 
@@ -244,6 +247,9 @@ def ensure_local_server(model: str, wait_s: int = 120) -> None:
     if not model.startswith(LOCAL_PREFIX) or _is_up():
         return
     model_id = model[len(LOCAL_PREFIX) :]
+    if model_id in LOW_MEMORY_BUILDS and _model_bytes(model_id) == 0 and _low_memory_ready():
+        _start_low_memory(model_id, wait_s)
+        return
     try:
         _check_memory(model_id)
     except MemoryError:
@@ -293,13 +299,28 @@ class QwenStatus(BaseModel):
     total_bytes: Optional[int] = None
     supported: bool
     fits: bool
+    low_memory: bool
+    splash_installed: bool
     ram_gb: int
     error: Optional[str] = None
 
 
-_qwen_total_bytes: Optional[int] = None
+class _Download(BaseModel):
+    repo: str
+    patterns: Optional[List[str]] = None
+
+
+QWEN_DOWNLOADS = [_Download(repo=QWEN_MODEL)]
+# What Splash needs to serve LOW_MEMORY_BUILDS[QWEN_MODEL]: the 2-bit weights and the draft model it loads with them.
+LOW_MEMORY_DOWNLOADS = [
+    _Download(repo="unsloth/Qwen3.6-35B-A3B-GGUF", patterns=["*UD-Q2_K_XL*.gguf"]),
+    _Download(repo="incoai/Qwen3.6-35B-A3B-DFlash2", patterns=["config.json", "*.safetensors"]),
+]
+
+_file_sizes: Dict[str, Dict[str, int]] = {}
 _qwen_download: Optional[threading.Thread] = None
 _qwen_error: Optional[str] = None
+_qwen_done_bytes = 0
 _qwen_bars: List[tqdm] = []
 
 
@@ -311,78 +332,121 @@ class _TrackedBar(tqdm):
         _qwen_bars.append(self)
 
 
-def _qwen_cache_dir() -> Path:
-    from huggingface_hub.constants import HF_HUB_CACHE
-
-    return Path(HF_HUB_CACHE) / f"models--{QWEN_MODEL.replace('/', '--')}"
-
-
-def _qwen_size() -> Optional[int]:
-    """Total size of the Qwen weights on Hugging Face, fetched once (None when offline)."""
-    global _qwen_total_bytes
-    if _qwen_total_bytes is None:
+def _expected_files(download: _Download) -> Optional[Dict[str, int]]:
+    """Files and sizes the download consists of, fetched once from Hugging Face (None when offline)."""
+    if download.repo not in _file_sizes:
         from huggingface_hub import HfApi
 
         try:
-            info = HfApi().model_info(QWEN_MODEL, files_metadata=True)
+            info = HfApi().model_info(download.repo, files_metadata=True)
         except Exception:
             return None
-        _qwen_total_bytes = sum(file.size or 0 for file in info.siblings or [])
-    return _qwen_total_bytes
+        _file_sizes[download.repo] = {file.rfilename: file.size or 0 for file in info.siblings or []}
+    files = _file_sizes[download.repo]
+    if download.patterns is None:
+        return files
+    return {name: size for name, size in files.items() if any(fnmatch(name, p) for p in download.patterns)}
+
+
+def _snapshot(download: _Download) -> Optional[Path]:
+    from huggingface_hub import snapshot_download
+
+    try:
+        return Path(snapshot_download(download.repo, allow_patterns=download.patterns, local_files_only=True))
+    except Exception:
+        return None
+
+
+def _is_present(download: _Download) -> bool:
+    snapshot = _snapshot(download)
+    if snapshot is None:
+        return False
+    files = _expected_files(download)
+    if files is None:
+        patterns = download.patterns or ["*.safetensors"]
+        return any(any(snapshot.glob(p)) for p in patterns)
+    return all((snapshot / name).exists() for name in files)
+
+
+def _downloaded_bytes(download: _Download) -> int:
+    snapshot = _snapshot(download)
+    files = _expected_files(download) or {}
+    if snapshot is None:
+        return 0
+    return sum(size for name, size in files.items() if (snapshot / name).exists())
+
+
+def _total_ram() -> int:
+    return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+
+
+def _mlx_fits(size: int) -> bool:
+    need = size + max(int(0.4 * 1024**3), int(0.08 * size))
+    return size > 0 and need <= MEMORY_BUDGET * _total_ram()
+
+
+def _qwen_downloads() -> List[_Download]:
+    """The 4-bit MLX build when it fits in memory, otherwise the 2-bit build Splash serves under a memory cap."""
+    size = sum((_expected_files(QWEN_DOWNLOADS[0]) or {}).values()) or _model_bytes(QWEN_MODEL)
+    if size and not _mlx_fits(size) and shutil.which("splash"):
+        return LOW_MEMORY_DOWNLOADS
+    return QWEN_DOWNLOADS
+
+
+def _low_memory_ready() -> bool:
+    return shutil.which("splash") is not None and all(_is_present(d) for d in LOW_MEMORY_DOWNLOADS)
 
 
 def qwen_status() -> QwenStatus:
     """Where the local Qwen weights are, how much is downloaded, and whether this Mac can run them."""
-    total_ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-    total = _qwen_size()
-    blobs = _qwen_cache_dir() / "blobs"
-    files = list(blobs.iterdir()) if blobs.is_dir() else []
-    downloaded = sum(file.stat().st_size for file in files)
+    downloads = _qwen_downloads()
+    sizes = [_expected_files(d) for d in downloads]
+    total = None if any(s is None for s in sizes) else sum(sum(s.values()) for s in sizes if s)
     downloading = _qwen_download is not None and _qwen_download.is_alive()
     if downloading:
-        downloaded = max([int(bar.n) for bar in _qwen_bars if bar.unit == "B"] + [0])
-    complete = (
-        bool(files)
-        and not downloading
-        and not any(file.name.endswith(".incomplete") for file in files)
-        and (total is None or downloaded >= total)
-    )
-    path = None
-    if complete:
-        from huggingface_hub import snapshot_download
-
-        path = snapshot_download(QWEN_MODEL, local_files_only=True)
-    size = total or downloaded
-    need = size + max(int(0.4 * 1024**3), int(0.08 * size))
+        downloaded = _qwen_done_bytes + max([int(bar.n) for bar in _qwen_bars if bar.unit == "B"] + [0])
+    else:
+        downloaded = sum(_downloaded_bytes(d) for d in downloads)
+    complete = not downloading and all(_is_present(d) for d in downloads)
+    snapshot = _snapshot(downloads[0]) if complete else None
+    mlx_size = sum((_expected_files(QWEN_DOWNLOADS[0]) or {}).values()) or _model_bytes(QWEN_MODEL)
     return QwenStatus(
         model=f"{LOCAL_PREFIX}{QWEN_MODEL}",
-        path=path,
+        path=str(snapshot) if snapshot else None,
         downloading=downloading,
         downloaded_bytes=downloaded,
         total_bytes=total,
         supported=platform.system() == "Darwin" and platform.machine() == "arm64",
-        fits=size > 0 and need <= MEMORY_BUDGET * total_ram,
-        ram_gb=round(total_ram / 1024**3),
+        fits=_mlx_fits(mlx_size),
+        low_memory=downloads is LOW_MEMORY_DOWNLOADS,
+        splash_installed=shutil.which("splash") is not None,
+        ram_gb=round(_total_ram() / 1024**3),
         error=_qwen_error,
     )
 
 
-def _download_qwen() -> None:
-    global _qwen_error
+def _download_qwen(downloads: List[_Download]) -> None:
+    global _qwen_error, _qwen_done_bytes
     from huggingface_hub import snapshot_download
 
     try:
-        snapshot_download(QWEN_MODEL, tqdm_class=_TrackedBar)
+        for download in downloads:
+            snapshot_download(download.repo, allow_patterns=download.patterns, tqdm_class=_TrackedBar)
+            _qwen_done_bytes += sum((_expected_files(download) or {}).values())
+            _qwen_bars.clear()
     except Exception as error:
         _qwen_error = str(error)
 
 
 def start_qwen_download() -> None:
-    """Download the Qwen weights into the Hugging Face cache in the background."""
-    global _qwen_download, _qwen_error
+    """Download the Qwen build this Mac can run into the Hugging Face cache in the background."""
+    global _qwen_download, _qwen_error, _qwen_done_bytes
     if _qwen_download is not None and _qwen_download.is_alive():
         return
     _qwen_error = None
+    _qwen_done_bytes = 0
     _qwen_bars.clear()
-    _qwen_download = threading.Thread(target=_download_qwen, daemon=True)
+    _qwen_download = threading.Thread(target=_download_qwen, args=(_qwen_downloads(),), daemon=True)
     _qwen_download.start()
+
+

@@ -610,6 +610,38 @@ function LocalModelStep({ onComplete, onCompletionChange, isActive }: StepProps)
     );
   }
 
+  const total = status.total_bytes ?? 0;
+
+  if (!status.supported) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
+        <h1 className="text-2xl font-bold text-center">Local model not available</h1>
+        <p className="text-sm text-muted-foreground text-center max-w-xl">
+          Qwen runs on Macs with Apple silicon (M1 or later). You can still use cloud models.
+        </p>
+        <Button variant="outline" onClick={skip}>Continue with cloud models</Button>
+      </div>
+    );
+  }
+
+  if (!status.fits && !status.low_memory && (total > 0 || status.path)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
+        <h1 className="text-2xl font-bold text-center">Install Splash to run Qwen here</h1>
+        <p className="text-sm text-muted-foreground text-center max-w-xl">
+          The full Qwen build needs more memory than this Mac has ({status.ram_gb} GB). Bro can run a
+          smaller build through Splash, a free engine for Apple silicon. Install it with Homebrew
+          (brew.sh), then check again:
+        </p>
+        <code className="rounded-md border px-3 py-2 text-sm">brew install incoai/tap/splash</code>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => void refresh()}>Check again</Button>
+          {skipButton}
+        </div>
+      </div>
+    );
+  }
+
   if (status.path) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
@@ -619,23 +651,6 @@ function LocalModelStep({ onComplete, onCompletionChange, isActive }: StepProps)
           Pick it in the next step to run Bro without sending pages to the cloud.
         </p>
         <Button variant="outline" onClick={onComplete}>Continue</Button>
-      </div>
-    );
-  }
-
-  const total = status.total_bytes ?? 0;
-  const cannotRun = !status.supported
-    ? "Qwen runs on Macs with Apple silicon (M1 or later). You can still use cloud models."
-    : !status.fits && total > 0
-      ? `Qwen needs more memory than this Mac has (${status.ram_gb} GB). You can still use cloud models.`
-      : null;
-
-  if (cannotRun) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
-        <h1 className="text-2xl font-bold text-center">Local model not available</h1>
-        <p className="text-sm text-muted-foreground text-center max-w-xl">{cannotRun}</p>
-        <Button variant="outline" onClick={skip}>Continue with cloud models</Button>
       </div>
     );
   }
@@ -661,7 +676,8 @@ function LocalModelStep({ onComplete, onCompletionChange, isActive }: StepProps)
       <p className="text-sm text-muted-foreground text-center max-w-xl">
         Bro can use Qwen 3.6, a free model that runs entirely on your Mac, so no API key is needed
         and pages never leave your computer. It&apos;s a one-time download
-        {total > 0 ? ` of ${gigabytes(total)} GB` : ""}.
+        {total > 0 ? ` of ${gigabytes(total)} GB` : ""}
+        {status.low_memory ? ", a smaller build that Splash runs within this Mac's memory" : ""}.
       </p>
       {status.error && (
         <p className="text-sm text-red-500 text-center max-w-xl">Download failed: {status.error}</p>

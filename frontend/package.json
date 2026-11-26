@@ -2,6 +2,7 @@
   "name": "Bro",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
@@ -11,7 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "electron:dev": "NODE_ENV=development electron electron/main.js",
-    "electron:build": "next build && electron-builder"
+    "electron:build": "./scripts/fetch-uv.sh && next build && electron-builder --mac"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -32,7 +33,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "electron": "^39.2.7",
     "embla-carousel-react": "^8.6.0",
     "geist": "^1.5.1",
     "lucide-react": "^0.553.0",
@@ -52,6 +52,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^39.2.7",
     "electron-builder": "^26.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
@@ -70,8 +71,7 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ]
@@ -103,6 +103,19 @@
       "out/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../bro",
+        "to": "backend/bro",
+        "filter": ["**/*", "!bench/**", "!demo/**", "!**/__pycache__/**", "!*.egg-info/**"]
+      },
+      { "from": "../pyproject.toml", "to": "backend/pyproject.toml" },
+      { "from": "../uv.lock", "to": "backend/uv.lock" },
+      { "from": "../.python-version", "to": "backend/.python-version" },
+      { "from": "../README.md", "to": "backend/README.md" },
+      { "from": "../bro.txt", "to": "backend/bro.txt" },
+      { "from": "vendor/uv", "to": "bin/uv" }
     ],
     "directories": {
       "output": "dist"

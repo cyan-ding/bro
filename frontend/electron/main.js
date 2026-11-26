@@ -1,19 +1,127 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const os = require('os');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
+const { pathToFileURL } = require('url');
 
 const isDev = process.env.NODE_ENV === 'development';
 const iconPath = path.join(__dirname, "../../assets/bro_512.png")
+const BACKEND_URL = 'http://127.0.0.1:8000';
+const BACKEND_START_TIMEOUT_MS = 15 * 60 * 1000; // first launch installs Python and every dependency
 
 // Set the application name for macOS
 app.setName('Bro');
 
-let mainWindow;
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
 
-function createWindow() {
+let mainWindow;
+let backendProcess = null;
+
+// Serve the static Next.js export, mapping routes like /dashboard to dashboard.html.
+function serveExport() {
+  const outDir = path.join(__dirname, '../out');
+  protocol.handle('app', (request) => {
+    const relative = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, '');
+    const candidates = relative === '' ? ['index.html'] : [relative, `${relative}.html`];
+    const file = candidates
+      .map((name) => path.join(outDir, name))
+      .find((p) => p.startsWith(outDir + path.sep) && fs.existsSync(p) && fs.statSync(p).isFile());
+    return net.fetch(pathToFileURL(file ?? path.join(outDir, '404.html')).toString());
+  });
+}
+
+async function backendIsUp() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/`);
+    return response.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+// uv writes build files next to the project, so the packaged app runs a copy outside its signed bundle.
+function packagedBackendDir() {
+  const source = path.join(process.resourcesPath, 'backend');
+  const target = path.join(app.getPath('userData'), 'backend');
+  const marker = path.join(target, '.version');
+  const version = `${app.getVersion()} ${fs.statSync(source).mtimeMs}`;
+  if (!fs.existsSync(marker) || fs.readFileSync(marker, 'utf8') !== version) {
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.cpSync(source, target, { recursive: true });
+    fs.writeFileSync(marker, version);
+  }
+  return target;
+}
+
+function startBackend() {
+  const dataDir = app.getPath('userData');
+  const root = app.isPackaged ? packagedBackendDir() : path.join(__dirname, '../..');
+  const uv = app.isPackaged ? path.join(process.resourcesPath, 'bin', 'uv') : 'uv';
+  const log = fs.openSync(path.join(dataDir, 'backend.log'), 'w');
+  const packagedEnv = app.isPackaged
+    ? {
+        UV_PROJECT_ENVIRONMENT: path.join(dataDir, 'venv'),
+        UV_PYTHON_INSTALL_DIR: path.join(dataDir, 'python'),
+        UV_CACHE_DIR: path.join(dataDir, 'uv-cache'),
+        UV_PYTHON_PREFERENCE: 'only-managed',
+      }
+    : {};
+  backendProcess = spawn(uv, ['run', '--frozen', '--project', root, 'python', '-m', 'bro.api.main'], {
+    cwd: root,
+    detached: true,
+    stdio: ['ignore', log, log],
+    env: {
+      ...process.env,
+      ...packagedEnv,
+      // Apps opened from Finder get a minimal PATH; Splash and other tools live in Homebrew.
+      PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? '/usr/bin:/bin'}`,
+    },
+  });
+  backendProcess.on('exit', () => {
+    backendProcess = null;
+  });
+}
+
+function statusPage(title, detail) {
+  const html = `<!doctype html><meta charset="utf-8"><style>
+    :root { color-scheme: light dark; font-family: -apple-system, sans-serif; }
+    body { display: grid; place-content: center; height: 100vh; margin: 0; text-align: center; }
+    p { color: GrayText; max-width: 28rem; }
+  </style><h2>${title}</h2><p>${detail}</p>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+async function waitForBackend() {
+  if (await backendIsUp()) return true;
+  if (!backendProcess) startBackend();
+  mainWindow?.loadURL(
+    statusPage('Starting Bro…', 'The first launch sets up Bro’s engine, which takes a few minutes and needs internet.'),
+  );
+  const deadline = Date.now() + BACKEND_START_TIMEOUT_MS;
+  while (Date.now() < deadline && backendProcess) {
+    if (await backendIsUp()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  const logPath = path.join(app.getPath('userData'), 'backend.log');
+  mainWindow?.loadURL(statusPage('Bro couldn’t start', `Details are in ${logPath}. Quit and reopen Bro to try again.`));
+  return false;
+}
+
+function stopBackend() {
+  if (!backendProcess) return;
+  try {
+    process.kill(-backendProcess.pid, 'SIGTERM');
+  } catch (e) {
+    // Already exited
+  }
+  backendProcess = null;
+}
+
+async function createWindow() {
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -28,26 +136,29 @@ function createWindow() {
   });
 
   // Set dock icon on macOS
-  if (process.platform === 'darwin') {
+  if (process.platform === 'darwin' && fs.existsSync(iconPath)) {
     app.dock.setIcon(iconPath);
-  }
-
-  const startUrl = isDev 
-    ? 'http://localhost:3000' 
-    : `file://${path.join(__dirname, '../out/index.html')}`;
-  
-  mainWindow.loadURL(startUrl);
-
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
   }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  if (isDev) {
+    mainWindow.webContents.openDevTools();
+  }
+
+  if (await waitForBackend()) {
+    mainWindow?.loadURL(isDev ? 'http://localhost:3000' : 'app://bro/');
+  }
 }
 
-app.on('ready', createWindow);
+app.on('ready', () => {
+  serveExport();
+  void createWindow();
+});
+
+app.on('before-quit', stopBackend);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
