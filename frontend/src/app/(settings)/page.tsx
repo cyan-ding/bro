@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/command";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   Carousel,
@@ -644,9 +645,7 @@ function LocalModelStep({ onComplete, onCompletionChange, isActive }: StepProps)
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 px-4">
         <h1 className="text-2xl font-bold text-center">Downloading Qwen</h1>
-        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-muted-foreground/20">
-          <div className="h-full bg-foreground transition-all" style={{ width: `${percent}%` }} />
-        </div>
+        <Progress value={percent} className="max-w-md" />
         <p className="text-sm text-muted-foreground text-center">
           {gigabytes(status.downloaded_bytes)} of {total > 0 ? gigabytes(total) : "?"} GB.
           You can keep going; it finishes in the background and shows up in the model picker.

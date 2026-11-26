@@ -35,10 +35,10 @@ dependencies = [
     "supabase>=2.24.0",
     "huggingface-hub>=2.4.0",
     "tqdm>=4.67.1",
+    "mlx-lm>=0.32; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [project.optional-dependencies]
-local = ["mlx-lm>=0.32"]
 demo = ["pillow>=11"]
 
 [tool.setuptools.packages.find]

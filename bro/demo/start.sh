@@ -3,7 +3,7 @@
 #   1. Start a screen recording (Cmd+Shift+5, "Record Entire Screen").
 #   2. Run bro/demo/start.sh from anywhere, then go back to what you were doing.
 #   3. Stop the recording after the "All 10 tasks done" notification and run the composite command printed at the end.
-# Needs: `uv sync --extra local --extra demo`, the splash CLI, ffmpeg.
+# Needs: `uv sync --extra demo`, the splash CLI, ffmpeg.
 set -e
 ROOT=${0:A:h:h:h}
 cd $ROOT

@@ -159,7 +159,7 @@ Every run, setting and dead end is in the [lab notebook](LABNOTEBOOK.md).
 ## Run it
 
 ```bash
-uv sync --extra local
+uv sync
 # Benchmark: local 2-bit model through Splash, headless Chrome
 splash serve --model unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q2_K_XL --max-memory 12G \
   --served-model-name mlx-community/Qwen3.6-35B-A3B-4bit --port 8001

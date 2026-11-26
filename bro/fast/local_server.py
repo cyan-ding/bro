@@ -189,15 +189,30 @@ def server_for(model: str, wait_s: int = 180) -> str:
     raise TimeoutError(f"local MLX server for {model_id} did not start")
 
 
+class _WeightIndex(BaseModel):
+    weight_map: Dict[str, str]
+
+
+def _has_all_weights(snapshot: Path) -> bool:
+    """True when every weight file is present, so a half-finished download is not offered."""
+    index = snapshot / "model.safetensors.index.json"
+    if not index.exists():
+        return (snapshot / "model.safetensors").exists()
+    files = set(_WeightIndex.model_validate_json(index.read_text()).weight_map.values())
+    return (snapshot / "config.json").exists() and all((snapshot / name).exists() for name in files)
+
+
 def _cached_mlx_model_ids() -> List[str]:
-    """MLX repos already in the Hugging Face cache, so the picker works before a server starts."""
+    """MLX repos fully downloaded to the Hugging Face cache, so the picker works before a server starts."""
     try:
         from huggingface_hub import scan_cache_dir
     except ImportError:
         return []
     ids: List[str] = []
     for repo in scan_cache_dir().repos:
-        if "mlx" in repo.repo_id.lower() and repo.size_on_disk > 1_000_000_000:
+        if "mlx" not in repo.repo_id.lower() or repo.size_on_disk < 1_000_000_000:
+            continue
+        if any(_has_all_weights(revision.snapshot_path) for revision in repo.revisions):
             ids.append(repo.repo_id)
     return ids
 
